@@ -21,6 +21,14 @@ const nextConfig: NextConfig = {
   // their own browsers, neither of which we can go and rewrite.
   async redirects() {
     return [
+      // The CDN and TTS server only allow the canonical origin (CORS), so the
+      // reader can't load on the old vercel.app address — send it home.
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "projectominira.vercel.app" }],
+        destination: "https://www.projectominira.org/:path*",
+        permanent: true,
+      },
       { source: "/reading", destination: "/shelf", permanent: true },
       // Superseded icon URLs. Already-sent announcement emails and installed
       // PWAs holding a stale manifest still request these.
