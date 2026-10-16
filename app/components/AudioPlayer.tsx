@@ -56,59 +56,38 @@ type Props = {
 
 function SpeedMenu({
   speed,
-  isMobile,
   onSelect,
   onClose,
 }: {
   speed: number;
-  isMobile: boolean;
   onSelect: (s: number) => void;
   onClose: () => void;
 }) {
   return (
     <>
       <div onClick={onClose} className="fixed inset-0 z-19" />
-      {isMobile ? (
-        <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 flex items-center gap-0.5 p-1 rounded-sm bg-[var(--reader-surface)] border border-[var(--reader-border)] shadow-lg z-20 whitespace-nowrap">
+      <div className="absolute bottom-[calc(100%+14px)] left-1/2 -translate-x-1/2 min-w-34 p-2.5 rounded-lg bg-[var(--reader-surface)] border border-[var(--reader-border)] shadow-lg z-20">
+        <div className="text-[10px] font-bold tracking-wide uppercase text-[var(--reader-text-muted)] px-2.5 pt-0.5 pb-2">
+          Playback Speed
+        </div>
+        <div className="flex flex-col gap-0.5">
           {SPEEDS.map((s) => {
             const active = s === speed;
             return (
               <button
                 key={s}
                 onClick={() => onSelect(s)}
-                className={`border-none cursor-pointer rounded-sm py-1.5 px-2.5 text-[11px] font-semibold ${
-                  active ? "bg-brand-500 text-white" : "bg-transparent text-[var(--reader-text-muted)]"
+                className={`flex items-center justify-between border-none cursor-pointer rounded-sm py-2 px-3.5 text-[13px] font-medium ${
+                  active ? "bg-brand-500/10 text-brand-500 font-semibold" : "bg-transparent text-[var(--reader-text)]"
                 }`}
               >
                 {s}×
+                {active && <Check size={13} className="flex-none" />}
               </button>
             );
           })}
         </div>
-      ) : (
-        <div className="absolute bottom-[calc(100%+14px)] left-1/2 -translate-x-1/2 min-w-34 p-2.5 rounded-lg bg-[var(--reader-surface)] border border-[var(--reader-border)] shadow-lg z-20">
-          <div className="text-[10px] font-bold tracking-wide uppercase text-[var(--reader-text-muted)] px-2.5 pt-0.5 pb-2">
-            Playback Speed
-          </div>
-          <div className="flex flex-col gap-0.5">
-            {SPEEDS.map((s) => {
-              const active = s === speed;
-              return (
-                <button
-                  key={s}
-                  onClick={() => onSelect(s)}
-                  className={`flex items-center justify-between border-none cursor-pointer rounded-sm py-2 px-3.5 text-[13px] font-medium ${
-                    active ? "bg-brand-500/10 text-brand-500 font-semibold" : "bg-transparent text-[var(--reader-text)]"
-                  }`}
-                >
-                  {s}×
-                  {active && <Check size={13} className="flex-none" />}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      </div>
     </>
   );
 }
@@ -177,10 +156,25 @@ export default function AudioPlayer({
       </button>
     </Tooltip>
   );
+  const speedControl = (
+    <div className="relative">
+      {speedTrigger}
+      {speedMenuOpen && (
+        <SpeedMenu
+          speed={speed}
+          onSelect={(s) => {
+            setSpeed(s);
+            setSpeedMenuOpen(false);
+          }}
+          onClose={() => setSpeedMenuOpen(false)}
+        />
+      )}
+    </div>
+  );
 
   const activeVoice = AFRICAN_VOICES.find((v) => v.id === voice) ?? AFRICAN_VOICES[0];
 
-  // Narrator identity strip — avatar, given name, and voice traits, doubling
+  // Narrator identity strip — avatar and given name, doubling
   // as the "change voice" trigger (opens VoiceChangeModal). Shown in both
   // the desktop and mobile full-player layouts (not the mini bar, which has
   // no room for more than an icon).
@@ -197,13 +191,8 @@ export default function AudioPlayer({
           className="h-11 w-11 flex-none rounded-full object-cover transition-[box-shadow] duration-150"
           style={{ boxShadow: isPlaying ? "0 0 0 2px var(--reader-surface), 0 0 0 4.5px var(--color-brand-500)" : "none" }}
         />
-        <div className="min-w-0 leading-tight text-left">
-          <div className="text-xs font-semibold text-[var(--reader-text)] whitespace-nowrap overflow-hidden text-ellipsis">
-            {activeVoice.name}
-          </div>
-          <div className="text-[10.5px] font-medium text-[var(--reader-text-muted)] whitespace-nowrap overflow-hidden text-ellipsis">
-            Narrating · {activeVoice.traits}
-          </div>
+        <div className="min-w-0 text-left text-xs font-medium text-[var(--reader-text-muted)] whitespace-nowrap overflow-hidden text-ellipsis">
+          <span className="font-semibold text-[var(--reader-text)]">{activeVoice.name}</span> narrating
         </div>
         <ChevronDown size={12} className="flex-none text-[var(--reader-text-muted)]" />
       </button>
@@ -353,20 +342,7 @@ export default function AudioPlayer({
           </div>
           <div className="flex items-center justify-center gap-6 pb-4">
             <div className="relative">{narratorStrip}</div>
-            <div className="relative">
-              {speedTrigger}
-              {speedMenuOpen && (
-                <SpeedMenu
-                  speed={speed}
-                  isMobile
-                  onSelect={(s) => {
-                    setSpeed(s);
-                    setSpeedMenuOpen(false);
-                  }}
-                  onClose={() => setSpeedMenuOpen(false)}
-                />
-              )}
-            </div>
+            {speedControl}
           </div>
         </>
       ) : (
@@ -388,20 +364,7 @@ export default function AudioPlayer({
               {skipNextBtn}
             </div>
             {narratorStrip}
-            <div className="relative">
-              {speedTrigger}
-              {speedMenuOpen && (
-                <SpeedMenu
-                  speed={speed}
-                  isMobile={false}
-                  onSelect={(s) => {
-                    setSpeed(s);
-                    setSpeedMenuOpen(false);
-                  }}
-                  onClose={() => setSpeedMenuOpen(false)}
-                />
-              )}
-            </div>
+            {speedControl}
           </div>
           <div className="flex items-center justify-end">{closeBtn}</div>
         </div>

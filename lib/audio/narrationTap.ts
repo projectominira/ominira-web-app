@@ -16,6 +16,23 @@ export function registerNarrationElement(el: HTMLAudioElement | null): void {
   element = el;
 }
 
+// 25ms of silence. iOS only lets an element play() outside a tap once it has
+// played inside one — and on Listen the real clip is still synthesizing, so
+// the tap plays this instead, letting the clip start by itself when it lands.
+export const SILENT_SRC =
+  "data:audio/wav;base64,UklGRuwAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YcgAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
+let unlocked = false;
+
+/** Call in a tap that starts playback. Once per page; a no-op while a clip is loaded. */
+export function unlockNarration(): void {
+  if (unlocked || !element || element.getAttribute("src")) return;
+  unlocked = true;
+  element.src = SILENT_SRC;
+  element.play().catch(() => {
+    unlocked = false;
+  });
+}
+
 /** Call in a tap. Creates the track the first time; later calls return it. */
 export function tapNarration(): MediaStreamTrack | null {
   if (tap) {

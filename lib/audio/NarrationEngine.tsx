@@ -11,7 +11,7 @@ import { chunkWordOffsets, hasNarratableText } from "@/lib/audio/narrationText";
 import { buildNarrationIndex, type NarrationTarget } from "@/lib/audio/narrationIndex";
 import { createNarrationQueue, type NarrationQueue } from "@/lib/audio/narrationQueue";
 import { ensureClip, peekClip, touchClip, useLiveClip } from "@/lib/audio/liveNarrationCache";
-import { registerNarrationElement } from "@/lib/audio/narrationTap";
+import { registerNarrationElement, SILENT_SRC } from "@/lib/audio/narrationTap";
 import { activeWordIndex, type KaraokeWord } from "@/lib/audio/karaoke";
 import type { Passage, Section } from "@/lib/book/schema";
 
@@ -518,8 +518,12 @@ export default function NarrationEngine() {
     // a rejected play() (iOS in particular) leaves the store reporting
     // "playing" while the element stays silent, so the play/pause icon and
     // the lock-screen state both lie until the user retries the gesture.
-    if (audioPlaying) audio.play().catch(() => useAudioStore.getState().pause());
-    else audio.pause();
+    // No clip yet (still synthesizing): play() would reject (iOS), and that
+    // rejection flipped the button back to Play under a reader who had just
+    // tapped it. The src-swap effect above starts the clip once it lands.
+    if (!audioPlaying) audio.pause();
+    else if (audioSrcRef.current && audio.getAttribute("src") === audioSrcRef.current)
+      audio.play().catch(() => useAudioStore.getState().pause());
   }, [isNarrating, audioPlaying]);
 
   // The word being read, worked out here and nowhere else: from the element's
@@ -697,6 +701,7 @@ export default function NarrationEngine() {
     const audio = audioElRef.current;
     if (!audio || !book || !narrationIndex || !target) return;
     const onEnded = () => {
+      if (audio.src === SILENT_SRC) return; // the iOS unlock clip, not a passage
       const next = narrationIndex.next(target);
       const clip = next && peekClip(book.slug, next.passageId, next.chunkIndex, voice);
       if (!clip || clip.status !== "ready" || !clip.src) return requestTarget(next);

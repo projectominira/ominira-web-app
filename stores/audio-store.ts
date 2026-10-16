@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { NarrationDocument } from "@/lib/audio/narrationDocument";
 import { DEFAULT_VOICE_ID } from "@/lib/audio/voices";
+import { unlockNarration } from "@/lib/audio/narrationTap";
 
 /**
  * Playback state lives outside the Reader component tree on purpose: the
@@ -82,22 +83,36 @@ export const useAudioStore = create<AudioState>()(
       materialId: null,
       startAtPassage: null,
 
-      play: () => set({ isPlaying: true }),
+      // Every action that starts playback runs in a tap — the moment iOS
+      // allows the element to start (unlockNarration).
+      play: () => {
+        unlockNarration();
+        set({ isPlaying: true });
+      },
       pause: () => set({ isPlaying: false }),
-      toggle: () => set((s) => ({ isPlaying: !s.isPlaying })),
+      toggle: () =>
+        set((s) => {
+          if (!s.isPlaying) unlockNarration();
+          return { isPlaying: !s.isPlaying };
+        }),
       seekTo: (ms) => set({ currentTimeMs: Math.max(0, ms) }),
       setVoice: (voice) => set({ voice }),
       setSpeed: (speed) => set({ speed }),
       setPlayerHeight: (playerHeight) => set({ playerHeight }),
-      openBook: (book, materialId) => set({ book, materialId, currentTimeMs: 0, isPlaying: true }),
-      openBookAtPassage: (book, materialId, sectionId, passageId, wordIndex) =>
+      openBook: (book, materialId) => {
+        unlockNarration();
+        set({ book, materialId, currentTimeMs: 0, isPlaying: true });
+      },
+      openBookAtPassage: (book, materialId, sectionId, passageId, wordIndex) => {
+        unlockNarration();
         set({
           book,
           materialId,
           currentTimeMs: 0,
           isPlaying: true,
           startAtPassage: { bookId: book.id, sectionId, passageId, wordIndex },
-        }),
+        });
+      },
       clearStartAtPassage: () => set({ startAtPassage: null }),
       updateBookContent: (book) => set((s) => (s.book && s.book.id === book.id ? { book } : {})),
       closePlayer: () => set({ book: null, materialId: null, isPlaying: false, startAtPassage: null }),

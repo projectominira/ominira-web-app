@@ -67,7 +67,7 @@ export default function VoiceChangeModal({ voice, onSelect, onClose }: Props) {
                 <img src={v.avatar} alt={v.name} className="h-14 w-14 flex-none rounded-full object-cover" />
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold text-[var(--reader-text)]">{v.name}</div>
-                  <div className="mt-0.5 text-xs text-[var(--reader-text-muted)]">{v.traits}</div>
+                  <div className="mt-0.5 text-xs text-[var(--reader-text-muted)]">{v.gender}</div>
                 </div>
                 {active && (
                   <span className="flex h-5.5 w-5.5 flex-none items-center justify-center rounded-full bg-[var(--reader-text)]">
