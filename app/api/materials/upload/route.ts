@@ -4,8 +4,7 @@ import { getAuthenticatedReader, isAdminReader } from "@/lib/auth/session";
 import { forbidden, unauthorized, validationError } from "@/lib/api/errors";
 import { readerCanUpload } from "@/lib/auth/profile";
 import { cdnUrl, copyObject, deletePrefix, fetchStorageText, listObjects, putObject } from "@/lib/storage/r2";
-import { parseBookDocument, type BookDocument } from "@/lib/book/schema";
-import { readerObjects } from "@/lib/materials/readerFiles";
+import { parseBookDocument } from "@/lib/book/schema";
 import { enrichMaterial } from "@/lib/materials/enrichMaterial";
 import { buildMaterialManifest } from "@/lib/materials/manifest";
 import { ADMIN_UPLOAD_LIMITS, MEMBER_UPLOAD_LIMITS, formatBytes } from "@/lib/materials/uploadLimits";
@@ -102,18 +101,15 @@ export async function POST(request: Request) {
 
     // Saved as the validated (normalized) document rather than the client's
     // bytes, with its cover and image URLs pointing into the book's folder;
-    // beside it, the manifest and the reader's chunks (readerFiles.ts).
+    // beside it, the manifest.
     jsonStoragePath = `${folder}v1/book.json`;
     const json = JSON.stringify(validated.data).replaceAll(cdnUrl(`${paths.folder}/`), cdnUrl(folder));
     const objects = [
       { key: jsonStoragePath, body: json },
       { key: `${folder}v1/manifest.json`, body: JSON.stringify(buildMaterialManifest(validated.data, slug)) },
-      ...readerObjects(JSON.parse(json) as BookDocument, `${folder}v1/`),
     ];
     try {
-      for (let i = 0; i < objects.length; i += 20) {
-        await Promise.all(objects.slice(i, i + 20).map((o) => putObject(o.key, o.body, "application/json")));
-      }
+      await Promise.all(objects.map((o) => putObject(o.key, o.body, "application/json")));
     } catch {
       return reject("Could not save the parsed book.");
     }

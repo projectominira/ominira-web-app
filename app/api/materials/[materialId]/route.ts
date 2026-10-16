@@ -9,7 +9,7 @@ import { deleteMaterialAssets } from "@/lib/materials/deleteMaterialAssets";
 const METADATA_CACHE = "public, max-age=0, s-maxage=60, stale-while-revalidate=300";
 
 /** Metadata only (`fields=`, see projectMaterial): a book's text comes from
- * the CDN (lib/materials/readerFiles.ts), never through here. */
+ * the CDN (its book.json), never through here. */
 export async function GET(request: Request, { params }: { params: Promise<{ materialId: string }> }) {
   const { materialId } = await params;
   const row = await resolveMaterialRow(materialId);

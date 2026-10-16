@@ -1,13 +1,12 @@
 import { resolveMaterialRow } from "@/lib/materials/resolve";
 import { bookMetadataFromRow, MaterialNotFoundError } from "@/lib/materials/toBookDocument";
-import { contentFolder } from "@/lib/materials/readerFiles";
 import { cdnUrl } from "@/lib/storage/r2";
 import type { BookMetadata } from "@/lib/book/schema";
 
 export { MaterialNotFoundError };
 
 export type ReaderMaterial =
-  | { kind: "book"; materialId: string; slug: string; contentBase: string; metadata: BookMetadata }
+  | { kind: "book"; materialId: string; slug: string; bookUrl: string; metadata: BookMetadata }
   | { kind: "pdf"; materialId: string; title: string; author: string; sourceUrl: string }
   | { kind: "docx"; materialId: string; title: string; author: string; sourceUrl: string }
   | { kind: "webpage"; materialId: string; title: string; author: string; sourceUrl: string; articleUrl: string };
@@ -47,7 +46,7 @@ export async function loadReaderMaterial(slug: string): Promise<ReaderMaterial> 
     kind: "book",
     materialId: row.id,
     slug: row.slug,
-    contentBase: cdnUrl(contentFolder(row.json_storage_path)),
+    bookUrl: cdnUrl(row.json_storage_path),
     metadata: bookMetadataFromRow(row),
   };
 }

@@ -3,38 +3,37 @@
 import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import Reader from "./Reader";
 import Loader from "../Loader";
-import type { BookMetadata } from "@/lib/book/schema";
-import type { ReaderBook } from "@/lib/materials/readerFiles";
+import type { BookDocument, BookMetadata } from "@/lib/book/schema";
 
-/** Fetches a book's reader.json from the CDN, then mounts Reader on it; the
- * prose follows chunk by chunk (useProgressiveText). The server sends only
- * `metadata`, from the materials row, which wins over the document's own
- * (a reader can retitle their upload; the cover cascade lives on the row). */
+/** Fetches a book's book.json from the CDN, then mounts Reader on it. The
+ * server sends only `bookUrl` and `metadata`, from the materials row, which
+ * wins over the document's own (a reader can retitle their upload; the cover
+ * cascade lives on the row). */
 export default function BookReader({
+  bookUrl,
   metadata,
   ...props
-}: Omit<ComponentProps<typeof Reader>, "book"> & { metadata: BookMetadata }) {
-  const { contentBase } = props;
-  const [loaded, setLoaded] = useState<{ base: string; book: ReaderBook } | null>(null);
+}: Omit<ComponentProps<typeof Reader>, "book"> & { bookUrl: string; metadata: BookMetadata }) {
+  const [loaded, setLoaded] = useState<{ url: string; book: BookDocument } | null>(null);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${contentBase}reader.json`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`reader.json: ${res.status}`))))
-      .then((book: ReaderBook) => !cancelled && setLoaded({ base: contentBase, book }))
+    fetch(bookUrl)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`book.json: ${res.status}`))))
+      .then((book: BookDocument) => !cancelled && setLoaded({ url: bookUrl, book }))
       .catch((err: Error) => !cancelled && setError(err));
     return () => {
       cancelled = true;
     };
-  }, [contentBase]);
+  }, [bookUrl]);
 
   const book = useMemo(
-    () => (loaded?.base === contentBase ? { ...loaded.book, metadata } : null),
-    [loaded, contentBase, metadata]
+    () => (loaded?.url === bookUrl ? { ...loaded.book, metadata } : null),
+    [loaded, bookUrl, metadata]
   );
 
   if (error) throw error;
   if (!book) return <Loader />;
-  return <Reader key={contentBase} book={book} {...props} />;
+  return <Reader key={bookUrl} book={book} {...props} />;
 }

@@ -69,14 +69,9 @@ export function useReadingProgress({
   });
 
   // Kept in sync every render (not read as an effect dependency below) —
-  // `activeSection` is a fresh object identity every time useProgressiveText
-  // swaps in more real prose (most notably its one-time "rest of the book"
-  // background load, which lands moments after the reader arrives, right when
-  // they're first settling in to read). Depending on the object itself tore
-  // the tracker down and rebuilt it — cancelling any pending debounced write
-  // with it — every time that happened, which routinely ate the very first
-  // scroll-settle write of a session. `read` below consults this ref at call
-  // time instead.
+  // `activeSection` can be a fresh object identity on any render; depending
+  // on it would tear the tracker down and rebuild it, cancelling any pending
+  // debounced write. `read` below consults this ref at call time instead.
   const activeSectionRef = useRef(activeSection);
   useEffect(() => {
     activeSectionRef.current = activeSection;

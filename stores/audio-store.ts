@@ -55,18 +55,9 @@ type AudioState = {
     wordIndex?: number
   ) => void;
   clearStartAtPassage: () => void;
-  /** Keeps `book` in sync as more of it arrives — Reader.tsx's own prose
-   * loads progressively (see useProgressiveText's doc comment: every
-   * section's structure is real from the start, but non-eager sections'
-   * passage.text starts blank and backfills asynchronously). openBook is
-   * called once, at listen-start, with whatever's loaded *then*; without
-   * this, any section that finishes loading its real text *after* that —
-   * which is the common case, since progressive loading is still running
-   * in the background — would stay permanently blank as far as
-   * NarrationEngine's narrationIndex is concerned, even though the reader
-   * itself is already showing real prose for it. A no-op if `book` isn't
-   * the one currently playing (stale call from a book the reader has since
-   * navigated away from/closed listen mode for). */
+  /** Keeps `book` in sync as more of it arrives — a PDF's text loads page
+   * by page (PdfDocumentView), after openBook ran with whatever was loaded
+   * then. A no-op if `book` isn't the one currently playing. */
   updateBookContent: (book: NarrationDocument) => void;
   /** Exits listen mode entirely — resume position is left untouched in
    * reading-position-store, so reopening the book later picks up where

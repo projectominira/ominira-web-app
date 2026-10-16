@@ -17,7 +17,6 @@ import SelectionActions, { useShareQuote } from "./SelectionActions";
 import BackToCurrentButton from "./BackToCurrentButton";
 import Loader from "../Loader";
 import type { BookDocument, Passage, Section } from "@/lib/book/schema";
-import type { ReaderBook } from "@/lib/materials/readerFiles";
 import { useReaderStore, useTypographyStyle } from "@/stores/reader-store";
 import { useReadingPositionStore } from "@/stores/reading-position-store";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -30,7 +29,6 @@ import { spokenPassageText, wordIndexAt } from "@/lib/audio/narrationText";
 import { buildSectionsById, resolveSpineTarget } from "@/lib/reader/sections";
 import { useSectionCarousel } from "@/lib/reader/useSectionCarousel";
 import { useResumeScroll } from "@/lib/reader/useResumeScroll";
-import { useProgressiveText } from "@/lib/reader/useProgressiveText";
 import { useReadingProgress } from "@/lib/reader/useReadingProgress";
 import { useTextAnnotations } from "@/lib/reader/useTextAnnotations";
 import { createDomSurface } from "@/lib/annotations/surface";
@@ -44,7 +42,6 @@ import { useRoomView } from "@/lib/room/useRoomView";
 
 export default function Reader({
   book,
-  contentBase,
   materialId,
   targetSectionId,
   targetPassageId,
@@ -55,11 +52,8 @@ export default function Reader({
   autoListen,
   onClose,
 }: {
-  /** reader.json: every section's structure, prose blank until
-   * useProgressiveText fetches its chunk. */
-  book: ReaderBook;
-  /** The book's version folder on the CDN, ending in "/". */
-  contentBase: string;
+  /** The whole book, fetched by BookReader from the CDN. */
+  book: BookDocument;
   /** The book's real `materials.id` (UUID) — distinct from `book.id`
    * (ingestion's own slug-like internal id, api-spec.md). Everything that
    * reads/writes reading position (reading-position-store, audio-store's
@@ -152,7 +146,6 @@ export default function Reader({
   const openBookAtPassage = useAudioStore((s) => s.openBookAtPassage);
   const playAudio = useAudioStore((s) => s.play);
   const pauseAudio = useAudioStore((s) => s.pause);
-  const updateBookContent = useAudioStore((s) => s.updateBookContent);
   const dockedHeight = useDockedHeight();
   const narrationBarHeight = useNarrationBarHeight();
   const anyPlayerActive = audioStoreBook !== null;
@@ -162,54 +155,13 @@ export default function Reader({
   const canListen = book.spine.length > 0;
   const isListen = audioStoreBook?.id === book.id;
 
-  // Every section's structure (spine order, ids, audio, passage counts/
-  // types) is real from the very first render — only the actual prose
-  // fills in progressively, chunk by chunk from the CDN, starting from
-  // wherever the reader lands (see useProgressiveText). `sections`
-  // below is what every downstream consumer (orderedSections,
-  // passageLookup, search, the book-wide notes feed, BookContent itself,
-  // and — critically — audio-store's `book` once listen mode opens) reads
-  // instead of the static `book.sections` prop, so all of them improve
-  // automatically as more of the book arrives, with no separate "is this
-  // stale" bookkeeping needed anywhere else in this file.
-  const { sections, ensureTextLoaded, loadAllTextInBackground } = useProgressiveText({
-    contentBase,
-    initialSections: book.sections,
-    chunks: book.chunks,
-  });
-  // The same BookDocument shape every child already expects, just with the
-  // live (progressively-filling) sections tree swapped in for the static
-  // one reader.json gave — so BookContent/ChaptersDrawer/NarrationEngine
-  // need no prop-shape changes at all, only this one substitution at each
-  // call site.
-  const liveBook = useMemo<BookDocument>(() => ({ ...book, sections }), [book, sections]);
-
   // See autoListen's own doc comment above — a one-time echo of what
   // ReaderHeader's onListen does on click, fired instead on mount when the
-  // book-detail page's Listen button is why we're here. Opens with
-  // liveBook, not the static `book` prop — passing the static prop here
-  // used to mean any section not yet loaded (most of the book, on first open)
-  // permanently had blank passage.text as far as NarrationEngine's
-  // narrationIndex was concerned, even once the reader itself had the real
-  // prose in hand — a section like this wouldn't just be missing from the
-  // narration queue, it would never make a single narration request at
-  // all, silently.
+  // book-detail page's Listen button is why we're here.
   useEffect(() => {
-    if (autoListen && !isListen) openBook(liveBook, materialId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately fires once on mount only; autoListen/liveBook/materialId are fixed at mount for this purpose, and isListen is read once as a mount-time guard, not tracked afterward.
+    if (autoListen && !isListen) openBook(book, materialId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately fires once on mount only; autoListen/book/materialId are fixed at mount for this purpose, and isListen is read once as a mount-time guard, not tracked afterward.
   }, []);
-
-  // Keeps audio-store's own book copy current as more prose arrives —
-  // openBook above (or ReaderHeader's onListen) only ever runs once, at
-  // whatever moment listen mode starts, and progressive loading keeps
-  // running in the background well past that moment for any book longer
-  // than its first chunk. Guarded to this book only (updateBookContent
-  // itself also checks id, but isListen is the cheaper/earlier check) — a
-  // reader who has navigated to a different book, or closed listen mode
-  // for this one, shouldn't push stale content into whatever's playing now.
-  useEffect(() => {
-    if (isListen) updateBookContent(liveBook);
-  }, [isListen, liveBook, updateBookContent]);
 
   const narrationAudioIndex = useNarrationStore((s) => s.audioIndex);
   const narrationAudioSection = useNarrationStore((s) => s.audioSection);
@@ -241,13 +193,13 @@ export default function Reader({
         seekToPassageForListening(sectionId, passageId);
         return;
       }
-      openBookAtPassage(liveBook, materialId, sectionId, passageId);
+      openBookAtPassage(book, materialId, sectionId, passageId);
     },
     [
       audioIsPlaying,
       currentPlayingPassageId,
       isListen,
-      liveBook,
+      book,
       materialId,
       openBookAtPassage,
       pauseAudio,
@@ -278,7 +230,7 @@ export default function Reader({
   // otherwise commit to "nothing to resume" before the request ever arrived.
   const serverPositionReady = useServerPositionReady();
 
-  const sectionsById = useMemo(() => buildSectionsById(sections), [sections]);
+  const sectionsById = useMemo(() => buildSectionsById(book.sections), [book.sections]);
 
   // book.spine is already the whole book's reading order (front matter,
   // part dividers, and chapters alike) — the same order the sidebar and
@@ -441,10 +393,10 @@ export default function Reader({
   // nearest real reading section instead.
   const navigateToSection = useCallback(
     (id: string, opts?: { animate?: boolean }) => {
-      const target = resolveSpineTarget(id, sections, book.spine);
+      const target = resolveSpineTarget(id, book.sections, book.spine);
       if (target) goToSection(target, opts);
     },
-    [sections, book.spine, goToSection]
+    [book.sections, book.spine, goToSection]
   );
 
   const resumeReady = useResumeScroll({
@@ -461,51 +413,11 @@ export default function Reader({
     serverPositionReady,
   });
 
-  // Whichever section the reader actually lands on (a ?section= link, or —
-  // the common "just continue reading" case — wherever useResumeScroll's
-  // client-only saved position actually points) needs its real prose in hand before
-  // the loader lifts — same gate as hydrated/resumeReady below, just for
-  // text instead of theme/scroll-position. Everywhere else in the book
-  // keeps filling in via loadAllTextInBackground below regardless.
-  const [textReady, setTextReady] = useState(false);
-  useEffect(() => {
-    if (!resumeReady) return;
-    let cancelled = false;
-    ensureTextLoaded(activeSectionId).then(() => {
-      if (!cancelled) setTextReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [resumeReady, activeSectionId, ensureTextLoaded]);
-
-  // The rest of the book, from the reader's own starting section onward —
-  // fired exactly once, right after that section is settled, not paced by
-  // scroll or navigation (see useProgressiveText's own doc comment).
-  const backgroundLoadStartedRef = useRef(false);
-  useEffect(() => {
-    if (!resumeReady || backgroundLoadStartedRef.current) return;
-    backgroundLoadStartedRef.current = true;
-    loadAllTextInBackground(activeSectionId);
-  }, [resumeReady, activeSectionId, loadAllTextInBackground]);
-
-  // Defensive: a reader can navigate (chapters drawer, search result,
-  // chapter-nav footer) to a section the background wave above hasn't
-  // reached yet — this fetches that one specific section immediately
-  // rather than leaving it blank until the whole-book wave gets there on
-  // its own. A no-op whenever the target's already loaded or already in
-  // flight (see ensureTextLoaded).
-  useEffect(() => {
-    if (!activeSectionId) return;
-    ensureTextLoaded(activeSectionId);
-  }, [activeSectionId, ensureTextLoaded]);
-
   // Gates the full-screen loader below — the reader isn't considered ready
   // until every piece of state it renders from (theme/font/position, via
-  // `hydrated`; scroll position, via `resumeReady`; the starting section's
-  // actual prose, via `textReady`) reflects the reader's actual saved data
+  // `hydrated`; scroll position, via `resumeReady`) reflects the reader's actual saved data
   // rather than a first-paint default.
-  const isReady = hydrated && resumeReady && textReady;
+  const isReady = hydrated && resumeReady;
 
   // Plain reading (no audio) had no position-save path at all — only
   // listen-mode's own effects (now in NarrationEngine) ever called
@@ -748,9 +660,9 @@ export default function Reader({
       });
       const wordIndex = wordIndexAt(spoken, spoken.length);
       if (isListen) seekToPassageForListening(sectionId, passageId, wordIndex);
-      else openBookAtPassage(liveBook, materialId, sectionId, passageId, wordIndex);
+      else openBookAtPassage(book, materialId, sectionId, passageId, wordIndex);
     },
-    [passageLookup, isListen, seekToPassageForListening, openBookAtPassage, liveBook, materialId]
+    [passageLookup, isListen, seekToPassageForListening, openBookAtPassage, book, materialId]
   );
   const onInternalLinkClick = useCallback(
     (sectionId: string, fragmentId?: string) => {
@@ -1007,7 +919,7 @@ export default function Reader({
           onClose={onClose}
           canListen={canListen}
           isListen={isListen}
-          onListen={() => openBook(liveBook, materialId)}
+          onListen={() => openBook(book, materialId)}
           onToggleSearch={() => setSearchOpen((o) => !o)}
           activeSection={orderedSections[activeIndex]}
           onToggleChapters={() => setChaptersOpen((o) => !o)}
@@ -1021,7 +933,7 @@ export default function Reader({
             fallback (a bottom sheet, since there's no room to push there). */}
         <div className="w-full h-full flex overflow-clip">
           <ChaptersDrawer
-            book={liveBook}
+            book={book}
             scrollPct={scrollPct}
             activeSectionId={activeSectionForSidebar}
             isMobile={isMobile}
@@ -1142,7 +1054,7 @@ export default function Reader({
             {searchOpen && (
               <div className="absolute inset-0 z-50">
                 <SearchModal
-                  book={liveBook}
+                  book={book}
                   onNavigate={(sectionId, passageId) => {
                     goToSection(sectionId, { animate: false });
                     requestAnimationFrame(() => {

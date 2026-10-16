@@ -7,7 +7,7 @@ type MaterialRow = Database["public"]["Tables"]["materials"]["Row"];
 // Everything `fields=` may request. All of it resolves off the row, except
 // `spine` and the `sections` outline, which come from the small manifest.
 // A book's text never passes through here: the reader fetches it from the
-// CDN (lib/materials/readerFiles.ts).
+// CDN (its book.json).
 const DB_ONLY_FIELDS = new Set([
   "title",
   "author",

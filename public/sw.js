@@ -1,11 +1,11 @@
 // Bumped whenever a precached file changes — activate() then drops every
 // older cache, so installed apps pick up the new icon set / splash marks.
-const CACHE_NAME = "ominira-shell-v12";
+const CACHE_NAME = "ominira-shell-v13";
 // Offline reading. None of these are cleared on activate — an app update
 // shouldn't make readers redownload what they've already opened.
 //  - documents: PDF/DOCX source files, written by the page itself
 //    (lib/offline/documentCache.ts — same name there).
-//  - content: book text from the CDN (reader.json and its chunks) — immutable,
+//  - content: book text from the CDN (each version's book.json) — immutable,
 //    each version under its own folder.
 //  - pages: the last copy of each reader page (/read/<slug>, /reader/<slug>),
 //    the offline fallback for opening a book already opened online.
@@ -121,9 +121,8 @@ async function saveOrTouchReaderPage(event, key) {
 
 const READER_PAGE = /^\/(read|reader)\/[^/]+\/?$/;
 
-/** A book's text on the CDN: reader.json and its chunks, under a version
- * folder, so immutable (lib/materials/readerFiles.ts). */
-const BOOK_TEXT = /^\/books\/[^/]+\/v\d+\/(reader\.json|s\/\d+\.json)$/;
+/** A book's text on the CDN: book.json under a version folder, so immutable. */
+const BOOK_TEXT = /^\/books\/[^/]+\/v\d+\/book\.json$/;
 
 // Network-first for navigations (so readers always get fresh pages when
 // online). Reader pages keep their last good copy, so a book opened online

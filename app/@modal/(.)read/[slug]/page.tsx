@@ -73,7 +73,7 @@ export default async function ReadBookModalPage({
     <ReaderModal
       slug={material.slug}
       metadata={material.metadata}
-      contentBase={material.contentBase}
+      bookUrl={material.bookUrl}
       materialId={material.materialId}
       targetSectionId={section}
       targetPassageId={passage}

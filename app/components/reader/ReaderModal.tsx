@@ -11,7 +11,7 @@ import type { BookMetadata } from "@/lib/book/schema";
 export default function ReaderModal({
   slug,
   metadata,
-  contentBase,
+  bookUrl,
   materialId,
   targetSectionId,
   targetPassageId,
@@ -21,7 +21,7 @@ export default function ReaderModal({
 }: {
   slug: string;
   metadata: BookMetadata;
-  contentBase: string;
+  bookUrl: string;
   materialId: string;
   targetSectionId?: string;
   targetPassageId?: string;
@@ -34,7 +34,7 @@ export default function ReaderModal({
       {(onClose) => (
         <BookReader
           metadata={metadata}
-          contentBase={contentBase}
+          bookUrl={bookUrl}
           materialId={materialId}
           targetSectionId={targetSectionId}
           targetPassageId={targetPassageId}

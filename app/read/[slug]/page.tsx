@@ -89,7 +89,7 @@ export default async function ReadBookPage({
   return (
     <BookReader
       metadata={material.metadata}
-      contentBase={material.contentBase}
+      bookUrl={material.bookUrl}
       materialId={material.materialId}
       targetSectionId={section}
       targetPassageId={passage}
