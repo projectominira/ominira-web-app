@@ -175,12 +175,14 @@ export function useResumeScroll({
     // `stored.sectionId`; done immediately rather than waiting forever for
     // a match that can't happen. Deferred a frame purely to satisfy the
     // no-setState-in-effect-body rule, same as the found-a-target path
-    // below.
+    // below. The frame is never cancelled: the ref above already stops a
+    // re-run, so a cancel (Strict Mode's mount/unmount/mount in dev) would
+    // leave the loader up for good.
     const sectionExists = stored && orderedSections.some((s) => s.id === stored.sectionId);
     if (!stored || !sectionExists) {
       hasScrolledInitialRef.current = true;
-      const raf = requestAnimationFrame(() => setInitialScrollDone(true));
-      return () => cancelAnimationFrame(raf);
+      requestAnimationFrame(() => setInitialScrollDone(true));
+      return;
     }
     // Step 1's goTo hasn't landed on this section yet (still mid-render) —
     // wait for the next pass rather than scrolling within the wrong slide.
@@ -192,8 +194,7 @@ export function useResumeScroll({
       usedPositionRef.current = stored;
       scrollToPassage(stored.sectionId, passageId);
     }
-    const raf = requestAnimationFrame(() => setInitialScrollDone(true));
-    return () => cancelAnimationFrame(raf);
+    requestAnimationFrame(() => setInitialScrollDone(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [book.id, materialId, activeSectionId, targetSectionId, targetPassageId, targetPassageIndex]);
 
