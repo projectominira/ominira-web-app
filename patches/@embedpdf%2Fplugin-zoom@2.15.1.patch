@@ -1,0 +1,13 @@
+diff --git a/dist/index.js b/dist/index.js
+index a4ba538..6b1853e 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -533,7 +533,7 @@ const _ZoomPlugin = class _ZoomPlugin extends BasePlugin {
+       case ZoomMode.FitPage:
+         return Math.min(availableWidth / maxContentW, availableHeight / maxContentH);
+       case ZoomMode.Automatic:
+-        return Math.min(availableWidth / maxContentW, 1);
++        return Math.min(availableWidth / maxContentW, 1.65);
+       default:
+         return 1;
+     }

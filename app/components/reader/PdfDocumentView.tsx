@@ -59,10 +59,12 @@ const PAGE_GAP_PX = 16;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4;
 
-/** The zoom that "fits the screen": the page's width, never enlarged past 100%.
+/** The zoom that "fits the screen": the page's width, never enlarged past 165%
+ * (patched up from EmbedPDF's 100%, see patches/@embedpdf%2Fplugin-zoom).
  * On a phone that's a page exactly as wide as the screen (the old viewer rendered
- * it at its full 612px and let it overflow); on a desktop it's the page at its
- * real size. */
+ * it at its full 612px and let it overflow); on a desktop it's a page about
+ * 1000px wide, as other web PDF viewers open it — at 100% a letter page's body
+ * text is ~11px, too small to read crisply on a 1x display. */
 const FIT_ZOOM = ZoomMode.Automatic;
 
 /** How each page is painted: a low-resolution image of the whole page, instantly
@@ -257,7 +259,9 @@ function PdfReader({
       // any other PDF viewer — without these, a document's existing highlights,
       // stamps and filled-in fields would simply be missing.
       createPluginRegistration(RenderPluginPackage, { withAnnotations: true, withForms: true }),
-      createPluginRegistration(TilingPluginPackage, { tileSize: 768, overlapPx: 2.5, extraRings: 0 }),
+      // Whole-pixel overlap, so every tile starts on a pixel boundary rather
+      // than being resampled (blurred) across a half pixel.
+      createPluginRegistration(TilingPluginPackage, { tileSize: 768, overlapPx: 2, extraRings: 0 }),
       createPluginRegistration(ZoomPluginPackage, {
         defaultZoomLevel: FIT_ZOOM,
         minZoom: MIN_ZOOM,

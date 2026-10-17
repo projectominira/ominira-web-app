@@ -73,6 +73,7 @@
     "unrs-resolver",
   ],
   "patchedDependencies": {
+    "@embedpdf/plugin-zoom@2.15.1": "patches/@embedpdf%2Fplugin-zoom@2.15.1.patch",
     "@embedpdf/engines@2.15.1": "patches/@embedpdf%2Fengines@2.15.1.patch",
   },
   "packages": {
