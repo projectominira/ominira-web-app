@@ -2,6 +2,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { loadSectionLabels } from "@/lib/materials/sectionLabels";
 import { resolveExcerpt } from "./excerpt";
 import { hydrateNotes, type NoteRow } from "./notes";
+import { canReadPost, type PostViewer } from "./visibility";
 import type { AnnotationRange, MaterialSummary, Note } from "@/lib/api/types";
 import { MATERIAL_SUMMARY_COLUMNS } from "@/lib/materials/columns";
 import { parseGoogleMetaData, parseOpenLibraryMetaData } from "@/lib/materials/providerMeta";
@@ -35,8 +36,9 @@ export type FeedItem = {
  * manifest read per unique book on the page (not per note), for section
  * labels, and one reply query for the whole page.
  */
-export async function enrichFeedItems(rows: NoteRow[], callerId: string | undefined): Promise<FeedItem[]> {
+export async function enrichFeedItems(rows: NoteRow[], viewer: PostViewer): Promise<FeedItem[]> {
   if (rows.length === 0) return [];
+  const callerId = viewer?.readerId;
   const admin = getSupabaseAdminClient();
 
   // material_id is nullable — a book-less discussion post has none — so
@@ -57,13 +59,9 @@ export async function enrichFeedItems(rows: NoteRow[], callerId: string | undefi
         )
         .order("created_at", { ascending: true })
     : { data: [] };
-  // Same visibility rule as everywhere else (visibleToFilter): a private
-  // reply is only visible to its own author. Filtered in app code rather
-  // than the query above since it's an `.in(parent_id)` already, and this
-  // keeps it identical to the single-thread route's own filter.
-  const visibleReplyRows = ((replyRows ?? []) as NoteRow[]).filter(
-    (r) => r.visibility === "public" || r.reader_id === callerId
-  );
+  // Same visibility rule as everywhere else (lib/community/visibility.ts),
+  // applied in app code since this is an `.in(parent_id)` already.
+  const visibleReplyRows = ((replyRows ?? []) as NoteRow[]).filter((r) => canReadPost(r, viewer));
   const repliesByParent = new Map<string, NoteRow[]>();
   for (const r of visibleReplyRows) {
     if (!r.parent_id) continue;

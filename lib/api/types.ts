@@ -19,6 +19,9 @@ export type CurrentReaderSummary = {
    * roster's mode icon. */
   mode: ReaderMode;
   updatedAt: string;
+  /** How far through the book they are (progress_percent): a book room's
+   * "Ch. 3" beside their name. */
+  pct: number;
   /** Where they read from, as set on their profile — the social rail's
    * profile card shows it. Null when they left it blank. */
   city: string | null;
@@ -101,25 +104,11 @@ export type Note = {
    * .sql). No matching count: unlike a reaction, a bookmark is private, so
    * there's no public total to carry. False for a signed-out caller. */
   bookmarkedByMe: boolean;
-  /** The post's default topic name — always topicNames[0] (migrations/
-   * 20260919_topics_and_posts.sql's required topic_id), null only if the
-   * topic lookup itself failed. Surfaced so AuthorRow can show "· in
-   * {topicName}". */
-  topicName: string | null;
-  /** topicName's own slug — lets AuthorRow link the topic label straight
-   * into Home's `?topic=<slug>` filter (CategoryPills' own href shape),
-   * without a client-side name->slug lookup. Null exactly when topicName
-   * is. */
-  topicSlug: string | null;
-  /** Every topic the post is tagged under, default first (migrations/
-   * 20260927_post_topics.sql) — a reader can tag a post under several
-   * topics via the composer's multi-select picker. Empty only alongside a
-   * null topicName. */
-  topicNames: string[];
-  /** Same set as topicNames, name+slug pairs — what AuthorRow actually
-   * renders (every tagged topic, each linked into Home's `?topic=<slug>`
-   * filter), rather than just the default. */
-  topics: { name: string; slug: string }[];
+  /** The group it was posted from (studygroup-spec.md §4.5): Community
+   * notes label it "· Sankara Study Circle". Null for every other post. */
+  group: { slug: string; name: string } | null;
+  /** Comrades it tags, who can read it even when private. */
+  mentions: { readerId: string; pseudonym: string }[];
   createdAt: string;
   updatedAt: string;
 };
@@ -194,6 +183,8 @@ export type ReaderProfile = {
   avatar: Avatar;
   /** Opted in to admin email announcements (off by default). */
   emailAnnouncements: boolean;
+  /** IANA zone last synced from a device; null until the first sync. */
+  timeZone: string | null;
   /** Approved by an admin to upload books (/admin/readers), or an admin. */
   canUpload: boolean;
   joinedAt: string;

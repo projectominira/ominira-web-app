@@ -5,6 +5,7 @@ import { conflict, unauthorized, validationError } from "@/lib/api/errors";
 import { getReaderRow, toReaderProfile } from "@/lib/auth/profile";
 import type { Database } from "@/lib/supabase/database.types";
 import { isAvatarColor } from "@/lib/avatar/avatar";
+import { isValidTimeZone } from "@/lib/time/zone";
 
 export async function GET(request: Request) {
   const reader = await getAuthenticatedReader(request);
@@ -26,6 +27,7 @@ export async function PATCH(request: Request) {
     country?: string | null;
     avatarColor?: string | null;
     emailAnnouncements?: boolean;
+    timeZone?: string;
   };
   const update: Database["public"]["Tables"]["readers"]["Update"] = {};
   if (body.fullName !== undefined) update.full_name = body.fullName;
@@ -51,6 +53,10 @@ export async function PATCH(request: Request) {
   if (body.emailAnnouncements !== undefined) {
     if (typeof body.emailAnnouncements !== "boolean") return validationError("Must be true or false.", "emailAnnouncements");
     update.email_announcements = body.emailAnnouncements;
+  }
+  if (body.timeZone !== undefined) {
+    if (typeof body.timeZone !== "string" || !isValidTimeZone(body.timeZone)) return validationError("Unknown timezone.", "timeZone");
+    update.timezone = body.timeZone;
   }
 
   const { data: updated, error } = await getSupabaseAdminClient()

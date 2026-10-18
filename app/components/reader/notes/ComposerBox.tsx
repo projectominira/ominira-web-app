@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import type { ReactNode, Ref } from "react";
+import type { KeyboardEvent, ReactNode, Ref } from "react";
 import { ArrowUp } from "lucide-react";
 import LinkPreviewCard from "@/app/components/shared/LinkPreviewCard";
 import { extractLinks } from "@/lib/community/links";
@@ -28,6 +28,7 @@ export default function ComposerBox({
   submitOnEnter,
   inputRef,
   containerRef,
+  onKeyDown,
   tools,
   canPost,
   postLabel = "Post",
@@ -49,6 +50,8 @@ export default function ComposerBox({
   submitOnEnter?: boolean;
   inputRef?: Ref<HTMLTextAreaElement>;
   containerRef?: Ref<HTMLDivElement>;
+  /** First look at a key; true means it was handled (a mention picker). */
+  onKeyDown?: (e: KeyboardEvent<HTMLTextAreaElement>) => boolean;
   tools?: ReactNode;
   canPost: boolean;
   postLabel?: string;
@@ -100,6 +103,7 @@ export default function ComposerBox({
         }
       }}
       onKeyDown={(e) => {
+        if (onKeyDown?.(e)) return;
         if (e.key === "Escape" && onCancel) {
           e.preventDefault();
           onCancel();

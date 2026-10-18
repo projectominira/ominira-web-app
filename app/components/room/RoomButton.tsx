@@ -1,14 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, MicSignal } from "lucide-react";
+import { Loader2, Mic } from "lucide-react";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
-import { materialKeys } from "@/lib/materials/queryKeys";
+import { useEnterRoom } from "@/lib/room/useEnterRoom";
 import { useMaterialRoom } from "@/lib/room/useMaterialRoom";
 import { roomChatUnread, useRoomStore } from "@/stores/room-store";
-import { confirmAction } from "@/stores/confirm-store";
-import { showToast } from "@/stores/toast-store";
 import UnreadBadge from "./UnreadBadge";
 import { LiveBadge } from "@/app/components/reader/ReaderPresence";
 
@@ -32,11 +28,7 @@ export function useRoomEntry(materialId: string) {
  * carrying chat's unread count. The live equaliser whenever the room is on. */
 export default function RoomButton({ materialId, onOpen }: { materialId: string; onOpen: () => void }) {
   const entry = useRoomEntry(materialId);
-  const signedIn = useIsAuthenticated();
-  const start = useRoomStore((s) => s.start);
-  const join = useRoomStore((s) => s.join);
-  const queryClient = useQueryClient();
-  const [pending, setPending] = useState(false);
+  const { enter, pending } = useEnterRoom();
   if (!entry) return null;
 
   const label =
@@ -52,32 +44,8 @@ export default function RoomButton({ materialId, onOpen }: { materialId: string;
 
   const onClick = async () => {
     if (entry.state === "in") return onOpen();
-    if (!signedIn) return showToast("Sign in to join the room.");
-    const ok = await confirmAction(
-      entry.state === "live"
-        ? {
-            title: `Join ${entry.live.title}?`,
-            message: "You'll hear the room and can raise your hand to speak.",
-            confirmLabel: "Join room",
-          }
-        : {
-            title: "Start a reading room?",
-            message: "Anyone reading this book can join and listen in.",
-            confirmLabel: "Start room",
-          }
-    );
-    if (!ok) return;
-    setPending(true);
-    try {
-      if (entry.state === "live") await join(entry.live.id);
-      else await start(materialId);
-      onOpen();
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Couldn't open the room.");
-    } finally {
-      setPending(false);
-      void queryClient.invalidateQueries({ queryKey: materialKeys.room(materialId) });
-    }
+    const entered = await enter(entry.state === "live" ? { materialId, join: entry.live } : { materialId, start: {} });
+    if (entered) onOpen();
   };
 
   return (
@@ -88,7 +56,7 @@ export default function RoomButton({ materialId, onOpen }: { materialId: string;
       title={label}
       className="relative flex h-10 w-10 flex-none cursor-pointer items-center justify-center rounded-full text-[var(--reader-text-muted)] transition-colors hover:bg-[var(--reader-surface-hover)] disabled:cursor-default disabled:opacity-60"
     >
-      {pending ? <Loader2 size={20} className="animate-spin" /> : <MicSignal size={21} strokeWidth={2} />}
+      {pending ? <Loader2 size={20} className="animate-spin" /> : <Mic size={21} strokeWidth={2} />}
       {entry.state === "in" && entry.unread > 0 ? (
         <UnreadBadge count={entry.unread} className="absolute right-0 top-0.5 ring-2 ring-[var(--reader-surface)]" />
       ) : (

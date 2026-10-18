@@ -28,17 +28,12 @@ import { confirmAction } from "@/stores/confirm-store";
 export default function ReplyEntry({
   reply,
   replyingToName,
-  depth = 1,
   ui,
   actions,
 }: {
   reply: Note;
+  /** Only where the threadline can't say it (ThreadEntry.to). */
   replyingToName?: string;
-  /** 2 for a reply that itself addresses another reply (nested one step
-   * further under the vertical thread rule) rather than the top-level
-   * note — same distinction `replyingToName` already carries, just as an
-   * indent level for the rule/padding below. */
-  depth?: 1 | 2;
   ui: ThreadUIState;
   actions: ThreadActions;
 }) {
@@ -52,11 +47,9 @@ export default function ReplyEntry({
     // column — this is a flex item of NoteThreadCard's reply-list column,
     // and without it a long unbroken run inside NoteContent (a URL) sets
     // this reply's own minimum width to that run's full length rather than
-    // letting NoteContent's wrap utilities engage. No tree lines of its own —
-    // NoteThreadCard draws the trunk and elbows; a depth-2 reply (addressing
-    // another reply, not the root) just gets a little extra indent here,
-    // which that elbow reaches into, rather than a second nested trunk.
-    <div className={`flex min-w-0 flex-col gap-1.5 ${depth === 2 ? "pl-4 sm:pl-6" : ""}`}>
+    // letting NoteContent's wrap utilities engage. No tree lines or indent
+    // of its own — ThreadReplies draws and places both.
+    <div className="flex min-w-0 flex-col gap-1.5">
       {/* Same avatar-beside-just-the-name-row pairing as NoteThreadCard's
           own root layout — a reply's author gets the same identity
           treatment as a top-level note's, not a scaled-down one. */}

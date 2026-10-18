@@ -6,6 +6,11 @@
 const BATCH_URL = "https://api.resend.com/emails/batch";
 export const RESEND_BATCH_MAX = 100;
 const MAX_ATTEMPTS = 3;
+// Resend's default limit is 2 requests/second; stay just under it. Shared by
+// every caller in this instance, so a broadcast and a reminder run don't
+// stack up past it.
+const MIN_BATCH_INTERVAL_MS = 550;
+let nextBatchAt = 0;
 
 export type OutgoingEmail = {
   from: string;
@@ -29,6 +34,9 @@ export function isResendConfigured() {
  */
 export async function sendBatch(emails: OutgoingEmail[], idempotencyKey: string): Promise<number> {
   for (let attempt = 1; ; attempt++) {
+    const wait = nextBatchAt - Date.now();
+    nextBatchAt = Math.max(nextBatchAt, Date.now()) + MIN_BATCH_INTERVAL_MS;
+    if (wait > 0) await sleep(wait);
     const res = await fetch(BATCH_URL, {
       method: "POST",
       headers: {

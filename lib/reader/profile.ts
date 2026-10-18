@@ -4,6 +4,7 @@ import { toMaterialSummary } from "@/lib/materials/summary";
 import { applyLibraryTypeFilter, withCurrentReaders } from "@/lib/materials/list";
 import { resolveExcerpt } from "@/lib/community/excerpt";
 import { enrichFeedItems, type FeedItem } from "@/lib/community/feed";
+import { loadPostViewer } from "@/lib/community/viewer";
 import type { NoteRow } from "@/lib/community/notes";
 import { resolveReaderBySlug } from "./profileSlug";
 import { listReaderActivities } from "./activity";
@@ -112,7 +113,7 @@ async function enrichHighlights(rows: HighlightRow[]): Promise<ReaderProfileHigh
  * `viewerId === reader.id`)
  * their own private highlights. Everything else here is visible to any
  * caller, signed in or not, the same "public until proven private" rule
- * lib/community/notes.ts's visibleToFilter uses everywhere else.
+ * lib/community/visibility.ts applies everywhere else.
  */
 export async function getReaderProfilePage(slug: string, viewerId: string | undefined): Promise<ReaderProfilePage> {
   const readerRow = await resolveReaderBySlug(slug);
@@ -151,7 +152,7 @@ export async function getReaderProfilePage(slug: string, viewerId: string | unde
     reactions: (ownPublicNotes ?? []).reduce((sum, row) => sum + row.reaction_count, 0),
   };
 
-  const publicNotes = await enrichFeedItems((rootNoteRows ?? []) as NoteRow[], viewerId);
+  const publicNotes = await enrichFeedItems((rootNoteRows ?? []) as NoteRow[], await loadPostViewer(viewerId));
 
   // Every in-progress activity, uncapped — a finished one belongs to the
   // Shelf's Finished tab, not "currently reading".

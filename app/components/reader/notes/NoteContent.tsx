@@ -6,6 +6,7 @@ import LinkPreviewCard from "@/app/components/shared/LinkPreviewCard";
 import VoiceNoteView from "./VoiceNoteView";
 import { truncateQuote } from "./HighlightCard";
 import { LINK_URL_PATTERN, extractLinks, normalizeLinkUrl } from "@/lib/community/links";
+import { splitMentions } from "@/lib/community/mentionText";
 
 // Same idea as HighlightCard's own preview budget — a note's own body is
 // the reader's writing, not a passage from the book, so it gets a somewhat
@@ -40,12 +41,20 @@ function linkify(text: string): Array<string | { url: string; label: string }> {
 
 /** One note/reply's actual content — text or voice — with no author,
  * timestamp, or actions bundled in (see AuthorRow for those); split out so
- * the same rendering works at both the top-level-note and reply scale. */
+ * the same rendering works at both the top-level-note and reply scale.
+ * `mentions` are the names it tags: their "@Name" runs show in brand.
+ * `bubble` is a room's NoteBubble (sheet #c1): sans 15/1.5, bold mentions;
+ * `thread` is the same on top of a thread, where lines aren't balanced. */
 export default function NoteContent({
   content,
+  mentions = [],
+  variant = "card",
 }: {
   content: NoteContentValue;
+  mentions?: string[];
+  variant?: "card" | "bubble" | "thread";
 }) {
+  const bubble = variant !== "card";
   const [expanded, setExpanded] = useState(false);
 
   if (content.kind === "voice") {
@@ -71,10 +80,24 @@ export default function NoteContent({
           of leading pushing the reaction row down further than a note that
           actually has visible content above it. */}
       {content.text.trim() !== "" && (
-        <p className="m-0 min-w-0 whitespace-pre-wrap break-words font-serif type-4 text-[var(--reader-text)]">
+        <p
+          className={`m-0 min-w-0 whitespace-pre-wrap break-words ${
+            bubble ? `font-sans text-[15px] font-normal ${variant === "bubble" ? "leading-[1.55] text-pretty" : "leading-[1.5]"}` : "font-serif type-4 text-[var(--reader-text)]"
+          }`}
+        >
           {linkify(displayedText).map((part, i) =>
             typeof part === "string" ? (
-              <span key={i}>{part}</span>
+              <span key={i}>
+                {splitMentions(part, mentions).map((run, j) =>
+                  typeof run === "string" ? (
+                    run
+                  ) : (
+                    <span key={j} className={bubble ? "font-bold text-[var(--color-app-brand)]" : "font-semibold text-[var(--reader-accent)]"}>
+                      {run.mention}
+                    </span>
+                  )
+                )}
+              </span>
             ) : (
               <a
                 key={i}

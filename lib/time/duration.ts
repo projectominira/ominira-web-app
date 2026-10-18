@@ -1,5 +1,5 @@
 // Elapsed-time labels shared by the room and its host contexts (spec §0.1):
-// "48 min", "1 h 12 min". Relative "ago" labels stay in lib/reader/timeAgo.ts.
+// "48 min", "1 h 12 min". Relative "ago" labels are in ./relative.ts.
 
 const MINUTE = 60_000;
 

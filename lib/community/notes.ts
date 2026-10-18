@@ -11,7 +11,6 @@ import { toAvatar, type Avatar } from "@/lib/avatar/avatar";
 // swap. A real NoteRow -> PostRow rename is deferred to whenever the public
 // Note/NoteContent types themselves get renamed to Post/PostContent.
 export type NoteRow = Database["public"]["Tables"]["posts"]["Row"];
-type SupabaseAdmin = ReturnType<typeof getSupabaseAdminClient>;
 
 export type PostKind = "citation" | "text" | "book_share" | "voice";
 
@@ -44,14 +43,19 @@ function contentFromRow(row: NoteRow): NoteContent {
 
 type AuthorMeta = { pseudonym: string; city: string | null; avatar: Avatar | null };
 
+/** A note's group label (Community notes' "· Sankara Study Circle") and who
+ * it tags. */
+export type NoteGroup = { slug: string; name: string };
+export type NoteMention = { readerId: string; pseudonym: string };
+
 /** snake_case posts row -> camelCase Note (api-spec.md's Shared Types,
- * unchanged even though the row is now a posts row). Author metadata,
- * topic name, and the caller's own reacted/bookmarked flags are looked up
- * separately (no typed FK embedding — see the helpers below) and passed in
- * rather than queried per-row, so a list of N notes costs a few extra
- * queries, not N per note. materialId/ranges are null only for a book-less
- * discussion post — every book-anchored note/reply this endpoint family
- * reads always has both.
+ * unchanged even though the row is now a posts row). Author metadata, the
+ * group label, mentions and the caller's own reacted/bookmarked flags are
+ * looked up separately (no typed FK embedding — see the helpers below) and
+ * passed in rather than queried per-row, so a list of N notes costs a few
+ * extra queries, not N per note. materialId/ranges are null only for a
+ * book-less discussion post — every book-anchored note/reply this endpoint
+ * family reads always has both.
  *
  * The two per-caller flags travel as one object rather than two positional
  * booleans: they're the same type, adjacent, and mean opposite things, so a
@@ -61,7 +65,8 @@ export function toNote(
   row: NoteRow,
   author: AuthorMeta,
   flags: { reactedByMe: boolean; bookmarkedByMe: boolean },
-  topics: TopicRef[]
+  group: NoteGroup | null,
+  mentions: NoteMention[]
 ): Note {
   return {
     id: row.id,
@@ -75,21 +80,11 @@ export function toNote(
     reactionCount: row.reaction_count,
     reactedByMe: flags.reactedByMe,
     bookmarkedByMe: flags.bookmarkedByMe,
-    topicName: topics[0]?.name ?? null,
-    topicSlug: topics[0]?.slug ?? null,
-    topicNames: topics.map((t) => t.name),
-    topics,
+    group,
+    mentions,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-}
-
-/** Only public rows, or rows the caller themself authored — the one
- * visibility rule shared by every notes-reading endpoint (per-material feed,
- * global feed, single thread). Unauthenticated callers (readerId undefined)
- * only ever see public notes. */
-export function visibleToFilter(readerId: string | undefined): string {
-  return readerId ? `visibility.eq.public,reader_id.eq.${readerId}` : "visibility.eq.public";
 }
 
 export async function getAuthorsByReaderId(readerIds: string[]): Promise<Map<string, AuthorMeta>> {
@@ -100,48 +95,30 @@ export async function getAuthorsByReaderId(readerIds: string[]): Promise<Map<str
   return new Map((data ?? []).map((r) => [r.id, { pseudonym: r.pseudonym, city: r.city, avatar: toAvatar(r) }]));
 }
 
-export type TopicRef = { name: string; slug: string };
-
-/** Batched topic-name lookup, same shape as getAuthorsByReaderId. Every
- * post has a topic_id, but not every topic_id is a real, displayable
- * topic — the throwaway pseudo-topics resolveTopicIdForNewThread (and the
- * untagged-discussion-post fallback in POST /api/community/notes) create
- * are `source: 'legacy_migration'`, never meant to surface as a label, so
- * they're excluded here and simply have no entry in the returned map. */
-export async function getTopicNamesByIds(topicIds: string[]): Promise<Map<string, TopicRef>> {
-  const unique = Array.from(new Set(topicIds));
+/** Batched group labels, same shape as getAuthorsByReaderId. */
+async function getGroupsById(groupIds: string[]): Promise<Map<string, NoteGroup>> {
+  const unique = Array.from(new Set(groupIds));
   if (unique.length === 0) return new Map();
-  const { data } = await getSupabaseAdminClient()
-    .from("topics")
-    .select("id, name, slug")
-    .in("id", unique)
-    .neq("source", "legacy_migration");
-  return new Map((data ?? []).map((t) => [t.id, { name: t.name, slug: t.slug }]));
+  const { data } = await getSupabaseAdminClient().from("groups").select("id, slug, name").in("id", unique);
+  return new Map((data ?? []).map((g) => [g.id, { slug: g.slug, name: g.name }]));
 }
 
-/** Every topic a post is tagged under (migrations/20260927_post_topics.sql),
- * default first — `created_at` ordering on post_topics is exactly insertion
- * order, and the composer always inserts the reader's chosen default first.
- * Falls back to just `[post.topic_id]`'s name for a post whose post_topics
- * rows predate this table (shouldn't happen post-backfill, but batching
- * degrades safely rather than surfacing an empty topic list). */
-export async function getTopicNamesForPosts(postIds: string[]): Promise<Map<string, TopicRef[]>> {
-  const unique = Array.from(new Set(postIds));
-  if (unique.length === 0) return new Map();
+/** Every post's tagged comrades, one query for the batch (plus one for their
+ * names). */
+async function getMentionsForPosts(postIds: string[]): Promise<Map<string, NoteMention[]>> {
+  if (postIds.length === 0) return new Map();
   const { data } = await getSupabaseAdminClient()
-    .from("post_topics")
-    .select("post_id, topic_id")
-    .in("post_id", unique)
-    .order("created_at", { ascending: true });
+    .from("post_mentions")
+    .select("post_id, reader_id")
+    .in("post_id", postIds)
+    .order("created_at");
   const rows = data ?? [];
-  const topics = await getTopicNamesByIds(rows.map((r) => r.topic_id));
-  const byPost = new Map<string, TopicRef[]>();
+  const names = await getAuthorsByReaderId(rows.map((r) => r.reader_id));
+  const byPost = new Map<string, NoteMention[]>();
   for (const row of rows) {
-    const topic = topics.get(row.topic_id);
-    if (!topic) continue;
-    const list = byPost.get(row.post_id) ?? [];
-    list.push(topic);
-    byPost.set(row.post_id, list);
+    const reader = names.get(row.reader_id);
+    if (!reader) continue;
+    byPost.set(row.post_id, [...(byPost.get(row.post_id) ?? []), { readerId: row.reader_id, pseudonym: reader.pseudonym }]);
   }
   return byPost;
 }
@@ -158,74 +135,28 @@ export async function getReactedNoteIds(readerId: string | undefined, noteIds: s
 }
 
 /** Batch-hydrates a set of note rows into full Note[] — one author query,
- * one reactions query, one bookmarks query, and one topic-name query for
- * the whole batch, in the same reply/thread hydration shape every
+ * one reactions query, one bookmarks query, one group query and one mentions
+ * query for the whole batch, in the same reply/thread hydration shape every
  * notes-reading route needs. */
 export async function hydrateNotes(rows: NoteRow[], callerId: string | undefined): Promise<Note[]> {
   if (rows.length === 0) return [];
-  const [authors, reacted, bookmarked, topicNamesByPost, defaultTopicNames] = await Promise.all([
+  const ids = rows.map((r) => r.id);
+  const [authors, reacted, bookmarked, groups, mentions] = await Promise.all([
     getAuthorsByReaderId(rows.map((r) => r.reader_id)),
-    getReactedNoteIds(callerId, rows.map((r) => r.id)),
+    getReactedNoteIds(callerId, ids),
     // Same batch-per-page shape as getReactedNoteIds above, and likewise a
     // no-op empty set for a signed-out caller.
-    getBookmarkedIds(callerId, "post", rows.map((r) => r.id)),
-    getTopicNamesForPosts(rows.map((r) => r.id)),
-    getTopicNamesByIds(rows.map((r) => r.topic_id)),
+    getBookmarkedIds(callerId, "post", ids),
+    getGroupsById(rows.flatMap((r) => (r.group_id ? [r.group_id] : []))),
+    getMentionsForPosts(ids),
   ]);
-  return rows.map((row) => {
-    // post_topics is what's authoritative once populated; a row it has
-    // nothing for (pre-backfill edge case, or an untagged discussion post
-    // whose topic_id is a throwaway pseudo-topic) falls back to just its
-    // default — dropped entirely (empty topics, not a raw id) when that
-    // default has no displayable name of its own.
-    const fallbackTopic = defaultTopicNames.get(row.topic_id);
-    const topics = topicNamesByPost.get(row.id) ?? (fallbackTopic ? [fallbackTopic] : []);
-    return toNote(
+  return rows.map((row) =>
+    toNote(
       row,
       authors.get(row.reader_id) ?? { pseudonym: "Unknown", city: null, avatar: null },
       { reactedByMe: reacted.has(row.id), bookmarkedByMe: bookmarked.has(row.id) },
-      topics
-    );
-  });
-}
-
-/** Resolves the topic_id a brand-new thread-root note should get, since
- * posts.topic_id is NOT NULL and there's no topic-picker UI yet:
- *   1. Use the material's oldest linked topic (material_topics), if any —
- *      most books get one from the Categories->Topics seed migration.
- *   2. Otherwise fall back to a pseudo-topic, same shape the legacy data
- *      migration used: a fresh id, generated up front, reused as the
- *      topic's id (source='legacy_migration' — "no real topic, exclude from
- *      any browse/directory query").
- * Replies never call this — they inherit their thread root's topic_id
- * directly from the already-fetched parent row. */
-export async function resolveTopicIdForNewThread(admin: SupabaseAdmin, materialId: string): Promise<string> {
-  const { data: materialTopic } = await admin
-    .from("material_topics")
-    .select("topic_id")
-    .eq("material_id", materialId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (materialTopic) return materialTopic.topic_id;
-
-  const topicId = crypto.randomUUID();
-  await admin.from("topics").insert({
-    id: topicId,
-    slug: `note-${topicId}`,
-    name: `Note ${topicId}`,
-    source: "legacy_migration",
-    status: "archived",
-  });
-  return topicId;
-}
-
-/** Writes a brand-new thread root's full topic set (default first — see
- * post_topics's own doc comment) into post_topics. A reply never calls
- * this: it inherits its thread root's topics wholesale, same as it already
- * inherits topic_id, so there's nothing new to write. */
-export async function insertPostTopics(admin: SupabaseAdmin, postId: string, topicIds: string[]): Promise<void> {
-  const unique = Array.from(new Set(topicIds));
-  if (unique.length === 0) return;
-  await admin.from("post_topics").insert(unique.map((topicId) => ({ post_id: postId, topic_id: topicId })));
+      (row.group_id && groups.get(row.group_id)) || null,
+      mentions.get(row.id) ?? []
+    )
+  );
 }

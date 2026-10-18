@@ -56,7 +56,7 @@ export default function NoteCard({
   const expanded = expandedIds.has(note.id);
 
   return (
-    <div className="border-b border-[var(--reader-border)] py-4">
+    <div className="mx-auto w-full max-w-[640px] border-b border-[var(--reader-border)] py-4">
       <NoteThreadCard
         {...(!bookContext
           ? { quote: excerpt ?? undefined }

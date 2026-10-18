@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useSessionStore } from "@/stores/session-store";
 import { ensureFreshSession } from "@/lib/api/client";
 import { configureDebouncedOnlineManager } from "@/lib/pwa/onlineManager";
+import { useTimeZoneSync } from "@/lib/time/useTimeZoneSync";
 
 // One QueryClient per browser tab, instantiated inside useState (not at
 // module scope) so it's created exactly once per mount and never recreated
@@ -39,5 +40,15 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
     });
   }, []);
 
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={client}>
+      <TimeZoneSync />
+      {children}
+    </QueryClientProvider>
+  );
+}
+
+function TimeZoneSync() {
+  useTimeZoneSync();
+  return null;
 }

@@ -4,10 +4,17 @@ import { getAuthenticatedReader } from "@/lib/auth/session";
 import { notFound, unauthorized, validationError } from "@/lib/api/errors";
 import { decodeCursor, encodeCursor, keysetBeforeFilter, type Keyset } from "@/lib/api/cursor";
 import { resolveMaterialRow } from "@/lib/materials/resolve";
-import { contentToColumns, hydrateNotes, insertPostTopics, resolveTopicIdForNewThread, type NoteRow } from "@/lib/community/notes";
+import { contentToColumns, hydrateNotes, type NoteRow } from "@/lib/community/notes";
+import { canReadPost, visiblePostsFilter, type PostViewer } from "@/lib/community/visibility";
+import { loadPostViewer } from "@/lib/community/viewer";
+import { MAX_MENTIONS, existingReaders, notifyMentioned, savePostMentions } from "@/lib/community/mentions";
+import { findGroup, groupResponse } from "@/lib/groups/membership";
+import { groupPostAccess } from "@/lib/groups/notes";
+import { readerGroupsWithBook } from "@/lib/groups/books";
+import { routeNote } from "@/lib/rooms/routing";
 import { enrichFeedItems } from "@/lib/community/feed";
 import type { AnnotationRange, NoteContent } from "@/lib/api/types";
-import { notifyReader } from "@/lib/notifications/notify";
+import { notifyReaders } from "@/lib/notifications/notify";
 import { comradeName } from "@/lib/reader/authorDisplay";
 import { notificationSnippet } from "@/lib/notifications/snippet";
 import { cdnUrl } from "@/lib/storage/r2";
@@ -28,23 +35,11 @@ function trendingScore(row: NoteRow): number {
   return row.reaction_count / Math.pow(hoursSinceCreated + 2, 1.5);
 }
 
-async function fetchPage(sort: Sort, limit: number, cursor: unknown, topicId: string | null) {
+async function fetchPage(sort: Sort, limit: number, cursor: unknown, viewer: PostViewer) {
   const admin = getSupabaseAdminClient();
-  let base = admin.from("posts").select("*").is("parent_id", null).eq("visibility", "public");
-  if (topicId) {
-    // Matches a post tagged under this topic at all (post_topics), not just
-    // ones whose *default* topic_id is it — a multi-topic post should show
-    // up under every topic it's tagged with.
-    const { data: tagged, error: taggedError } = await admin.from("post_topics").select("post_id").eq("topic_id", topicId);
-    if (taggedError) {
-      // Surfaced loudly rather than swallowed into `[]` — a broken/missing
-      // post_topics table would otherwise look identical to "this topic
-      // genuinely has zero posts" on the client.
-      console.error("post_topics lookup failed for topicId", topicId, taggedError);
-      throw taggedError;
-    }
-    base = base.in("id", (tagged ?? []).map((t) => t.post_id));
-  }
+  // One chronological stream (no topic filter, spec §4.5): every top-level
+  // post the viewer can read, private ones they're in included.
+  const base = admin.from("posts").select("*").is("parent_id", null).or(visiblePostsFilter(viewer));
 
   if (sort === "top") {
     let query = base.order("reaction_count", { ascending: false }).order("created_at", { ascending: false }).order("id", { ascending: false });
@@ -100,11 +95,11 @@ export async function GET(request: Request) {
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 20, 1), 100);
   const cursorParam = url.searchParams.get("cursor");
   const cursor = sort === "top" ? decodeCursor<TopCursor>(cursorParam) : sort === "trending" ? decodeCursor<TrendingCursor>(cursorParam) : decodeCursor<Keyset>(cursorParam);
-  const topicId = url.searchParams.get("topicId");
 
   const reader = await getAuthenticatedReader(request);
-  const { page, nextCursor } = await fetchPage(sort, limit, cursor, topicId);
-  const items = await enrichFeedItems(page, reader?.readerId);
+  const viewer = await loadPostViewer(reader?.readerId);
+  const { page, nextCursor } = await fetchPage(sort, limit, cursor, viewer);
+  const items = await enrichFeedItems(page, viewer);
 
   return NextResponse.json({ items, nextCursor });
 }
@@ -115,13 +110,6 @@ type CreateNoteBody = {
   content?: NoteContent;
   parentId?: string;
   visibility?: "public" | "private";
-  /** A thread root's chosen topics, default first — always optional. A
-   * book-anchored note falls back to resolveTopicIdForNewThread's own
-   * auto-resolution; a `threadType: "discussion"` post with none gets a
-   * throwaway archived topic (same shape as that fallback) so it only ever
-   * shows up under "All". Ignored on a reply either way: it always
-   * inherits its thread root's topics wholesale. */
-  topicIds?: string[];
   /** "discussion" — a top-level, HomeComposer-style post: no book anchor
    * required, `materialId` (when present) is an attached book rather than
    * an annotation target, and there's no `ranges` to speak of. Omitted or
@@ -130,6 +118,14 @@ type CreateNoteBody = {
    * reply's thread_type is always inherited from its root, never chosen
    * independently. */
   threadType?: "note" | "discussion";
+  /** Posted from this group's composer (studygroup-spec.md §4.5): members
+   * only. Thread roots only, like the two below. */
+  groupSlug?: string;
+  /** Tagged comrades: notified, and able to read it even when private. */
+  mentionReaderIds?: string[];
+  /** "Whole circle" (moderators of `groupSlug`): every member is notified
+   * and, on a private note, can read it. */
+  wholeCircle?: boolean;
 };
 
 function rangesEqual(a: AnnotationRange[], b: AnnotationRange[]): boolean {
@@ -146,6 +142,12 @@ export async function POST(request: Request) {
   if (body.content.kind === "voice" && !body.content.audioUrl.startsWith(cdnUrl("voice-notes/"))) {
     return validationError("audioUrl must come from POST /api/community/voice-notes.", "content");
   }
+  const requestedMentions = body.parentId ? [] : (body.mentionReaderIds ?? []);
+  if (!Array.isArray(requestedMentions) || requestedMentions.length > MAX_MENTIONS || requestedMentions.some((id) => typeof id !== "string")) {
+    return validationError(`Tag up to ${MAX_MENTIONS} comrades.`, "mentionReaderIds");
+  }
+  const wholeCircle = !body.parentId && body.wholeCircle === true;
+  if (wholeCircle && !body.groupSlug) return validationError("Whole circle needs a group.", "wholeCircle");
 
   const isReply = !!body.parentId;
   const isDiscussion = !isReply && body.threadType === "discussion";
@@ -173,13 +175,32 @@ export async function POST(request: Request) {
   const material = !isReply && body.materialId ? await resolveMaterialRow(body.materialId) : null;
   if (!isReply && body.materialId && !material) return notFound();
 
+  const group = !isReply && body.groupSlug ? await findGroup(body.groupSlug) : null;
+  if (!isReply && body.groupSlug) {
+    if (!group) return groupResponse("not_found");
+    const access = await groupPostAccess(group.id, reader.readerId, wholeCircle);
+    if (access !== "ok") return groupResponse(access);
+  }
+
+  // A note on a book with no group named (the reader, the book room) is
+  // routed by the lock alone (rooms-spec §5.3): public, and also in the
+  // author's group when its list has the book; locked is private, with no
+  // group and no tags.
+  const route =
+    !isReply && !isDiscussion && !group && material
+      ? routeNote({
+          locked: body.visibility === "private",
+          mentionIds: requestedMentions,
+          groupsWithBook: (await readerGroupsWithBook(reader.readerId, material.id)).map((g) => g.id),
+        })
+      : { visibility: body.visibility ?? "public", groupId: group?.id ?? null, mentionIds: requestedMentions };
+  const mentionIds = route.mentionIds;
+
   const admin = getSupabaseAdminClient();
   let parentId: string | null = null;
   let replyingToId: string | null = null;
   let replyRecipientReaderIds: string[] = [];
   let replyRootNoteId: string | null = null;
-  let topicId: string;
-  let topicIds: string[];
   let materialId: string | null = material?.id ?? null;
   let ranges: AnnotationRange[] | null = isDiscussion ? null : (body.ranges ?? null);
   let threadType: "note" | "discussion" = isDiscussion ? "discussion" : "note";
@@ -193,14 +214,15 @@ export async function POST(request: Request) {
     // a reply can't switch books, add an anchor its root never had, or
     // become a different thread_type than the thread it's replying into.
     const { data: target } = await admin.from("posts").select("*").eq("id", body.parentId!).maybeSingle();
-    if (!target) return notFound();
+    if (!target || (target.visibility !== "public" && !canReadPost(target, await loadPostViewer(reader.readerId)))) {
+      return notFound();
+    }
     if (!rangesEqual((target.ranges as AnnotationRange[] | null) ?? [], body.ranges ?? [])) {
       return validationError("A reply must use the same ranges as its parent thread.", "ranges");
     }
     parentId = target.parent_id ?? target.id;
     replyingToId = target.parent_id ? target.id : null;
     replyRootNoteId = parentId;
-    topicId = target.topic_id;
     materialId = target.material_id;
     ranges = target.ranges as AnnotationRange[] | null;
     threadType = target.thread_type;
@@ -216,32 +238,6 @@ export async function POST(request: Request) {
     }
     recipientIds.delete(reader.readerId); // no self-notification
     replyRecipientReaderIds = [...recipientIds];
-    topicIds = []; // unused for a reply — it inherits the root's post_topics rows, never writes its own
-  } else if (body.topicIds && body.topicIds.length > 0) {
-    [topicId] = body.topicIds;
-    topicIds = body.topicIds;
-  } else if (isDiscussion) {
-    // A discussion post's topics are optional — but posts.topic_id is
-    // NOT NULL (migrations/20260919_topics_and_posts.sql), so an untagged
-    // post gets the same kind of throwaway archived topic
-    // resolveTopicIdForNewThread falls back to for a material with no
-    // linked topic. It's excluded from the topics list/picker (status !=
-    // 'active') and gets no post_topics row, so the post only ever shows
-    // up under "All" — same end result as "no topic" would look like.
-    topicId = crypto.randomUUID();
-    await admin.from("topics").insert({
-      id: topicId,
-      slug: `note-${topicId}`,
-      name: `Note ${topicId}`,
-      source: "legacy_migration",
-      status: "archived",
-    });
-    topicIds = [];
-  } else {
-    // Reached only for a book-anchored thread root with no explicit
-    // topicIds — material here is guaranteed non-null (validated at the top).
-    topicId = await resolveTopicIdForNewThread(admin, material!.id);
-    topicIds = [topicId];
   }
 
   // A post with no material can never be kind='citation' — the
@@ -257,13 +253,15 @@ export async function POST(request: Request) {
     .from("posts")
     .insert({
       reader_id: reader.readerId,
-      topic_id: topicId,
+      // No topic: posts no longer carry one (spec §4.5).
+      group_id: route.groupId,
+      mentions_group_id: wholeCircle ? group!.id : null,
       material_id: materialId,
       parent_id: parentId,
       replying_to_id: replyingToId,
       ranges,
       thread_type: threadType,
-      visibility: body.visibility ?? "public",
+      visibility: route.visibility,
       ...contentToColumns(body.content, kind),
     })
     .select("*")
@@ -271,7 +269,18 @@ export async function POST(request: Request) {
 
   if (error || !data) return validationError("Could not create note.");
 
-  if (!isReply) await insertPostTopics(admin, data.id, topicIds);
+  if (!isReply) {
+    const mentioned = await existingReaders(mentionIds, reader.readerId);
+    await savePostMentions(data.id, mentioned);
+    if (mentioned.length || wholeCircle) notifyMentioned({
+      id: data.id,
+      text: (data.content as { text?: string }).text ?? null,
+      authorId: reader.readerId,
+      readerIds: mentioned,
+      circle: wholeCircle ? group : null,
+      groupName: group?.name ?? null,
+    });
+  }
 
   // Fire-and-forget — never let a push failure affect the create response.
   // Wrapped in try/catch so a thrown error (e.g. URL resolution) can't
@@ -307,7 +316,7 @@ export async function POST(request: Request) {
           snippet: replyText,
           tag: `note-reply-${replyRootNoteId}`,
         };
-        await Promise.all(replyRecipientReaderIds.map((recipientId) => notifyReader(recipientId, payload)));
+        await notifyReaders(replyRecipientReaderIds, payload);
       } catch (err) {
         console.error("Failed to send reply notification/push", err);
       }

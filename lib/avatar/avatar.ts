@@ -16,6 +16,10 @@ export const AVATAR_COLORS = {
   olive: "var(--color-olive-500)",
   forest: "var(--color-forest-500)",
   neutral: "var(--color-sand-800)",
+  // From the Rooms v4 design (migrations/20261103_avatar_colors.sql).
+  rust: "var(--color-brand-700)",
+  stone: "var(--color-sand-600)",
+  wine: "var(--color-oxblood-600)",
 } as const;
 
 export type AvatarColor = keyof typeof AVATAR_COLORS;

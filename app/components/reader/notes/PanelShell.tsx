@@ -29,6 +29,7 @@ export default function PanelShell({
   subheader,
   bodyClassName = "om-scroll flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-5 pb-10 flex flex-col gap-3.5",
   footer,
+  footerClassName = "px-5 py-3",
   onClose,
   children,
 }: {
@@ -79,6 +80,8 @@ export default function PanelShell({
    * composer that grew *inline* inside a flex region; the idle pill this
    * slot actually holds is a fixed, non-growing row. */
   footer?: ReactNode;
+  /** Padding around the footer. */
+  footerClassName?: string;
   onClose: () => void;
   children: React.ReactNode;
 }) {
@@ -229,7 +232,7 @@ export default function PanelShell({
         <div className={bodyClassName}>{children}</div>
         {footer && (
           <div
-            className="flex-none border-t border-[var(--reader-border)] bg-[var(--reader-surface)] px-5 py-3"
+            className={`flex-none border-t border-[var(--reader-border)] bg-[var(--reader-surface)] ${footerClassName}`}
             style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
           >
             {footer}

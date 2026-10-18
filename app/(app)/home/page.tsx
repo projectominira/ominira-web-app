@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import HomeCommunityFeed from "@/app/components/home/HomeCommunityFeed";
+import HomeScreen from "@/app/components/home/HomeScreen";
 
 export const metadata: Metadata = {
   title: "Home",
-  description: "Pick up where you left off and see what comrades are discussing across the library right now.",
+  description: "Join a reading room, pick up where you left off, keep your reading streak and see the featured books.",
 };
 
 export default function HomePage() {
-  return <HomeCommunityFeed />;
+  return <HomeScreen />;
 }

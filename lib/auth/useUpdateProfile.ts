@@ -7,6 +7,8 @@ import type { ReaderProfile } from "@/lib/api/types";
 import type { AvatarColor } from "@/lib/avatar/avatar";
 
 export type ProfileUpdate = Partial<Pick<ReaderProfile, "pseudonym" | "city" | "country" | "emailAnnouncements">> & {
+  /** Set by useTimeZoneSync only, never a form. */
+  timeZone?: string;
   /** A default avatar color, or `null` to switch back to the uploaded photo. */
   avatarColor?: AvatarColor | null;
 };

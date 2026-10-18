@@ -41,7 +41,8 @@ const EXIT_ANIMATION_MS = 220;
  * rather than a fresh load of it — covering the sidebar changes nothing
  * about that.
  *
- * z-40 — above ordinary page content, but still below NowPlayingBar's own
+ * z-[42] — above ordinary page content and RoomScreen's z-[41] (a group or
+ * book room opens quotes over itself), but still below NowPlayingBar's own
  * z-50 (app/components/NowPlayingBar.tsx), so a playing book's persistent
  * bar keeps floating on top of this the same way it already does over the
  * standalone /read/[slug] page. */
@@ -133,7 +134,7 @@ export default function DocumentOverlayShell({
     // through in the gap the panel's own translateY/scale briefly leaves
     // around it while animating — a plain single-div version couldn't fade
     // a background in behind its own transform.
-    <div className={`fixed inset-0 z-40 ${closing ? "reader-modal-scrim-exit" : "reader-modal-scrim-enter"}`}>
+    <div className={`fixed inset-0 z-[42] ${closing ? "reader-modal-scrim-exit" : "reader-modal-scrim-enter"}`}>
       <div className={`h-full w-full ${closing ? "reader-modal-panel-exit" : "reader-modal-panel-enter"}`}>
         {children(close)}
       </div>

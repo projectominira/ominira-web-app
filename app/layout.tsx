@@ -9,6 +9,7 @@ import NowPlayingBar from "./components/NowPlayingBar";
 import RoomLayer from "./components/room/RoomLayer";
 import Toaster from "./components/shared/Toaster";
 import ConfirmDialog from "./components/shared/ConfirmDialog";
+import ReturnTracker from "./components/auth/ReturnTracker";
 import ThemeProvider from "./components/ThemeProvider";
 import QueryProvider from "./components/QueryProvider";
 import NarrationEngine from "@/lib/audio/NarrationEngine";
@@ -124,6 +125,7 @@ export default function RootLayout({
             {children}
           </ThemeProvider>
           {modal}
+          <ReturnTracker />
           <ServiceWorkerRegistration />
           <TouchActiveState />
           <NarrationEngine />

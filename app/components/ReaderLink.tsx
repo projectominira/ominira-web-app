@@ -24,6 +24,9 @@ import Link, { type LinkProps } from "next/link";
  * using next/link's <Link> straight at /read/[slug] on purpose, since a
  * "preview without leaving the feed" overlay is the whole point there.
  */
+/** `/read/{slug}?…` as the real reader's URL, for a push outside a link. */
+export const readerHref = (href: string) => href.replace(/^\/read\//, "/reader/");
+
 export default function ReaderLink({
   href,
   className,
@@ -32,7 +35,7 @@ export default function ReaderLink({
 }: { href: string; className?: string; children?: ReactNode } & Omit<LinkProps, "href"> &
   Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "className" | "children">) {
   return (
-    <Link href={href.replace(/^\/read\//, "/reader/")} className={className} {...rest}>
+    <Link href={readerHref(href)} className={className} {...rest}>
       {children}
     </Link>
   );

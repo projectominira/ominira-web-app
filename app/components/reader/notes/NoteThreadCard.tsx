@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronRight, EllipsisVertical } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { EllipsisVertical } from "lucide-react";
 import type { Note } from "@/lib/api/types";
 import { useIsOwnNote } from "@/lib/reader/currentAuthor";
 import AuthorAvatar from "./AuthorAvatar";
@@ -14,12 +14,12 @@ import NoteComposer from "./NoteComposer";
 import HighlightCard from "./HighlightCard";
 import EntryMenu from "./EntryMenu";
 import ReplyEntry from "./ReplyEntry";
+import ThreadReplies from "./ThreadReplies";
 import type { ThreadActions, ThreadUIState } from "@/lib/reader/threadTypes";
 import { confirmAction } from "@/stores/confirm-store";
 
-// Reply threads default to their first two entries, with the rest behind a
-// "Show N more" expander — matches the redesigned Thread View, and keeps a
-// long-running thread from dominating the card the moment it's expanded.
+// Reply threads show their latest entries, the earlier ones behind "Show N
+// earlier replies" — keeps a long-running thread from dominating the card.
 const COLLAPSED_REPLY_COUNT = 5;
 
 /** One top-level note ("comment") on a highlighted passage, plus its own
@@ -89,18 +89,9 @@ export default function NoteThreadCard({
   const isMenuOpen = ui.activeMenuFor === note.id;
   const isReplyingToRoot = ui.activeComposerFor === note.id && ui.editingId === null;
   const [showAllReplies, setShowAllReplies] = useState(initialShowAll ?? Boolean(focusReplyId));
-  const focusRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    // "center", not the default "start": a reply landing flush against the
-    // top of the viewport reads as the beginning of the thread rather than
-    // as one entry inside it.
-    if (focusReplyId) focusRef.current?.scrollIntoView({ block: "center" });
-  }, [focusReplyId]);
-  const visibleReplies = showAllReplies ? replies : replies.slice(0, COLLAPSED_REPLY_COUNT);
-  const hiddenReplyCount = Math.max(0, replies.length - visibleReplies.length);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="mx-auto flex w-full max-w-[640px] flex-col gap-3">
       {/* The avatar sits beside just the name/time row (`items-center` here
           pairs their vertical centers — the row below stretches to the
           height of the taller multi-line content next to it, so aligning
@@ -115,7 +106,6 @@ export default function NoteThreadCard({
             name={note.author.pseudonym}
             savedAt={Date.parse(note.createdAt)}
             city={note.author.city}
-            topics={note.topics}
             isPrivate={own && note.visibility === "private"}
             menu={
               own ? (
@@ -261,88 +251,33 @@ export default function NoteThreadCard({
       </div>
 
       {expanded && (
-        // A tree, so replies read as belonging to this note: a trunk drops
-        // from the root avatar's center (left-[15px] — AuthorAvatar is 32px)
-        // and a rounded elbow branches off it into each reply's avatar,
-        // stopping at the last one. Deliberately shallow for phone width:
-        // the thread model is capped at two levels (a reply, or a reply to a
-        // reply — see `depth`), so the indent can never compound, and a
-        // depth-2 reply is told apart by a longer elbow into ReplyEntry's
-        // own small extra indent rather than a second nested trunk.
-        <div className="flex flex-col gap-3">
-          {visibleReplies.map((reply, index) => {
-            const replyingToName = reply.replyingToId
-              ? replies.find((r) => r.id === reply.replyingToId)?.author.pseudonym
-              : undefined;
-            const depth = replyingToName ? 2 : 1;
-            const isReplyingToThis = ui.activeComposerFor === reply.id && ui.editingId === null;
-            const isLast = index === visibleReplies.length - 1;
-            // Each depth-1 reply starts a fresh little sub-thread of its own
-            // (itself plus whichever depth-2 replies address it) — extra top
-            // spacing marks where one of those groups ends and the next
-            // begins, including above the first, away from the root note's
-            // own reaction/reply row.
-            const isNewRootReply = depth === 1;
-            return (
-              <div key={reply.id} className={`relative pl-8 sm:pl-10 ${isNewRootReply ? "pt-3" : ""}`}>
-                {/* Trunk through this entry and the gap-3 below it; the last
-                    entry's elbow is where the trunk ends. */}
-                {!isLast && (
-                  <span className="absolute -bottom-3 left-[15px] top-0 w-px bg-[var(--reader-thread-line)]" aria-hidden="true" />
-                )}
-                {/* Elbow down to this reply's avatar center (16px, plus the
-                    pt-3 when there is one), across to its left edge. */}
-                <span
-                  className={`absolute left-[15px] top-0 rounded-bl-md border-b border-l border-[var(--reader-thread-line)] ${
-                    isNewRootReply ? "h-7" : "h-4"
-                  } ${depth === 2 ? "w-[30px] sm:w-[46px]" : "w-[14px] sm:w-[22px]"}`}
-                  aria-hidden="true"
-                />
-                <div
-                  ref={reply.id === focusReplyId ? focusRef : undefined}
-                  className={
-                    reply.id === focusReplyId
-                      ? "-mx-2 rounded-sm bg-[color-mix(in_srgb,var(--reader-accent)_8%,transparent)] px-2"
-                      : undefined
-                  }
-                >
-                  <ReplyEntry reply={reply} replyingToName={replyingToName} depth={depth} ui={ui} actions={actions} />
-                  {/* Same "mounts right under its own target" rule as the
-                      root composer above — indented to this reply's own
-                      depth so it visually hangs off the entry it addresses,
-                      never a fixed slot shared by every other reply. mt-3:
-                      this composer is a plain sibling of ReplyEntry inside a
-                      non-flex wrapper, so it doesn't get the list's own
-                      gap-3 between entries — without its own margin it sits
-                      flush against the reaction/reply row above it. */}
-                  {isReplyingToThis && (
-                    <div className={`mt-3 ${depth === 2 ? "pl-4 sm:pl-6" : "pl-2 sm:pl-4"}`}>
-                      <NoteComposer
-                        initialText=""
-                        placeholder={`Reply to ${reply.author.pseudonym}`}
-                        showMemberPrompt
-                        action="reply"
-                        onCancel={() => ui.toggleComposer(reply.id)}
-                        onSave={(content, visibility) => actions.reply(reply.id, content, visibility)}
-                      />
-                    </div>
-                  )}
+        <ThreadReplies
+          replies={replies}
+          avatar={32}
+          keep={COLLAPSED_REPLY_COUNT}
+          all={showAllReplies}
+          onShowAll={() => setShowAllReplies(true)}
+          focusId={focusReplyId}
+          render={({ reply, to }) => (
+            <>
+              <ReplyEntry reply={reply} replyingToName={to?.author.pseudonym} ui={ui} actions={actions} />
+              {/* Same "mounts right under its own target" rule as the root
+                  composer above. mt-3: ReplyEntry ends on its action row. */}
+              {ui.activeComposerFor === reply.id && ui.editingId === null && (
+                <div className="mt-3">
+                  <NoteComposer
+                    initialText=""
+                    placeholder={`Reply to ${reply.author.pseudonym}`}
+                    showMemberPrompt
+                    action="reply"
+                    onCancel={() => ui.toggleComposer(reply.id)}
+                    onSave={(content, visibility) => actions.reply(reply.id, content, visibility)}
+                  />
                 </div>
-              </div>
-            );
-          })}
-
-          {hiddenReplyCount > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowAllReplies(true)}
-              className="flex items-center gap-1.5 pl-8 sm:pl-10 text-xs font-semibold text-[var(--reader-text-muted)] hover:text-[var(--reader-text)]"
-            >
-              <ChevronRight size={14} />
-              Show {hiddenReplyCount} more {hiddenReplyCount === 1 ? "reply" : "replies"}
-            </button>
+              )}
+            </>
           )}
-        </div>
+        />
       )}
     </div>
   );

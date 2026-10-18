@@ -45,17 +45,14 @@ export function communityFeedItemHref(item: FeedItem): string | null {
  * real backend at all). */
 export type CommunityFeedSort = "recent" | "top";
 
-/** `GET /api/community/notes` — the home community feed. Only top-level,
- * public notes (api-spec.md) — this is the discovery surface, not a
- * per-book thread view. `topicId` narrows it to one topic (Home's
- * CategoryPills filter) — omitted/null means every topic. */
-export function useCommunityFeed(sort: CommunityFeedSort, topicId: string | null = null) {
+/** `GET /api/community/notes` — the home community feed: every top-level
+ * note the viewer can read (lib/community/visibility.ts), one stream with no
+ * topic filter (studygroup-spec.md §4.5). The discovery surface, not a
+ * per-book thread view. */
+export function useCommunityFeed(sort: CommunityFeedSort) {
   return useQuery({
-    queryKey: communityKeys.feed(sort, topicId),
-    queryFn: () =>
-      apiFetch<{ items: FeedItem[]; nextCursor: string | null }>(
-        `/community/notes?sort=${sort}&limit=20${topicId ? `&topicId=${topicId}` : ""}`
-      ),
+    queryKey: communityKeys.feed(sort),
+    queryFn: () => apiFetch<{ items: FeedItem[]; nextCursor: string | null }>(`/community/notes?sort=${sort}&limit=20`),
   });
 }
 

@@ -1,12 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
+import InviteButton from "./InviteButton";
 import { ROOM_CHAT_ID } from "./RoomActions";
 import RoomAvatar from "./RoomAvatar";
 import { RoomChatList } from "./RoomChat";
 import UnreadBadge from "./UnreadBadge";
 import { comradeName } from "@/lib/reader/authorDisplay";
-import { formatShortTimeAgo } from "@/lib/reader/timeAgo";
+import { formatShortTimeAgo } from "@/lib/time/relative";
 import { positionLabel } from "@/lib/room/follow";
 import { narratorName } from "@/lib/room/presence";
 import { useFollowing, useHands, useListening, usePlace, useReaderView, useRoom, useSpeaking, useVoice } from "@/lib/room/hooks";
@@ -15,7 +16,7 @@ import { formatDuration } from "@/lib/time/duration";
 import { useNow } from "@/lib/time/useNow";
 import { useRoomStore } from "@/stores/room-store";
 
-// The feed panel's Room tab, the expanded mini-player (design M6 / C5): Live
+// The feed panel's Live tab, the expanded mini-player (design M6 / C5): Live
 // with the count and the time, the room's title over its book, then
 // Speakers, Hands raised, Listening and Chat on one page, each under its
 // heading. The controls stay in the mini-player, which shows alongside;
@@ -23,7 +24,7 @@ import { useRoomStore } from "@/stores/room-store";
 // member's row has a Read along button (spec §1.6). Loaded by FeedPanel only while you're in the
 // room on this book.
 
-/** Who's here and the chat, the Room tab's body. */
+/** Who's here and the chat, the Live tab's body. */
 export function RoomStage() {
   const session = useRoomStore((s) => s.session);
   const followingId = useFollowing()?.member.readerId;
@@ -55,6 +56,7 @@ export function RoomStage() {
           <span className="min-w-0 flex-1 truncate text-xs font-medium text-[var(--reader-text-muted)]">
             {count} listening · {formatDuration(now - Date.parse(room.startedAt))}
           </span>
+          <InviteButton room={room} />
         </div>
         <h2 className="m-0 font-serif text-lg leading-tight font-semibold">{room.title}</h2>
         <p className="m-0 truncate text-[13px] font-medium text-[var(--reader-text-muted)]">

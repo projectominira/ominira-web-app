@@ -2,14 +2,14 @@ import { cache } from "react";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getMaterialDetail, MaterialNotFoundError, type MaterialDetail } from "@/lib/materials/detail";
-import MaterialDetailView from "@/app/components/materials/MaterialDetailView";
+import BookRoomView from "@/app/components/materials/BookRoomView";
 import { PLATFORM_NAME, PLATFORM_URL } from "@/lib/config/platform";
 import { resolveBookCoverSrc } from "@/lib/materials/image";
 
 // generateMetadata and the page both need the book; load it once per request.
 const getDetail = cache(getMaterialDetail);
 
-/** The blurb the page itself shows (MaterialDetailView), as plain text. */
+/** The book's blurb, as plain text. */
 function blurbOf(material: MaterialDetail) {
   const text = material.description ?? material.googleDescription ?? material.openlibraryDescription;
   return text?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() || null;
@@ -43,10 +43,14 @@ export async function generateMetadata({
 
 export default async function MaterialDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  /** `?tab=room` opens on the room (Home's conversations link so); the book's info otherwise. */
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { slug } = await params;
+  const { tab } = await searchParams;
 
   let material;
   try {
@@ -76,7 +80,7 @@ export default async function MaterialDetailPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
       />
-      <MaterialDetailView material={material} />
+      <BookRoomView material={material} initialTab={tab === "room" ? "room" : "details"} />
     </>
   );
 }

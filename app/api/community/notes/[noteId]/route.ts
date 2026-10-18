@@ -4,6 +4,9 @@ import { getAuthenticatedReader } from "@/lib/auth/session";
 import { forbidden, notFound, unauthorized, validationError } from "@/lib/api/errors";
 import { contentToColumns, hydrateNotes, type NoteRow, type PostKind } from "@/lib/community/notes";
 import { enrichFeedItems } from "@/lib/community/feed";
+import { canReadPost } from "@/lib/community/visibility";
+import { loadPostViewer } from "@/lib/community/viewer";
+import { isModerator } from "@/lib/groups/membership";
 import type { NoteContent } from "@/lib/api/types";
 import { deleteMaterialAssets } from "@/lib/materials/deleteMaterialAssets";
 import type { Database } from "@/lib/supabase/database.types";
@@ -23,19 +26,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ note
   const reader = await getAuthenticatedReader(request);
   const admin = getSupabaseAdminClient();
 
-  const { data: row } = await admin.from("posts").select("*").eq("id", noteId).maybeSingle();
-  // Same rule as the per-material feed: a private note is only visible to its
-  // own author — 404, not 403, so existence of a private note is never leaked.
-  if (!row || (row.visibility !== "public" && row.reader_id !== reader?.readerId)) return notFound();
+  const [{ data: row }, viewer] = await Promise.all([
+    admin.from("posts").select("*").eq("id", noteId).maybeSingle(),
+    loadPostViewer(reader?.readerId),
+  ]);
+  // Same rule as every feed (lib/community/visibility.ts) — 404, not 403, so
+  // existence of a private note is never leaked.
+  if (!row || !canReadPost(row, viewer)) return notFound();
 
   let rootRow = row as NoteRow;
   if (row.parent_id) {
     const { data: parent } = await admin.from("posts").select("*").eq("id", row.parent_id).maybeSingle();
-    if (!parent || (parent.visibility !== "public" && parent.reader_id !== reader?.readerId)) return notFound();
+    if (!parent || !canReadPost(parent, viewer)) return notFound();
     rootRow = parent as NoteRow;
   }
 
-  const [item] = await enrichFeedItems([rootRow], reader?.readerId);
+  const [item] = await enrichFeedItems([rootRow], viewer);
   if (!item) return notFound();
 
   return NextResponse.json({ ...item, focusId: row.parent_id ? row.id : null });
@@ -74,9 +80,12 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ n
 
   const { noteId } = await params;
   const admin = getSupabaseAdminClient();
-  const { data: existing } = await admin.from("posts").select("reader_id, material_id").eq("id", noteId).maybeSingle();
+  const { data: existing } = await admin.from("posts").select("reader_id, material_id, group_id").eq("id", noteId).maybeSingle();
   if (!existing) return notFound();
-  if (existing.reader_id !== reader.readerId) return forbidden();
+  // The author, or a moderator of the group it was posted in (Remove note,
+  // spec §3.2 Pin).
+  const ownsIt = existing.reader_id === reader.readerId;
+  if (!ownsIt && !(existing.group_id && (await isModerator(existing.group_id, reader.readerId)))) return forbidden();
 
   // parent_id on delete cascade (models-spec.md) takes the whole reply
   // subtree with it — no manual descendant collection needed here, unlike
@@ -97,7 +106,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ n
       .select("id, slug, uploaded_by")
       .eq("id", existing.material_id)
       .maybeSingle();
-    if (material && material.uploaded_by === reader.readerId) {
+    if (material && material.uploaded_by === existing.reader_id) {
       const { count } = await admin
         .from("posts")
         .select("id", { count: "exact", head: true })

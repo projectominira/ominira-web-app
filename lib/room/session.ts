@@ -13,7 +13,7 @@ import { isSuperseded, selectRoster, selectSpeaking } from "@/lib/room/presence"
 import { createReactions, type Reactions, type RisingReaction } from "@/lib/room/reactions";
 import { createSignalling, type Signalling } from "@/lib/room/signalling";
 import { startSpeakingDetector } from "@/lib/room/speaking";
-import type { RoomInfo, RoomJoinPayload, RoomLeaveStats } from "@/lib/room/types";
+import type { RoomInfo, RoomJoinPayload, RoomLeaveStats, RoomStartHost } from "@/lib/room/types";
 import type { ReaderView } from "@/lib/room/view";
 import { comradeName } from "@/lib/reader/authorDisplay";
 
@@ -148,9 +148,10 @@ export class RoomSession {
     private readonly deps: SessionDeps = REAL_DEPS,
   ) {}
 
-  /** Starts a room on the book, or joins the one already live on it. */
-  async start(materialId: string, title?: string): Promise<void> {
-    this.enter(await this.deps.api.startRoom(materialId, title));
+  /** Starts a room on the book, or joins the one already live on it (in the
+   * group, for a group room). */
+  async start(materialId: string, title?: string, host?: RoomStartHost): Promise<void> {
+    this.enter(await this.deps.api.startRoom(materialId, title, host));
   }
 
   async join(roomId: string): Promise<void> {

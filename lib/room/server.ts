@@ -7,6 +7,7 @@ import { toAvatar } from "@/lib/avatar/avatar";
 import { getIceServers } from "@/lib/room/turn";
 import { roomTitle } from "@/lib/room/title";
 import { resolveMaterialRow } from "@/lib/materials/resolve";
+import { liveRoom } from "@/lib/groups/rooms";
 import type { MaterialRoom, RoomJoinPayload, RoomSummary } from "@/lib/room/types";
 
 // Room lifecycle for the thin app/api/rooms/* routes (spec §0 rule 5, §7).
@@ -15,13 +16,24 @@ import type { MaterialRoom, RoomJoinPayload, RoomSummary } from "@/lib/room/type
 
 export type JoinRefusal = "not_found" | "ended" | "forbidden" | "full";
 
-/** Starts a room on a public book, or returns the one already live on it.
- * Null when the book can't host a room. */
-export async function startRoom(readerId: string, materialId: string, title: string | null): Promise<string | null> {
+/** A group room's host: the group, and the session it's for, if any. */
+export type RoomHost = { groupId: string; sessionId: string | null };
+
+/** Starts a room on a public book, or returns the one already live on it
+ * (in the group, for a group room). Null when the book can't host a room,
+ * or the reader can't start the group's. */
+export async function startRoom(
+  readerId: string,
+  materialId: string,
+  title: string | null,
+  host: RoomHost | null = null,
+): Promise<string | null> {
   const { data, error } = await getSupabaseAdminClient().rpc("start_room", {
     material: materialId,
     reader: readerId,
     room_title: title,
+    grp: host?.groupId ?? null,
+    session: host?.sessionId ?? null,
   });
   if (error) throw error;
   return data;
@@ -38,7 +50,11 @@ export async function joinRoom(
 
   // ICE credentials are the slow call (Cloudflare), so it runs alongside the reads.
   const [roomRes, modsRes, meRes, iceServers] = await Promise.all([
-    admin.from("rooms").select("id, material_id, title, started_by, started_at, max_members").eq("id", roomId).single(),
+    admin
+      .from("rooms")
+      .select("id, material_id, title, started_by, started_at, max_members, group_id")
+      .eq("id", roomId)
+      .single(),
     admin.rpc("room_moderator_ids", { room: roomId }),
     admin.from("readers").select("pseudonym, avatar_color, avatar_url").eq("id", readerId).single(),
     getIceServers(),
@@ -48,12 +64,12 @@ export async function joinRoom(
   if (meRes.error) throw meRes.error;
   const room = roomRes.data;
 
-  const { data: book, error: bookError } = await admin
-    .from("materials")
-    .select("title, author, slug")
-    .eq("id", room.material_id)
-    .single();
+  const [{ data: book, error: bookError }, groupRes] = await Promise.all([
+    admin.from("materials").select("title, author, slug").eq("id", room.material_id).single(),
+    room.group_id ? admin.from("groups").select("id, slug, name").eq("id", room.group_id).single() : null,
+  ]);
   if (bookError) throw bookError;
+  if (groupRes?.error) throw groupRes.error;
 
   const moderatorIds = modsRes.data;
   return {
@@ -68,6 +84,7 @@ export async function joinRoom(
         startedBy: room.started_by,
         startedAt: room.started_at,
         maxMembers: room.max_members,
+        group: groupRes?.data ?? null,
       },
       isModerator: moderatorIds.includes(readerId),
       me: { name: meRes.data.pseudonym, avatar: toAvatar(meRes.data) },
@@ -116,30 +133,23 @@ export async function materialRoom(materialId: string): Promise<MaterialRoom> {
   const material = await resolveMaterialRow(materialId);
   if (!material || material.visibility !== "public") return { canStart: false, live: null };
 
-  const admin = getSupabaseAdminClient();
-  const { data: room, error } = await admin
+  const { data: room, error } = await getSupabaseAdminClient()
     .from("rooms")
-    .select("id, title, max_members")
+    .select("id, material_id, title, session_id, started_by, started_at, max_members")
     .eq("material_id", material.id)
     .eq("status", "live")
     .is("group_id", null)
     .maybeSingle();
   if (error) throw error;
   if (!room) return { canStart: true, live: null };
-
-  const { data: members, error: countError } = await admin.rpc("room_active_count", { room: room.id });
-  if (countError) throw countError;
-  return {
-    canStart: true,
-    live: { id: room.id, title: roomTitle(room.title, material.title), members, maxMembers: room.max_members },
-  };
+  return { canStart: true, live: { ...(await liveRoom(room, material.title)), maxMembers: room.max_members } };
 }
 
 /** Faces shown on the ended screen before "+N". */
 const SUMMARY_FACES = 9;
 
 /** The ended screen's data. Null unless the reader joined the room. */
-export async function roomSummary(readerId: string, roomId: string): Promise<RoomSummary | null> {
+export async function roomSummary(readerId: string, roomId: string): Promise<Omit<RoomSummary, "next"> | null> {
   const admin = getSupabaseAdminClient();
   const { data: member } = await admin
     .from("room_members")

@@ -4,6 +4,7 @@ import type { AnnotationRange } from "@/lib/api/types";
 import { setAudioSessionType } from "@/lib/room/audioSession"; // REVERT: remove with the call in enter()
 import type { RoomSession, RoomSnapshot } from "@/lib/room/session";
 import type { PendingPassage } from "@/lib/room/sharePassage";
+import type { RoomStartHost } from "@/lib/room/types";
 import type { ReaderView } from "@/lib/room/view";
 import { useSessionStore } from "@/stores/session-store";
 
@@ -32,8 +33,9 @@ type RoomState = {
   passage: PendingPassage | null;
   attachPassage: (passage: PendingPassage) => void;
   clearPassage: () => void;
-  /** Starts a room on the book, or joins the one already live on it. */
-  start: (materialId: string, title?: string) => Promise<void>;
+  /** Starts a room on the book, or joins the one already live on it (in the
+   * group, for a group room). */
+  start: (materialId: string, title?: string, host?: RoomStartHost) => Promise<void>;
   join: (roomId: string) => Promise<void>;
   /** Also dismisses the ended screen and the "open in another tab" state. */
   leave: () => Promise<void>;
@@ -127,8 +129,11 @@ export const useRoomStore = create<RoomState>()((set, get) => {
     passage: null,
     attachPassage: (passage) => set({ passage }),
     clearPassage: () => set({ passage: null }),
-    start: (materialId, title) =>
-      enter((s) => s.room.materialId === materialId, (session) => session.start(materialId, title)),
+    start: (materialId, title, host) =>
+      enter(
+        (s) => s.room.materialId === materialId && s.room.group?.slug === host?.groupSlug,
+        (session) => session.start(materialId, title, host)
+      ),
     join: (roomId) => enter((s) => s.room.id === roomId, (session) => session.join(roomId)),
     leave: async () => {
       const session = get().session;

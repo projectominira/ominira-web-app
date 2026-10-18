@@ -1,12 +1,12 @@
 import { apiFetch } from "@/lib/api/client";
-import type { RoomJoinPayload, RoomLeaveStats, RoomSummary } from "@/lib/room/types";
+import type { RoomJoinPayload, RoomLeaveStats, RoomStartHost, RoomSummary } from "@/lib/room/types";
 import { useSessionStore } from "@/stores/session-store";
 
 // Client side of the room lifecycle routes (spec §8.1). Refusals arrive as
 // ApiError with code `room_full` / `room_ended` / `forbidden` / `not_found`.
 
-export function startRoom(materialId: string, title?: string): Promise<RoomJoinPayload> {
-  return apiFetch("/rooms", { json: { materialId, title } });
+export function startRoom(materialId: string, title?: string, host?: RoomStartHost): Promise<RoomJoinPayload> {
+  return apiFetch("/rooms", { json: { materialId, title, ...host } });
 }
 
 export function joinRoom(roomId: string): Promise<RoomJoinPayload> {

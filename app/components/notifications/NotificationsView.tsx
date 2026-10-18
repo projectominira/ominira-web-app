@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { BookOpen, Hash, Megaphone, MessageCircle } from "lucide-react";
+import { BookOpen, Hash, Megaphone, MessageCircle, Mic, UserPlus } from "lucide-react";
 import SearchableAppPage from "@/app/components/shell/SearchableAppPage";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import Loader from "@/app/components/Loader";
@@ -13,7 +13,7 @@ import { useNotifications, type NotificationItem } from "@/lib/notifications/use
 import { useMarkNotificationsRead } from "@/lib/notifications/useMarkNotificationsRead";
 import { apiFetch } from "@/lib/api/client";
 import { comradeName } from "@/lib/reader/authorDisplay";
-import { formatTimeAgo } from "@/lib/reader/timeAgo";
+import { formatTimeAgo } from "@/lib/time/relative";
 import { notificationSnippet } from "@/lib/notifications/snippet";
 import type { NotificationKind } from "@/lib/notifications/types";
 
@@ -42,13 +42,16 @@ function FistIcon({ size = 10 }: { size?: number }) {
 // One color + icon per kind, so the notification type is scannable from the
 // avatar corner without reading the line (Notifications design). Colors come
 // from the same accent scale as generated avatars — deliberately not all
-// brand orange, which would make every badge look identical.
-const KIND_STYLE: Record<NotificationKind, { color: string; icon: (props: { size?: number }) => ReactNode }> = {
+// brand orange, which would make every badge look identical. Kinds without
+// an entry yet read as a broadcast.
+const KIND_STYLE: Partial<Record<NotificationKind, { color: string; icon: (props: { size?: number }) => ReactNode }>> = {
   reaction: { color: "var(--color-brand-500)", icon: FistIcon },
   material_reaction: { color: "var(--color-oxblood-500)", icon: BookOpen },
   reply: { color: "var(--color-forest-500)", icon: MessageCircle },
   digest: { color: "var(--color-olive-500)", icon: Hash },
   broadcast: { color: "var(--color-olive-500)", icon: Megaphone },
+  room_live: { color: "var(--color-brand-500)", icon: Mic },
+  group_invite: { color: "var(--color-forest-500)", icon: UserPlus },
 };
 
 // notify.ts prefixes push titles with an emoji (✊🏾/💬) because a push has no
@@ -74,16 +77,19 @@ const ROW_SNIPPET_CHARS = 200;
 const LEGACY_PUSH_BODY = /^Tap to view in\s+/;
 
 function NotificationRow({ item, isUnread }: { item: NotificationItem; isUnread: boolean }) {
-  const { color, icon: KindIcon } = KIND_STYLE[item.kind] ?? KIND_STYLE.broadcast;
+  const { color, icon: KindIcon } = KIND_STYLE[item.kind] ?? KIND_STYLE.broadcast!;
   const title = item.title.replace(LEADING_EMOJI, "");
 
+  const room = item.kind === "room_live";
   const parsed = TITLE_ACTOR.exec(title);
   const actor = item.actorPseudonym ? comradeName(item.actorPseudonym) : (parsed?.[1] ?? null);
-  const action = actor ? (title.startsWith(actor) ? title.slice(actor.length) : (parsed?.[2] ?? null)) : null;
+  const action = room ? " started a reading room" : actor ? (title.startsWith(actor) ? title.slice(actor.length) : (parsed?.[2] ?? null)) : null;
 
   // A book appreciation's body is the bare book title — it trails the
   // sentence rather than sitting under it as a quote, since it isn't one.
-  const context = item.kind === "material_reaction" ? item.body : null;
+  // A room invite's is its snippet: "<actor> started a reading room on <book>"
+  // (its title, "<book> is live", is the push's).
+  const context = item.kind === "material_reaction" ? item.body : room ? item.snippet : null;
 
   // The quoted line: the note's own words. `snippet` holds the full text
   // (the push body is cut short for a lock screen), so the row gets its own
@@ -91,9 +97,11 @@ function NotificationRow({ item, isUnread }: { item: NotificationItem; isUnread:
   // back to the body for a broadcast's actual message — but never for the
   // legacy "tap to view" copy, which says nothing worth a line.
   const snippet = context ? null : notificationSnippet(item.snippet, ROW_SNIPPET_CHARS);
+  // A group invite: the group's name, its description, then who invited you.
+  const invite = item.kind === "group_invite";
   const detail = snippet
-    ? `“${snippet}”`
-    : context || LEGACY_PUSH_BODY.test(item.body)
+    ? invite ? snippet : `“${snippet}”`
+    : invite || context || LEGACY_PUSH_BODY.test(item.body)
       ? null
       : item.body;
 
@@ -146,13 +154,15 @@ function NotificationRow({ item, isUnread }: { item: NotificationItem; isUnread:
           shouty — the fix is hierarchy, not one larger font size. */}
       <span className="flex min-w-0 flex-1 flex-col gap-1.5 pt-px">
         <span className="text-[13px] leading-[1.45] text-[var(--reader-text)]">
-          {actor && action ? (
+          {invite ? (
+            <span className="font-bold">{title}</span>
+          ) : actor && action ? (
             <>
               <span className="font-bold">{actor}</span>
               <span className="font-medium">{action}</span>
               {context && (
                 <>
-                  {item.kind === "material_reaction" ? " · " : " in "}
+                  {item.kind === "material_reaction" ? " · " : room ? " on " : " in "}
                   <span className="font-semibold text-[var(--reader-text-muted)]">{context}</span>
                 </>
               )}
@@ -164,6 +174,11 @@ function NotificationRow({ item, isUnread }: { item: NotificationItem; isUnread:
         {detail && (
           <span className="line-clamp-2 font-serif text-[14px] leading-[1.65] text-[var(--reader-text-muted)]">
             {detail}
+          </span>
+        )}
+        {invite && (
+          <span className="text-[12px] font-medium text-[var(--reader-text-muted)]">
+            <span className="font-bold text-[var(--reader-text)]">{actor ?? "A comrade"}</span> invited you to join
           </span>
         )}
         <span className="text-[11px] font-semibold tracking-wide text-[var(--reader-text-subtle)]">

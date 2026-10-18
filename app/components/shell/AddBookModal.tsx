@@ -131,6 +131,9 @@ function attachmentFromMaterial(material: MaterialSummary): FileAttachment {
  * sticky progress footer in place of the modal chrome — and `limits` raises the per-file
  * size/count caps there (the server enforces its own, see
  * lib/materials/uploadLimits.ts).
+ *
+ * `publicOnly` hides the visibility toggle, so every book goes up public: a
+ * group's reading list is public (studygroup-spec §4.6).
  */
 export default function AddBookModal({
   category = "All",
@@ -142,6 +145,7 @@ export default function AddBookModal({
   onMaterialDeleted,
   layout = "modal",
   limits = MEMBER_UPLOAD_LIMITS,
+  publicOnly = false,
 }: {
   category?: string;
   categories: string[];
@@ -153,6 +157,7 @@ export default function AddBookModal({
   onMaterialDeleted?: (id: string) => void;
   layout?: "modal" | "page";
   limits?: UploadLimits;
+  publicOnly?: boolean;
 }) {
   const { upload } = useUploadBook();
   const metadataEditor = useAttachmentMetadataEditor();
@@ -383,10 +388,14 @@ export default function AddBookModal({
           metadataEditor.commit(attachment.file, attachment.materialId, { author });
           notifyEdit({ author });
         }}
-        onSetVisibility={(visibility) => {
-          setVisibility(i, visibility);
-          notifyEdit({ visibility });
-        }}
+        onSetVisibility={
+          publicOnly
+            ? undefined
+            : (visibility) => {
+                setVisibility(i, visibility);
+                notifyEdit({ visibility });
+              }
+        }
         onSetCategories={(categories) => {
           setCategories(i, categories);
           notifyEdit({ categories });

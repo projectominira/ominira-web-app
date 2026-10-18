@@ -22,9 +22,7 @@ const BROADCAST_BATCH_SIZE = 200;
 // the table stays clean without a separate cron job. Never throws — a push
 // failure must not surface as an API error to the caller that triggered it.
 // Returns whether the send itself succeeded, for sendBroadcast's tally —
-// event-triggered callers (sendToReader/sendToReaders) don't need this, a
-// single reader's push failing silently is fine, unlike a broadcast where an
-// admin wants to know how many actually went out.
+// event-triggered callers (sendToReaders) tally it too, for the cron's logs.
 async function sendToSubscription(row: SubscriptionRow, payload: PushPayload): Promise<boolean> {
   try {
     await getWebPush().sendNotification(
@@ -48,25 +46,17 @@ async function sendToRows(rows: SubscriptionRow[], payload: PushPayload) {
   return results.filter((result) => result.status === "fulfilled" && result.value).length;
 }
 
-// Fire-and-forget from a route handler: `void sendToReader(...)` after the
-// triggering row (reaction/reply) is committed — never awaited into the
-// response, per lib/push's design (a push failure is best-effort, same
-// spirit as deleteMaterialAssets in the admin materials DELETE route).
-export async function sendToReader(readerId: string, payload: PushPayload) {
-  const { data } = await getSupabaseAdminClient()
-    .from("push_subscriptions")
-    .select("id, endpoint, p256dh, auth")
-    .eq("reader_id", readerId);
-  if (data?.length) await sendToRows(data, payload);
-}
-
-export async function sendToReaders(readerIds: string[], payload: PushPayload) {
-  if (readerIds.length === 0) return;
+// Only called through lib/notifications (notifyReader/notifyReaders), never
+// straight from a route — that's what keeps the in-app row, push and email
+// in step. Best-effort, like every send here. Returns how many devices
+// accepted the push.
+export async function sendToReaders(readerIds: string[], payload: PushPayload): Promise<number> {
+  if (readerIds.length === 0) return 0;
   const { data } = await getSupabaseAdminClient()
     .from("push_subscriptions")
     .select("id, endpoint, p256dh, auth")
     .in("reader_id", readerIds);
-  if (data?.length) await sendToRows(data, payload);
+  return data?.length ? sendToRows(data, payload) : 0;
 }
 
 // Everyone with a live subscription — installed PWA or plain web. Paginated
