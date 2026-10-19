@@ -7,7 +7,7 @@ export const ACCEPTED_FILE_TYPES =
 
 export type UploadLimits = { maxFileSizeBytes: number; maxFiles: number };
 
-export const MEMBER_UPLOAD_LIMITS: UploadLimits = { maxFileSizeBytes: 10 * 1024 * 1024, maxFiles: 10 };
+export const MEMBER_UPLOAD_LIMITS: UploadLimits = { maxFileSizeBytes: 100 * 1024 * 1024, maxFiles: 10 };
 // Admins add editorial books in bulk from /admin/library/new. The server
 // grants this cap only to ADMIN_EMAILS (isAdminReader) — the client value is
 // just for fail-fast feedback.
