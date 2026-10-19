@@ -63,7 +63,7 @@ export default function RoomPanel({
       )}
       <div className={`flex flex-none items-center gap-2 border-b border-[var(--color-app-border)] ${sheet ? "py-1 pr-2 pl-4" : "min-h-16 pr-2 pl-5"}`}>
         <div className="flex min-w-0 flex-1 flex-col gap-px">
-          <span className="text-ui-lg">{title}</span>
+          <span className="text-[14px] font-bold">{title}</span>
           {sub && <span className="truncate text-ui-caption text-[var(--color-app-text-muted)]">{sub}</span>}
         </div>
         {actions}

@@ -38,3 +38,5 @@ export function endRoom(roomId: string): Promise<void> {
 export function getRoomSummary(roomId: string): Promise<RoomSummary> {
   return apiFetch(`/rooms/${roomId}/summary`);
 }
+
+export const inviteToRoom = (roomId: string, readerIds: string[]) => apiFetch<void>(`/rooms/${roomId}/invite`, { method: "POST", json: { readerIds } });

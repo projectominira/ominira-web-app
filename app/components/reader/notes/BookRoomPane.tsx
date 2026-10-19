@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import RoomInput from "@/app/components/rooms/RoomInput";
 import RoomStream, { type RoomStreamHandle } from "@/app/components/rooms/RoomStream";
 import { quoteReaderHref } from "@/app/components/rooms/PassageQuote";
-import { button } from "@/app/components/rooms/buttons";
 import { roomItems } from "@/lib/rooms/timeline";
 import type { RoomItem, RoomNote } from "@/lib/rooms/types";
 import { useBookRoom } from "@/lib/rooms/useBookRoom";
@@ -66,7 +65,7 @@ export default function BookRoomPane({ materialId, authorId, targetNoteId }: { m
         viewerId ? (
           <RoomInput placeholder="Share a note" onSend={send.send} />
         ) : (
-          <button type="button" onClick={() => router.push("/auth/signup")} className={button("primary", { full: true })}>
+          <button type="button" onClick={() => router.push("/auth/signup")} className="mx-auto flex min-h-12 cursor-pointer items-center justify-center px-4 text-ui-sm font-extrabold text-[var(--color-app-brand)] hover:text-brand-600 disabled:opacity-60">
             Join the conversation
           </button>
         )

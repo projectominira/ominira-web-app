@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
-import { ArrowUp, AtSign, Calendar, Mic, Plus } from "lucide-react";
+import { ArrowUp, AtSign } from "lucide-react";
 import { splitMentions } from "@/lib/community/mentionText";
 import type { MentionCandidate } from "@/lib/community/mentionTypes";
 import { useComposerMentions, type Tagged } from "@/lib/community/useComposerMentions";
@@ -10,14 +10,12 @@ import { TEAM_TAG } from "@/lib/rooms/timeline";
 import type { Comrade } from "@/lib/rooms/types";
 import { COMPOSER_TOOL } from "@/app/components/reader/notes/ComposerBox";
 import RoomAvatar from "./RoomAvatar";
-import RoomPanel from "./RoomPanel";
 
 // A room's input (home-spec §2 Composer, Room.dc.html): the 52 px field
-// (rounded-sm) with ＋ (the team only) and @ on the left, the text and a
+// (rounded-sm) with @ on the left, the text and a
 // square send that turns brand when there's text. Typing @ (or the @ button) floats the picker above the
 // field: comrades, then chapters.
 
-const ICON = { size: 20, strokeWidth: 1.75, "aria-hidden": true } as const;
 const ROUND = "flex size-9 flex-none cursor-pointer items-center justify-center rounded-sm transition-colors duration-150 ease-out";
 
 /** The field alone, controlled. Tagged "@Name" runs show in brand through a
@@ -27,10 +25,8 @@ export function RoomField({
   onChange,
   placeholder,
   mentions = [],
-  team = false,
   atOpen = false,
   inputRef,
-  onPlus,
   onAt,
   onSend,
   onKeyDown,
@@ -47,10 +43,8 @@ export function RoomField({
   placeholder: string;
   /** Names tagged in the text. */
   mentions?: string[];
-  team?: boolean;
   atOpen?: boolean;
   inputRef?: RefObject<HTMLInputElement | null>;
-  onPlus?: () => void;
   onAt?: () => void;
   onSend?: () => void;
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
@@ -64,12 +58,7 @@ export function RoomField({
   useLayoutEffect(sync, [value, input]);
 
   return (
-    <div className="flex min-h-13 items-center gap-1 rounded-sm border border-[var(--color-app-border)] bg-[var(--color-app-surface)] px-2 py-1.5 text-[var(--color-app-text)] transition-colors duration-150 ease-out focus-within:border-brand-300">
-      {team && (
-        <button type="button" aria-label="Team actions" onClick={onPlus} className={COMPOSER_TOOL}>
-          <Plus size={16} strokeWidth={2} aria-hidden />
-        </button>
-      )}
+    <div className="flex min-h-13 items-center gap-1 rounded-sm border border-[var(--color-app-border)] bg-[var(--color-app-surface)] px-2 py-1.5 text-[var(--color-app-text)] transition-colors duration-150 ease-out focus-within:border-sand-300">
       {onAt && (
         <button
           type="button"
@@ -111,7 +100,7 @@ export function RoomField({
         type="button"
         aria-label="Send"
         onClick={onSend}
-        className={`${ROUND} ${canSend ? "bg-brand-500 text-sand-25 hover:bg-brand-600" : "bg-sand-100 text-[var(--color-app-text-muted)]"}`}
+        className={`${ROUND} ${canSend ? "bg-[var(--color-app-text)] text-[var(--color-app-surface)] hover:opacity-85" : "bg-sand-100 text-[var(--color-app-text-muted)]"}`}
       >
         <ArrowUp size={18} strokeWidth={2.25} aria-hidden />
       </button>
@@ -136,7 +125,7 @@ export function MentionPicker({
 }) {
   const label = "px-2 text-ui-xs tracking-eyebrow text-[var(--color-app-text-muted)] uppercase";
   return (
-    <div className="flex w-70 max-w-full flex-col gap-0.5 rounded-lg border border-[var(--color-app-border)] bg-[var(--color-app-surface)] p-2 text-[var(--color-app-text)] shadow-md">
+    <div className="flex w-70 max-w-full flex-col gap-0.5 rounded-sm border border-[var(--color-app-border)] bg-[var(--color-app-surface)] p-2 text-[var(--color-app-text)] shadow-md">
       <span className={`${label} py-1`}>Tag a comrade</span>
       {people.map(({ comrade, sub }, i) => (
         <button
@@ -147,7 +136,7 @@ export function MentionPicker({
           className={`flex min-h-11 cursor-pointer items-center gap-2.5 rounded-sm px-2 text-left hover:bg-sand-100 ${i === active ? "bg-sand-100" : ""}`}
         >
           <RoomAvatar comrade={comrade} size={28} />
-          <span className="text-ui-sm font-bold">{personName(comrade.pseudonym)}</span>
+          <span className="text-[12px] font-bold">{personName(comrade.pseudonym)}</span>
           {sub && <span className="text-ui-caption text-[var(--color-app-text-muted)]">{sub}</span>}
         </button>
       ))}
@@ -244,21 +233,17 @@ export function useRoomMentions({
  * who's tagged; the stream shows the note as sending (NoteBubble). */
 export default function RoomInput({
   placeholder,
-  team = false,
   groupSlug = null,
   chapters = [],
   subFor = teamSub,
   autoFocus = false,
-  onPlus,
   onSend,
 }: {
   placeholder: string;
   autoFocus?: boolean;
-  team?: boolean;
   groupSlug?: string | null;
   chapters?: string[];
   subFor?: (c: MentionCandidate) => string | null;
-  onPlus?: () => void;
   onSend: (note: { text: string; mentions: string[] }) => void;
 }) {
   const [text, setText] = useState("");
@@ -281,11 +266,9 @@ export default function RoomInput({
         onChange={onChange}
         placeholder={placeholder}
         mentions={m.kept.map((t) => t.pseudonym)}
-        team={team}
         atOpen={m.picking}
         inputRef={inputRef}
         autoFocus={autoFocus}
-        onPlus={onPlus}
         onAt={m.togglePicker}
         onSend={send}
         onKeyDown={(e) => {
@@ -297,47 +280,5 @@ export default function RoomInput({
         }}
       />
     </div>
-  );
-}
-
-const TEAM_ACTIONS = [
-  { key: "target", icon: Calendar, title: "Set this week’s target", sub: "Optional. Shows in the pinned bar" },
-  { key: "schedule", icon: Calendar, title: "Schedule a reading room", sub: "Posts a session card comrades can set a reminder on" },
-  { key: "start", icon: Mic, title: "Start a reading room now", sub: "Goes live for the group straight away" },
-] as const;
-
-/** The moderators' ＋ (rooms-spec §2, 5d): what the team can post. */
-export function TeamMenu({
-  groupName,
-  layout = "sheet",
-  className,
-  onClose,
-  onPick,
-}: {
-  groupName: string;
-  layout?: "sheet" | "panel";
-  className?: string;
-  onClose?: () => void;
-  onPick?: (action: (typeof TEAM_ACTIONS)[number]["key"]) => void;
-}) {
-  return (
-    <RoomPanel layout={layout} title="Team actions" sub={groupName} onClose={onClose} className={className}>
-      <div className="flex flex-col gap-1 px-3 pt-2 pb-5">
-        <span className="px-2 pt-1 pb-2 text-ui-caption text-[var(--color-app-text-secondary)]">
-          Everything you post lands in the stream as a card. Comrades don’t see this menu.
-        </span>
-        {TEAM_ACTIONS.map(({ key, icon: Icon, title, sub }) => (
-          <button key={key} type="button" onClick={() => onPick?.(key)} className="flex min-h-15 cursor-pointer items-center gap-3.5 px-2.5 text-left">
-            <span className="flex size-10 flex-none items-center justify-center rounded-full border border-[var(--color-app-border)]">
-              <Icon {...ICON} />
-            </span>
-            <span className="flex flex-col gap-0.5">
-              <span className="text-ui-md font-extrabold">{title}</span>
-              <span className="text-ui-caption text-[var(--color-app-text-secondary)]">{sub}</span>
-            </span>
-          </button>
-        ))}
-      </div>
-    </RoomPanel>
   );
 }

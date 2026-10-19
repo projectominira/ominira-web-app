@@ -85,12 +85,9 @@ export function ScreenHead<T extends string>({
 }
 
 /** A tab that scrolls as a page: one centred column. */
-export function ScreenPage({ children }: { children: ReactNode }) {
-  return (
-    <div className="om-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
-      <div className="mx-auto flex w-full max-w-[640px] flex-col px-4 pt-6 pb-12">{children}</div>
-    </div>
-  );
+export function ScreenPage({ children, outer = false }: { children: ReactNode; /** The screen itself scrolls (`RoomScreen scroll`), so the page doesn't. */ outer?: boolean }) {
+  const column = <div className="mx-auto flex w-full max-w-[640px] flex-col px-4 pt-6 pb-12">{children}</div>;
+  return outer ? column : <div className="om-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain">{column}</div>;
 }
 
 /** Switches the page's tab in the URL too (`?tab=`), so a refresh or a

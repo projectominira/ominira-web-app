@@ -5,6 +5,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { resolveBookCoverSrc } from "@/lib/materials/image";
 import { MATERIAL_SUMMARY_COLUMNS } from "@/lib/materials/columns";
 import { toMaterialSummary } from "@/lib/materials/summary";
+import { existingReaders } from "@/lib/community/mentions";
 import { notifyReaders } from "@/lib/notifications/notify";
 import { comradeName } from "@/lib/reader/authorDisplay";
 import { roomTitle } from "@/lib/room/title";
@@ -92,4 +93,39 @@ export async function roomInvite(roomId: string): Promise<RoomInvite | null> {
     bookSlug: book.slug,
     cover: resolveBookCoverSrc(book),
   };
+}
+
+/** A member's tagged invite to a live room: `room_live` to every tagged
+ * reader, saying who invited them; it opens the room's link. One per room
+ * and reader a day (policy dedupe). */
+export async function inviteToRoom(roomId: string, actorId: string, readerIds: string[]): Promise<"ok" | "not_found" | "forbidden"> {
+  const admin = getSupabaseAdminClient();
+  const [room, member] = await Promise.all([
+    admin.from("rooms").select("id, material_id, status, group_id").eq("id", roomId).maybeSingle(),
+    admin.from("room_members").select("reader_id").eq("room_id", roomId).eq("reader_id", actorId).maybeSingle(),
+  ]);
+  if (room.error) throw room.error;
+  if (member.error) throw member.error;
+  if (!room.data || room.data.status !== "live" || room.data.group_id) return "not_found";
+  if (!member.data) return "forbidden";
+
+  const tagged = await existingReaders(readerIds, actorId);
+  if (tagged.length === 0) return "ok";
+  const [book, actor] = await Promise.all([
+    admin.from("materials").select("title").eq("id", room.data.material_id).single(),
+    admin.from("readers").select("pseudonym").eq("id", actorId).maybeSingle(),
+  ]);
+  if (book.error) throw book.error;
+  const who = actor.data?.pseudonym ? comradeName(actor.data.pseudonym) : "A comrade";
+  await notifyReaders(tagged, {
+    kind: "room_live",
+    title: `${who} invited you to a reading room`,
+    body: `${book.data.title} is live. Join in.`,
+    url: `/room/${roomId}`,
+    tag: `room-invite-${roomId}`,
+    actorReaderId: actorId,
+    snippet: book.data.title,
+    ref: `invite:${roomId}`,
+  });
+  return "ok";
 }

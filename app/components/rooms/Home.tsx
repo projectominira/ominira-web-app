@@ -168,6 +168,7 @@ export default function Home({
   onStartGroup,
   myRoom,
   onOpenRoom,
+  signedIn = false,
 }: {
   view: HomeView | undefined;
   failed?: boolean;
@@ -183,6 +184,8 @@ export default function Home({
   /** The room you're in, for its card: Invite and back into it. */
   myRoom?: { id: string; title: string; bookTitle: string } | null;
   onOpenRoom?: () => void;
+  /** Signed out, public groups are plain rows in the list, not join cards. */
+  signedIn?: boolean;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   if (!view)
@@ -203,8 +206,8 @@ export default function Home({
       {myRoom && <MyRoomCard room={myRoom} onOpen={onOpenRoom} />}
     </div>
   );
-  const joined = view.groups.filter((g) => g.joined);
-  const open = view.groups.filter((g) => !g.joined);
+  const joined = signedIn ? view.groups.filter((g) => g.joined) : view.groups;
+  const open = signedIn ? view.groups.filter((g) => !g.joined) : [];
   const talk = joined.length > 0 || view.rooms.length > 0;
   const chips = filters(joined, view.rooms);
   const community = ((desktop && rooms) || talk || open.length > 0 || onStartRoom || onStartGroup) && (

@@ -136,7 +136,7 @@ export default function GroupRoom({
               className={`flex flex-col bg-[var(--reader-bg)] ${wide ? "w-100 flex-none border-l border-[var(--color-app-border)]" : "absolute inset-0 z-10"}`}
             >
               <div className="flex min-h-14 flex-none items-center justify-between border-b border-[var(--color-app-border)] pr-2 pl-5">
-                <span className="text-ui-lg">Group info</span>
+                <span className="text-ui-md">Group info</span>
                 <button
                   type="button"
                   aria-label="Close"

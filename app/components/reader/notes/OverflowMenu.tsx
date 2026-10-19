@@ -74,7 +74,7 @@ export default function OverflowMenu({ items, onClose }: { items: OverflowMenuIt
               role="menuitem"
               onClick={item.disabled ? undefined : item.onClick}
               disabled={item.disabled}
-              className={`flex h-8 w-full items-center gap-2 rounded-sm border-none bg-transparent px-2.5 text-left text-[13px] font-semibold outline-none transition-colors ${
+              className={`flex h-8 w-full items-center gap-2 rounded-sm border-none bg-transparent px-2.5 text-left text-[12px] font-semibold outline-none transition-colors ${
                 item.disabled
                   ? "cursor-not-allowed text-[var(--reader-text-subtle)]"
                   : item.danger

@@ -51,6 +51,7 @@ export default function HomeScreen() {
         onStartRoom={signedIn ? () => setStarting(true) : undefined}
         onStartGroup={signedIn ? () => setStartingGroup(true) : undefined}
         myRoom={myRoom}
+        signedIn={signedIn}
         onOpenRoom={myRoom ? () => openRoom(myRoom.materialId) : undefined}
       />
       {starting && (

@@ -28,8 +28,8 @@ import SessionSheet from "./SessionSheet";
 
 type Tab = "details" | "reading-list" | "sessions" | "members";
 const TABS: { value: Tab; label: string }[] = [
-  { value: "details", label: "Details" },
   { value: "reading-list", label: "Reading list" },
+  { value: "details", label: "Details" },
   { value: "sessions", label: "Sessions" },
   { value: "members", label: "Members" },
 ];

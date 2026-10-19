@@ -83,7 +83,7 @@ function NotificationRow({ item, isUnread }: { item: NotificationItem; isUnread:
   const room = item.kind === "room_live";
   const parsed = TITLE_ACTOR.exec(title);
   const actor = item.actorPseudonym ? comradeName(item.actorPseudonym) : (parsed?.[1] ?? null);
-  const action = room ? " started a reading room" : actor ? (title.startsWith(actor) ? title.slice(actor.length) : (parsed?.[2] ?? null)) : null;
+  const action = room ? (/ invited you/.test(title) ? " invited you to a reading room" : " started a reading room") : actor ? (title.startsWith(actor) ? title.slice(actor.length) : (parsed?.[2] ?? null)) : null;
 
   // A book appreciation's body is the bare book title — it trails the
   // sentence rather than sitting under it as a quote, since it isn't one.

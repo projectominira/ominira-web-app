@@ -81,7 +81,7 @@ export default function BookRoom({
 
   return (
     <>
-      <ScreenHead title={header.title} subtitle={header.author} lead={<BookCover src={header.cover} alt="" className="aspect-2/3 w-7 rounded-xs ring-1 ring-sand-950/8" />} onBack={onBack} share={{ title: header.title, text: `${header.title} by ${header.author}` }} action={<HeadMenu items={menu} />} actionLast tabs={tabs} tab={shown} onTab={onTab} />
+      <ScreenHead title={header.title} subtitle={shown === "details" ? undefined : header.author} lead={shown === "details" ? undefined : <BookCover src={header.cover} alt="" className="aspect-square w-9 rounded-full object-cover ring-1 ring-sand-950/8" />} onBack={onBack} share={{ title: header.title, text: `${header.title} by ${header.author}` }} action={<HeadMenu items={menu} />} actionLast tabs={tabs} tab={shown} onTab={onTab} />
       {shown === "details" ? (
         details
       ) : (

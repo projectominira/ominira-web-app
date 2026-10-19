@@ -22,7 +22,6 @@ import { bookHeader, type BookProgress } from "@/lib/rooms/book";
 import { roomItems } from "@/lib/rooms/timeline";
 import type { RoomItem, RoomNote } from "@/lib/rooms/types";
 import RoomInput from "@/app/components/rooms/RoomInput";
-import { button } from "@/app/components/rooms/buttons";
 import { useBookRoom } from "@/lib/rooms/useBookRoom";
 import { useFeedStore } from "@/stores/feed-store";
 import { useReadingPositionStore } from "@/stores/reading-position-store";
@@ -134,7 +133,7 @@ export default function BookRoomView({ material, initialTab }: { material: Mater
   ];
 
   return (
-    <RoomScreen sidebar={false}>
+    <RoomScreen sidebar={false} scroll={!liveOpen && tab === "details"}>
       <BookRoom
         header={header}
         tab={liveOpen ? "live" : tab}
@@ -184,7 +183,7 @@ export default function BookRoomView({ material, initialTab }: { material: Mater
           viewerId ? (
             <RoomInput placeholder={`Note on ${material.title}`} onSend={send.send} />
           ) : (
-            <button type="button" onClick={() => router.push("/auth/signup")} className={button("primary", { full: true })}>
+            <button type="button" onClick={() => router.push("/auth/signup")} className="mx-auto flex min-h-12 cursor-pointer items-center justify-center px-4 text-ui-sm font-extrabold text-[var(--color-app-brand)] hover:text-brand-600 disabled:opacity-60">
               Join the conversation
             </button>
           )

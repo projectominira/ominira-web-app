@@ -48,7 +48,7 @@ export default function BookDetails({
   const position = useReadingPositionStore((s) => s.positions[material.id]);
   const setFinished = useReadingPositionStore((s) => s.setFinished);
   return (
-    <ScreenPage>
+    <ScreenPage outer>
       <div className="flex flex-col items-center gap-5 text-center">
         <BookCover materialType={material.materialType} src={resolveBookCoverSrc(material)} alt={material.title} className="aspect-[2/3] w-48 flex-none shadow-lg shell:w-56" />
         <div className="w-full min-w-0">

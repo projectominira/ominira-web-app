@@ -177,14 +177,14 @@ export default function GroupReadingList({
     <div className="flex flex-col gap-8 pt-1">
       {add_ && (
         <div className="flex items-center justify-between gap-3">
-          <p className="m-0 text-[13px] text-[var(--reader-text-muted)]">Books the group reads, in order.</p>
+          {/* <p className="m-0 text-[13px] text-[var(--reader-text-muted)]">Books the group reads, in order.</p> */}
           {add_}
         </div>
       )}
       {list.length === 0 && <NoResults message="No books on the list yet." />}
 
       {current && (
-        <section aria-label="Reading now" className="flex flex-col gap-4 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] p-5">
+        <section aria-label="Reading now" className="flex flex-col gap-4 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-5">
           <div className="flex gap-4">
             <Link href={`/library/${current.material.slug}`} className="h-[120px] w-20 flex-none overflow-hidden rounded-xs">
               <BookCover

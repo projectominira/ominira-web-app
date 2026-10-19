@@ -13,7 +13,7 @@ import { groupHref } from "@/lib/groups/copy";
 import { reminderKey } from "@/lib/groups/sessions";
 import type { TocSection } from "@/lib/api/types";
 import { setPendingJoin } from "@/lib/groups/pendingJoin";
-import type { GroupBook, GroupPage, GroupRole, GroupSession, SessionsView } from "@/lib/groups/types";
+import type { GroupBook, GroupRole, GroupSession, SessionsView } from "@/lib/groups/types";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useSessionStore } from "@/stores/session-store";
 
@@ -148,18 +148,6 @@ export const useInviteToGroup = (slug: string) =>
   useMutation({ mutationFn: (readerIds: string[]) => api.inviteToGroup(slug, readerIds) });
 
 export const useLeaveGroup = (slug: string) => useGroupMutation<void>(() => api.leaveGroup(slug));
-
-/** Mute, shown flipped at once and put back if the write fails. */
-export function useMuteGroup(slug: string) {
-  const queryClient = useQueryClient();
-  const readerId = useSessionStore((s) => s.readerId);
-  const set = (muted: boolean) => queryClient.setQueryData<GroupPage>(groupKeys.page(slug, readerId), (page) => page && { ...page, muted });
-  return useMutation({
-    mutationFn: (muted: boolean) => api.setMuted(slug, muted),
-    onMutate: set,
-    onError: (_err, muted) => set(!muted),
-  });
-}
 
 export const useSetMemberRole = (slug: string) =>
   useGroupMutation(({ readerId, role }: { readerId: string; role: GroupRole }) => api.setMemberRole(slug, readerId, role));

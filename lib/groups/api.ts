@@ -27,7 +27,6 @@ export const joinGroup = (slug: string) => apiFetch<void>(`/groups/${slug}/join`
 
 export const leaveGroup = (slug: string) => apiFetch<void>(`/groups/${slug}/leave`, { method: "POST" });
 
-export const setMuted = (slug: string, muted: boolean) => apiFetch<void>(`/groups/${slug}/mute`, { method: "PUT", json: { muted } });
 
 export const inviteToGroup = (slug: string, readerIds: string[]) =>
   apiFetch<void>(`/groups/${slug}/invite`, { method: "POST", json: { readerIds } });

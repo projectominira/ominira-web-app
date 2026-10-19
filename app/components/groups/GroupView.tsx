@@ -5,9 +5,8 @@ import { useRouter } from "next/navigation";
 import { Info, LogOut, Mic, Settings, Trash2 } from "lucide-react";
 import GroupRoom from "@/app/components/rooms/GroupRoom";
 import type { RoomOverlay } from "@/app/components/rooms/RoomPanel";
-import RoomInput, { TeamMenu } from "@/app/components/rooms/RoomInput";
+import RoomInput from "@/app/components/rooms/RoomInput";
 import RoomScreen from "@/app/components/rooms/RoomScreen";
-import { button } from "@/app/components/rooms/buttons";
 import StatusPage from "@/app/components/shared/StatusPage";
 import { errorMessage } from "@/lib/api/client";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
@@ -89,7 +88,7 @@ export default function GroupView({ slug, initialAbout }: { slug: string; initia
   const reply = useRoomReply(streamKey);
   const del = useRoomDelete(streamKey);
   // What the room has open on demand: the team's ＋ menu and target sheet (5a / 5b).
-  const [open, setOpen] = useState<"plus" | "target" | null>(null);
+  const [open, setOpen] = useState<"target" | null>(null);
   const markRead = useMarkRoomRead("group", viewerId ? (data?.group.id ?? null) : null);
   const reminder = useSessionReminder(slug);
   const { join, isPending: joining } = useJoinAction(slug);
@@ -154,39 +153,11 @@ export default function GroupView({ slug, initialAbout }: { slug: string; initia
     });
     if (ok) deleteGroup.mutate(undefined, { onError: onFail("Couldn't delete the group.") });
   };
-  const onInvite = () => {
-    if (!group) return;
-    const url = `${window.location.origin}${groupHref(slug)}`;
-    const share = navigator.share?.({ title: group.name, text: `Read with ${group.name} on Ominira`, url });
-    if (share) return void share.catch(() => {});
-    void navigator.clipboard
-      .writeText(url)
-      .then(() => showToast("Link copied"))
-      .catch(() => showToast("Couldn't copy the link"));
-  };
-
   const onRemind = upcoming?.remind != null ? () => reminder.mutate({ session: upcoming, on: !upcoming.remind }) : undefined;
   const close = () => setOpen(null);
   const team: RoomOverlay | null =
     aboutOpen
       ? null
-      : open === "plus" && group
-      ? {
-          onClose: close,
-          render: (layout) => (
-            <TeamMenu
-              layout={layout}
-              groupName={group.name}
-              onClose={close}
-              onPick={(action) => {
-                if (action === "target") return setOpen("target");
-                close();
-                if (action === "schedule") setSessionSheet({});
-                else void onStartRoom();
-              }}
-            />
-          ),
-        }
       : open === "target" && group && target
         ? {
             onClose: close,
@@ -230,7 +201,6 @@ export default function GroupView({ slug, initialAbout }: { slug: string; initia
               roomTarget={roomTarget ?? null}
               roomSession={roomSession?.card ?? null}
               viewerId={viewerId}
-              onInvite={onInvite}
               onRemind={onRemind}
               onSetTarget={() => {
                 setAboutOpen(false);
@@ -270,9 +240,9 @@ export default function GroupView({ slug, initialAbout }: { slug: string; initia
         }}
         input={
           myRole ? (
-            <RoomInput placeholder="Message the group" team={isModerator} groupSlug={slug} onPlus={() => setOpen("plus")} onSend={send.send} />
+            <RoomInput placeholder="Message the group" groupSlug={slug} onSend={send.send} />
           ) : (
-            <button type="button" onClick={join} disabled={joining || isLoading} className={button("primary", { full: true })}>
+            <button type="button" onClick={join} disabled={joining || isLoading} className="mx-auto flex min-h-12 cursor-pointer items-center justify-center px-4 text-ui-sm font-extrabold text-[var(--color-app-brand)] hover:text-brand-600 disabled:opacity-60">
               Join the group
             </button>
           )
