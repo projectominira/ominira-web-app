@@ -3,8 +3,8 @@
  * (it core-js-polyfills Map#getOrInsertComputed, Promise.try, Iterator
  * helpers, etc., but assumes these as baseline). Missing on Safari < 17.4 —
  * `Promise.withResolvers()` alone throws "undefined is not a function" the
- * moment a document loads. Imported on the main thread (lib/pdf/setup.ts) and
- * in the worker (lib/pdf/pdf.worker.ts), since each has its own globals.
+ * moment a document loads. Imported by lib/pdf/setup.ts, where pdf.js and its
+ * worker code both run on the main thread.
  * Every shim is a no-op where the browser already has the real thing.
  */
 
