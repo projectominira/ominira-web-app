@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { communityFeedItemHref } from "@/lib/community/useCommunityFeed";
@@ -19,7 +19,7 @@ export default function PassageQuote({
   onClick,
 }: {
   excerpt: string;
-  /** "How Europe Underdeveloped Africa - Walter Rodney · Ch. 1". */
+  /** The chapter, when there is one: "Ch. 1". */
   cite?: string | null;
   href?: string | null;
   onClick?: () => void;
@@ -29,10 +29,21 @@ export default function PassageQuote({
   const body = (
     <>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span aria-hidden className="mb-1.5 block font-serif text-[20px]/none text-brand-200 select-none">
-          &ldquo;
+        {/* The opening mark and the arrow share one line, so the quote
+            itself runs the card's full width. */}
+        <span className="mb-1.5 flex items-start justify-between">
+          <span aria-hidden className="font-serif text-[20px]/none text-brand-200 select-none">
+            &ldquo;
+          </span>
+          {(href || onClick) && (
+            <ArrowUpRight
+              aria-hidden
+              size={16}
+              className="text-[var(--color-app-text-muted)] opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
+            />
+          )}
         </span>
-        <span className="block font-serif text-[16px]/[1.5] text-pretty text-sand-900">
+        <span className="block font-serif text-[16px]/[1.65] text-pretty text-sand-900">
           {expanded ? excerpt : shown}
           {isTruncated && !expanded && (
             <>
@@ -59,18 +70,11 @@ export default function PassageQuote({
             </>
           )}
         </span>
-        {cite && <span className="mt-3 block text-[12px] font-medium text-sand-500">{cite}</span>}
+        {cite && <span className="mt-1.5 block text-[12px] font-medium text-sand-500">{cite}</span>}
       </span>
-      {(href || onClick) && (
-        <ArrowUpRight
-          aria-hidden
-          size={16}
-          className="mt-0.5 flex-none text-[var(--color-app-text-muted)] opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
-        />
-      )}
     </>
   );
-  const cls = "group flex w-full items-start gap-3 rounded-sm bg-sand-50 p-4 text-left";
+  const cls = "group flex w-full items-start rounded-sm bg-sand-50 px-3.5 py-3 text-left";
   if (href) return <Link href={href} className={cls}>{body}</Link>;
   if (onClick)
     return (
@@ -92,10 +96,4 @@ export function quoteReaderHref(item: Parameters<typeof communityFeedItemHref>[0
   q.delete("note");
   const rest = q.toString();
   return rest ? `${path}?${rest}` : path;
-}
-
-/** "Title - Author · Ch. 1" from a note's material and label. */
-export function passageCite(material: { title: string; author?: string | null } | null | undefined, label: ReactNode | string | null) {
-  const book = material ? `${material.title}${material.author ? ` - ${material.author.replace(/[;,\s]+$/, "")}` : ""}` : null;
-  return [book, label].filter(Boolean).join(" · ") || null;
 }

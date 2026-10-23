@@ -13,6 +13,9 @@ const subscribe = (onChange: () => void) => {
   return () => mq.removeEventListener("change", onChange);
 };
 
+/** The same, read once, outside render. */
+export const isShell = () => window.matchMedia(QUERY).matches;
+
 /** True at the shell breakpoint and above; false on the server. */
 export function useShell(): boolean {
   return useSyncExternalStore(subscribe, () => window.matchMedia(QUERY).matches, () => false);

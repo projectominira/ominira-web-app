@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CircleAlert, Clock, Ellipsis, Lock, RotateCcw } from "lucide-react";
+import { CircleAlert, Clock, Ellipsis, RotateCcw } from "lucide-react";
 import NoteContent from "@/app/components/reader/notes/NoteContent";
 import OverflowMenu, { type OverflowMenuItem } from "@/app/components/reader/notes/OverflowMenu";
 import PulseDot from "@/app/components/shared/PulseDot";
@@ -14,8 +14,9 @@ import { OFFICIAL_TAG, personName } from "@/lib/rooms/names";
 import type { RoomNote } from "@/lib/rooms/types";
 import FistReaction, { ReplyPill } from "./FistReaction";
 import { noteMenu } from "./noteMenu";
-import PassageQuote, { passageCite } from "./PassageQuote";
+import PassageQuote from "./PassageQuote";
 import RoomAvatar from "./RoomAvatar";
+import { CardAuthor, RoomCard } from "./RoomCard";
 import RoomInput from "./RoomInput";
 import ThreadReplies from "@/app/components/reader/notes/ThreadReplies";
 
@@ -28,7 +29,7 @@ const ICON = { strokeWidth: 1.75, "aria-hidden": true } as const;
 const SHOWN = 3;
 
 /** ⋯ and its menu; nothing when there's nothing in it. */
-function Menu({ items, small = false }: { items: OverflowMenuItem[]; small?: boolean }) {
+export function Menu({ items, small = false }: { items: OverflowMenuItem[]; small?: boolean }) {
   const [open, setOpen] = useState(false);
   if (!items.length) return null;
   return (
@@ -139,33 +140,17 @@ export default function NoteBubble({
 
   return (
     <div className={`flex w-full flex-col gap-1 ${state === "sending" ? "opacity-60" : ""}`}>
-      <article
-        className={`flex w-full flex-col gap-3 rounded-sm border px-4 pt-3 pb-3.5 transition-shadow duration-250 ease-out ${flash ? "ring-3 ring-brand-300" : ""} ${
-          priv ? "border-dashed border-sand-300 bg-white" : "border-[var(--color-app-border)] bg-white"
-        }`}
-      >
-        <div className="flex min-w-0 items-center gap-2.5">
-          <RoomAvatar comrade={note.author} size={32} official={official} />
-          <div className="flex min-w-0 flex-1 flex-col gap-px">
-            <div className="flex min-w-0 items-baseline gap-1.5">
-              <span className="min-w-0 truncate text-ui-sm font-bold text-[var(--reader-text)]">{mine ? "You" : personName(note.author.pseudonym, official)}</span>
-              {n.authorTag && (
-                <span className="flex-none self-center rounded-xs bg-sand-100 px-1.5 py-px font-sans text-[10px]/[1.4] font-bold whitespace-nowrap text-[var(--color-app-text-secondary)]">
-                  {n.authorTag}
-                </span>
-              )}
-              <span className="min-w-0 flex-none truncate text-[12px] font-semibold text-[var(--reader-text-muted)]">
-                {pending ? "now" : chatTime(note.createdAt, now)}
-                {note.author.city && ` · ${note.author.city}`}
-              </span>
-              {priv && (
-                <span className="flex flex-none items-center gap-0.5 self-center text-[11px] font-semibold text-[var(--reader-text-subtle)]">
-                  <Lock size={9} aria-hidden />
-                  Only you
-                </span>
-              )}
-            </div>
-            {book && (
+      <RoomCard priv={priv} flash={flash}>
+        <CardAuthor
+          author={note.author}
+          viewerId={viewerId}
+          at={pending ? null : note.createdAt}
+          now={now}
+          priv={priv}
+          official={official}
+          tag={n.authorTag}
+          below={
+            book && (
               <button
                 type="button"
                 onClick={onBook ?? onPassage}
@@ -173,10 +158,10 @@ export default function NoteBubble({
               >
                 in <span className="font-serif text-[13px] text-[var(--color-app-text)] italic">{book.title}</span>
               </button>
-            )}
-          </div>
-          {!pending && onDelete && <Menu items={noteMenu(note, viewerId, moderator, replies.length, () => onDelete())} />}
-        </div>
+            )
+          }
+          menu={!pending && onDelete && <Menu items={noteMenu(note, viewerId, moderator, replies.length, () => onDelete())} />}
+        />
 
         {n.pinned && (
           <span className="inline-flex items-center gap-1.5 self-start font-sans text-[11px]/[1.3] font-extrabold tracking-eyebrow text-[var(--color-app-brand)] uppercase">
@@ -185,7 +170,7 @@ export default function NoteBubble({
             {n.pinned}
           </span>
         )}
-        {n.excerpt && <PassageQuote excerpt={n.excerpt} cite={passageCite(n.material, n.label && chapterLabel(n.label))} onClick={onPassage} />}
+        {n.excerpt && <PassageQuote excerpt={n.excerpt} cite={n.label ? chapterLabel(n.label) : null} onClick={onPassage} />}
         {n.question && <span className="font-serif text-[16px]/[1.4] font-semibold text-pretty">{n.question}</span>}
         {text && <NoteContent content={note.content} mentions={noteMentionNames(note)} variant="card" />}
 
@@ -249,7 +234,7 @@ export default function NoteBubble({
             }}
           />
         )}
-      </article>
+      </RoomCard>
 
       {state === "sending" && (
         <div className="flex items-center gap-1.5 text-ui-caption text-[var(--color-app-text-muted)]">

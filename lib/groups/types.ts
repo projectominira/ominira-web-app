@@ -14,6 +14,8 @@ export type GroupInfo = {
   name: string;
   description: string;
   memberCount: number;
+  /** Invite only: not listed, and joined by invite. */
+  private?: boolean;
 };
 
 /** `GET /api/groups/{slug}`: the page header. `myRole` is null signed out or

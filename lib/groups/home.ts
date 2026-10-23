@@ -43,6 +43,7 @@ export async function homeGroups(readerId: string | null): Promise<GroupCardView
     mine.length < FEW
       ? ok(
           await (mine.length ? admin.from("groups").select("id").not("id", "in", `(${mine.join(",")})`) : admin.from("groups").select("id"))
+            .eq("is_private", false)
             .order("created_at", { ascending: false })
             .limit(OPEN_CARDS * 2)
         ).map((g) => g.id)

@@ -10,6 +10,7 @@ import { useFeed } from "@/lib/reader/useFeed";
 import { useScrollChrome } from "@/lib/reader/useScrollChrome";
 import { PENDING_ANNOTATION_ID, useTextAnnotations } from "@/lib/reader/useTextAnnotations";
 import { useSessionStore } from "@/stores/session-store";
+import { useFeedStore, type FeedTab } from "@/stores/feed-store";
 import type { Annotation } from "@/stores/library-store";
 import FeedPanel from "./notes/FeedPanel";
 import NotesFeedFab from "./NotesFeedFab";
@@ -86,7 +87,10 @@ export function useDocumentAnnotations({
   const feed = useFeed({ materialId, locate });
   const shareQuote = useShareQuote(title);
   const scrollChrome = useScrollChrome(scrollEl);
-  const { close: closeFeed } = feed;
+  const { close: closeFeed, open: feedOpen, filter: feedTab } = feed;
+  // The thread opened from over the feed, and the feed's tab then: its
+  // panel's back arrow returns there.
+  const [feedReturn, setFeedReturn] = useState<{ annotationId: string; tab: FeedTab } | null>(null);
   // One slot for both panels, and the room's mini-player can open the feed
   // from outside, so the feed opening closes the thread.
   useEffect(() => {
@@ -94,10 +98,11 @@ export function useDocumentAnnotations({
   }, [feed.open, closeNotesPanel]);
   const onMarkClick = useCallback(
     (block: string, annotationId: string) => {
+      setFeedReturn(feedOpen ? { annotationId, tab: feedTab } : null);
       closeFeed();
       onNoteMarkerClick(block, annotationId);
     },
-    [closeFeed, onNoteMarkerClick]
+    [feedOpen, feedTab, closeFeed, onNoteMarkerClick]
   );
   const jumpToEntry = useCallback((entry: FeedEntry) => jumpToBlock(entry.passageId), [jumpToBlock]);
 
@@ -132,7 +137,7 @@ export function useDocumentAnnotations({
         onShare={shareQuote.share}
         onSharedToRoom={() => {
           closeNotesPanel();
-          feed.openRoom();
+          feed.openRoom("chat");
         }}
       />
       {/* The same notes panel and feed as the EPUB reader: over the right edge
@@ -146,13 +151,18 @@ export function useDocumentAnnotations({
                 materialId={materialId}
                 passageId={notesPanel.passageId}
                 getPassageText={getPassageText}
+                locationLabel={(block) => locate(block)?.label ?? ""}
                 annotationId={notesPanel.annotationId}
                 pendingRanges={notesPanel.ranges}
                 editingNoteId={notesPanel.editingNoteId}
                 targetThreadId={notesPanel.targetThreadId}
                 panelType={isMobile ? "sheet" : "side"}
                 onClose={closeNotesPanel}
-                onShare={shareQuote.share}
+                onBack={
+                  feedReturn && feedReturn.annotationId === notesPanel.annotationId
+                    ? () => useFeedStore.getState().open(materialId, feedReturn.tab)
+                    : undefined
+                }
               />
             ) : (
               <FeedPanel
@@ -164,6 +174,7 @@ export function useDocumentAnnotations({
                 activeSectionId={activeSectionId}
                 onJump={jumpToEntry}
                 getPassageText={getPassageText}
+                locate={locate}
                 panelType={isMobile ? "sheet" : "side"}
                 onClose={closeFeed}
                 focusedAuthor={feed.focusedAuthor}

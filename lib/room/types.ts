@@ -2,6 +2,7 @@
 
 import type { Avatar } from "@/lib/avatar/avatar";
 import type { GroupLiveRoom, GroupSession } from "@/lib/groups/types";
+import type { Comrade } from "@/lib/rooms/types";
 
 export type RoomInfo = {
   id: string;
@@ -45,6 +46,9 @@ export type RoomInvite = {
   members: number;
   /** "Comrade Yeast"; null if their account is gone. */
   host: string | null;
+  hostId: string;
+  /** A few of those in, by face, the host first when they're in. */
+  people: Comrade[];
   materialId: string;
   bookTitle: string;
   bookAuthor: string;

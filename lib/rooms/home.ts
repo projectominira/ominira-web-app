@@ -13,23 +13,20 @@ export type ChainDay = { day: LocalDay; letter: string; state: "done" | "today" 
 
 const LETTERS = ["M", "T", "W", "T", "F", "S", "S"];
 
-/** This week, Monday to Sunday: read days done, today ringed until read.
- * `linked[i]` is the link into day i: on when the day before it was read. */
-export function weekChain(view: Pick<StreakView, "today" | "days">): { days: ChainDay[]; linked: boolean[] } {
+/** This week, Monday to Sunday: read days done, today ringed until read. */
+export function weekChain(view: Pick<StreakView, "today" | "days">): ChainDay[] {
   const monday = addDays(view.today, -weekdayOf(view.today));
   const read = new Set(view.days);
-  const days = LETTERS.map((letter, i): ChainDay => {
+  return LETTERS.map((letter, i): ChainDay => {
     const day = addDays(monday, i);
     return { day, letter, state: read.has(day) ? "done" : day === view.today ? "today" : "next" };
   });
-  return { days, linked: days.map((_, i) => i > 0 && days[i - 1].state === "done") };
 }
 
 /** The ring's share of today's goal, 0 to 1. */
 export const goalShare = ({ minutes, goal }: Pick<StreakToday, "minutes" | "goal">) => (goal > 0 ? Math.min(1, minutes / goal) : 0);
 
 /** "10,100" */
-const count = (n: number) => n.toLocaleString("en-GB");
 
 export type StreakCopy = { title: string; sub: string };
 
@@ -37,14 +34,19 @@ export function streakCopy(view: StreakView, today: StreakToday): StreakCopy {
   const { state } = view;
   // TodayCard.dc.html's words; it has no milestone state.
   const left = Math.max(0, today.goal - today.minutes);
-  const minutes = (n: number) => `${n} minute${n === 1 ? "" : "s"}`;
-  const collective = `The collective has read ${minutes(today.collectiveMinutes).replace(/^\d+/, count(today.collectiveMinutes))} today.`;
   const fresh = state.kind === "none" || state.kind === "ended";
-  const goal = left === 0 ? "Goal met for today." : fresh ? `Read ${minutes(left)} today to start one.` : `${left} more minute${left === 1 ? "" : "s"} to make it ${state.kind === "kept" ? state.days : state.days + 1}.`;
-  return { title: fresh ? "Start a streak" : `${state.days}-day streak`, sub: `${goal} ${collective}` };
+  // Any reading counts the day; the goal is apart from the streak.
+  const goal =
+    left === 0
+      ? "Goal met for today."
+      : state.kind === "kept"
+        ? `${goalLabel(left)} left of today's goal.`
+        : fresh
+          ? "Read today to start one."
+          : `Start today's reading to make it day ${state.days + 1}.`;
+  return { title: fresh ? "Start a streak" : `${state.days}-day streak`, sub: goal };
 }
 
-/** Adjust daily goal's choices (TodayCard.dc.html), in minutes. */
 /** The daily goal's range and step (what the server accepts): 30 min to
  * 8 hr in quarter hours. */
 export const GOAL = { min: 30, max: 480, step: 15, fallback: 60 } as const;
@@ -55,17 +57,28 @@ export const dailyGoal = (stored: number | null) => stored ?? GOAL.fallback;
 /** A goal Adjust can set: in range, on a step. */
 export const isGoal = (m: number) => Number.isInteger(m) && m >= GOAL.min && m <= GOAL.max && m % GOAL.step === 0;
 
-/** "45 min", "1 hr", "2 hr 30 min". */
+const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"}`;
+
+/** "45 minutes", "1 hour", "2 hours 30 minutes". */
 export function goalLabel(m: number): string {
-  if (m < 60) return `${m} min`;
+  if (m < 60) return plural(m, "minute");
   const rest = m % 60;
-  return `${Math.floor(m / 60)} hr${rest ? ` ${rest} min` : ""}`;
+  return `${plural(Math.floor(m / 60), "hour")}${rest ? ` ${plural(rest, "minute")}` : ""}`;
 }
 
-/** Where on the slider `m` sits, 0 to 1, and back (snapped to a step). */
-export const goalAt = (m: number) => (m - GOAL.min) / (GOAL.max - GOAL.min);
-export const goalFrom = (share: number) =>
-  Math.min(GOAL.max, Math.max(GOAL.min, GOAL.min + Math.round((Math.min(1, Math.max(0, share)) * (GOAL.max - GOAL.min)) / GOAL.step) * GOAL.step));
+/** Today's reading inside the ring: "45" minutes, or "1:15" hours. */
+export function ringTime(m: number): { value: string; unit: string } {
+  if (m < 60) return { value: `${m}`, unit: m === 1 ? "minute" : "minutes" };
+  const h = Math.floor(m / 60);
+  const rest = m % 60;
+  return { value: rest ? `${h}:${`${rest}`.padStart(2, "0")}` : `${h}`, unit: m === 60 ? "hour" : "hours" };
+}
+
+/** Adjust daily goal's quick picks, in minutes. */
+export const GOAL_PRESETS = [30, 60, 120, 240] as const;
+
+/** `m` into the goal's range, `steps` quarter hours on. */
+export const goalStep = (m: number, steps = 0) => Math.min(GOAL.max, Math.max(GOAL.min, m + steps * GOAL.step));
 
 /** Whole minutes in a day's seconds. */
 export const toMinutes = (seconds: number) => Math.floor(seconds / 60);

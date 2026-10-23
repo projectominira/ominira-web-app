@@ -1,17 +1,18 @@
 "use client";
 
 import { useRef, type ReactNode } from "react";
-import { X } from "lucide-react";
 import type { OverflowMenuItem } from "@/app/components/reader/notes/OverflowMenu";
 import { useShell } from "@/app/components/useShell";
 import type { RoomItem, RoomSession, RoomTarget } from "@/lib/rooms/types";
 import type { LocalDay } from "@/lib/time/zone";
 import { comradeCount } from "@/lib/groups/copy";
 import HeadMenu from "./HeadMenu";
+import ShareButton from "@/app/components/materials/ShareButton";
+import InfoPanel, { HEAD_PILL, InfoButton } from "./InfoPanel";
 import { GroupAvatar } from "./RoomAvatar";
 import PinnedBar from "./PinnedBar";
 import { RoomFrame, type RoomOverlay } from "./RoomPanel";
-import { ScreenHead, SidePanel } from "./RoomScreen";
+import { ScreenHead } from "./RoomScreen";
 import RoomStream, {
   type RoomStreamHandle,
   type StreamHandlers,
@@ -19,14 +20,10 @@ import RoomStream, {
 
 // The study group's page (rooms-spec §2, 4a / 4b / 7a–7c): the room (the
 // pinned target and reading room rows, the stream and the input), with
-// Group info a side panel opened from the head, as in a WhatsApp group (a
-// full panel on mobile). What the room opens on demand (the team's sheets)
+// Group info a side panel opened from the head's ⓘ or the name, as in a
+// WhatsApp group (a full panel on mobile). What the room opens on demand (the team's sheets)
 // is a sheet over it on mobile and a 400 px column beside it on desktop
 // (9a / 9b). The page (GroupView) loads it.
-
-/** Wide, Group info sits at the window's right edge; on mobile it fills the room. */
-const Side = ({ wide, children }: { wide: boolean; children: ReactNode }) =>
-  wide ? <SidePanel>{children}</SidePanel> : <>{children}</>;
 
 export default function GroupRoom({
   name,
@@ -85,7 +82,14 @@ export default function GroupRoom({
   const stream = useRef<RoomStreamHandle>(null);
   const sessionAnchor = session?.session.id;
 
-  const more = <HeadMenu items={menu} />;
+  // Invite is also in Group info, where it alone lives on mobile.
+  const more = (
+    <div className="flex items-center gap-1">
+      <InfoButton label="Group info" onClick={onAbout} />
+      <ShareButton title={name} text={`Read with ${name} on Ominira`} ariaLabel="Share a link to this group" label="Invite" className={`${HEAD_PILL} hidden shell:flex`} />
+      <HeadMenu items={menu} />
+    </div>
+  );
 
   return (
     <>
@@ -94,12 +98,11 @@ export default function GroupRoom({
         lead={<GroupAvatar name={name} size={36} />}
         subtitle={comradeCount(memberCount)}
         onBack={onBack}
-        share={{ title: name, text: `Read with ${name} on Ominira` }}
         action={more}
         actionLast
         onTitle={onAbout}
       />
-      <div className="relative flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1">
           <RoomFrame wide={wide} overlay={overlay}>
             <RoomStream
@@ -131,24 +134,9 @@ export default function GroupRoom({
           </RoomFrame>
         </div>
         {aboutOpen && (
-          <Side wide={wide}>
-            <aside
-              className={`flex flex-col bg-[var(--reader-bg)] ${wide ? "w-100 flex-none border-l border-[var(--color-app-border)]" : "absolute inset-0 z-10"}`}
-            >
-              <div className="flex min-h-14 flex-none items-center justify-between border-b border-[var(--color-app-border)] pr-2 pl-5">
-                <span className="text-ui-md">Group info</span>
-                <button
-                  type="button"
-                  aria-label="Close"
-                  onClick={onCloseAbout}
-                  className="flex size-11 cursor-pointer items-center justify-center rounded-md hover:bg-sand-75"
-                >
-                  <X size={20} strokeWidth={1.75} aria-hidden />
-                </button>
-              </div>
-              {about}
-            </aside>
-          </Side>
+          <InfoPanel title="Group info" onClose={onCloseAbout}>
+            {about}
+          </InfoPanel>
         )}
       </div>
     </>

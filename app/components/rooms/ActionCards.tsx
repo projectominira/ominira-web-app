@@ -1,6 +1,7 @@
 "use client";
 
 import { Headphones, Target } from "lucide-react";
+import { activeRoom, useRoomStore } from "@/stores/room-store";
 import PulseDot from "@/app/components/shared/PulseDot";
 import { sessionMeta, sessionPeople, targetRange } from "@/lib/rooms/cards";
 import { personName } from "@/lib/rooms/names";
@@ -85,6 +86,8 @@ export function SessionCard({
   const { state, session, people, reading, summary } = card;
   const live = state === "live";
   const ended = state === "ended";
+  // One live room per book: you're in this one.
+  const joined = useRoomStore((s) => live && activeRoom(s)?.room.materialId === session.materialId);
   const sub = live ? "text-sand-25/68" : "text-[var(--color-app-text-secondary)]";
   return (
     <div className={`${CARD} ${flash ? FLASH : ""} ${live ? "border-sand-900 bg-sand-900 text-sand-25" : "border-[var(--color-app-border)] bg-[var(--color-app-surface)] text-[var(--color-app-text)]"}`}>
@@ -143,7 +146,7 @@ export function SessionCard({
         ))}
       {live && (
         <button type="button" onClick={onJoin} className={button("primary", { full: true })}>
-          Join live
+          {joined ? "Open room" : "Join"}
         </button>
       )}
     </div>

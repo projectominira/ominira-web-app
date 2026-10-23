@@ -1,4 +1,4 @@
-/** Chat's unread count, the same pill wherever it shows (the Room tab, the
+/** Chat's unread count, the same pill wherever it shows (the room panel, the
  * chat row, the room button). Keyed by the count, so each new message pops
  * it again: the quiet "something was said", in place of a sound. */
 export default function UnreadBadge({ count, className = "" }: { count: number; className?: string }) {

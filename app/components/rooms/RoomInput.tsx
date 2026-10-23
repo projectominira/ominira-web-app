@@ -1,7 +1,7 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
-import { ArrowUp, AtSign } from "lucide-react";
+import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import { AtSign, SendHorizontal } from "lucide-react";
 import { splitMentions } from "@/lib/community/mentionText";
 import type { MentionCandidate } from "@/lib/community/mentionTypes";
 import { useComposerMentions, type Tagged } from "@/lib/community/useComposerMentions";
@@ -11,15 +11,26 @@ import type { Comrade } from "@/lib/rooms/types";
 import { COMPOSER_TOOL } from "@/app/components/reader/notes/ComposerBox";
 import RoomAvatar from "./RoomAvatar";
 
-// A room's input (home-spec §2 Composer, Room.dc.html): the 52 px field
-// (rounded-sm) with @ on the left, the text and a
-// square send that turns brand when there's text. Typing @ (or the @ button) floats the picker above the
-// field: comrades, then chapters.
+// A room's input (home-spec §2 Composer, Room.dc.html), a chat bar
+// (rounded-sm) with @ on the left, text that grows as you write and a
+// square send on the right that turns brand when there's
+// text. Typing @ (or the @ button) floats the picker above the bar:
+// comrades, then chapters.
 
-const ROUND = "flex size-9 flex-none cursor-pointer items-center justify-center rounded-sm transition-colors duration-150 ease-out";
+/** The text's box, shared by the field and its mirror so both lay the text
+ * out identically — the same thin scrollbar's gutter kept in both, so the
+ * field can scroll without its lines wrapping apart from the mirror's.
+ * max-md: 16px, as globals.css sets every field there (iOS zoom). */
+const TEXT = "om-scroll [scrollbar-gutter:stable] pr-2 pl-0.5 py-[7px] font-sans text-[15px]/[22px] font-normal whitespace-pre-wrap break-words max-md:text-[16px]";
+
+/** Enter sends only where there's a real keyboard; on a phone it's a new line. */
+export const hasKeyboard = () => window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 
 /** The field alone, controlled. Tagged "@Name" runs show in brand through a
- * mirror behind the input's transparent text. */
+ * mirror behind the field's transparent text. The mirror must lay text out
+ * exactly as the field does (same weight, same wrap), or the caret drifts.
+ * It also shows the placeholder, on one line cut with an ellipsis (a long
+ * book title on a phone), which a textarea's own placeholder can't do. */
 export function RoomField({
   value,
   onChange,
@@ -33,6 +44,8 @@ export function RoomField({
   maxLength,
   autoFocus = false,
   canSend = !!value.trim(),
+  tools,
+  below,
 }: {
   value: string;
   maxLength?: number;
@@ -44,66 +57,86 @@ export function RoomField({
   /** Names tagged in the text. */
   mentions?: string[];
   atOpen?: boolean;
-  inputRef?: RefObject<HTMLInputElement | null>;
+  inputRef?: RefObject<HTMLTextAreaElement | null>;
   onAt?: () => void;
   onSend?: () => void;
-  onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+  onKeyDown?: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
+  /** Quiet buttons beside send. */
+  tools?: ReactNode;
+  /** A row inside the box, under the text (the share switch), shown
+   * while writing. */
+  below?: ReactNode;
 }) {
   const mirror = useRef<HTMLDivElement>(null);
-  const own = useRef<HTMLInputElement>(null);
+  const own = useRef<HTMLTextAreaElement>(null);
   const input = inputRef ?? own;
   const sync = () => {
-    if (mirror.current && input.current) mirror.current.scrollLeft = input.current.scrollLeft;
+    if (mirror.current && input.current) mirror.current.scrollTop = input.current.scrollTop;
   };
   useLayoutEffect(sync, [value, input]);
 
   return (
-    <div className="flex min-h-13 items-center gap-1 rounded-sm border border-[var(--color-app-border)] bg-[var(--color-app-surface)] px-2 py-1.5 text-[var(--color-app-text)] transition-colors duration-150 ease-out focus-within:border-sand-300">
-      {onAt && (
+    <div className="group/box flex flex-col rounded-sm border border-[var(--color-app-border)] bg-[var(--color-app-surface)] p-1 text-[var(--color-app-text)] shadow-sm transition-colors duration-150 ease-out focus-within:border-sand-300">
+      <div className={`flex items-end ${onAt ? "" : "pl-2.5"}`}>
+        {onAt && (
+          <button
+            type="button"
+            aria-label="Tag a comrade or chapter"
+            aria-expanded={atOpen}
+            onClick={onAt}
+            className={`${COMPOSER_TOOL} my-0.5 !w-7 !min-w-7 !px-0 ${atOpen ? "!bg-brand-50 !text-[var(--color-app-brand)]" : ""}`}
+          >
+            <AtSign size={16} strokeWidth={2} aria-hidden />
+          </button>
+        )}
+        <div className="relative min-w-0 flex-1">
+          <div aria-hidden ref={mirror} className={`pointer-events-none absolute inset-0 overflow-hidden ${TEXT}`}>
+            {!value && <span className="block truncate text-[var(--color-app-text-muted)]">{placeholder}</span>}
+            {splitMentions(value, mentions).map((run, i) =>
+              typeof run === "string" ? (
+                run
+              ) : (
+                <span key={i} className="text-[var(--color-app-brand)]">
+                  {run.mention}
+                </span>
+              ),
+            )}
+          </div>
+          <textarea
+            ref={input}
+            rows={1}
+            autoFocus={autoFocus}
+            value={value}
+            onChange={(e) => onChange?.(e.target.value)}
+            onScroll={sync}
+            onKeyDown={onKeyDown}
+            maxLength={maxLength}
+            aria-label={placeholder}
+            className={`relative field-sizing-content block max-h-40 min-h-9 w-full resize-none border-none bg-transparent text-transparent caret-[var(--color-app-text)] outline-none selection:text-[var(--color-app-text)] ${TEXT}`}
+          />
+        </div>
+        {tools && <div className="mb-0.5 flex flex-none items-center gap-0.5">{tools}</div>}
         <button
           type="button"
-          aria-label="Tag a comrade or chapter"
-          aria-expanded={atOpen}
-          onClick={onAt}
-          className={`${COMPOSER_TOOL} ${atOpen ? "!bg-brand-50 !text-[var(--color-app-brand)]" : ""}`}
+          aria-label="Send"
+          onClick={onSend}
+          className={`flex size-9 flex-none cursor-pointer items-center justify-center rounded-sm border-none bg-transparent transition-colors duration-150 ease-out ${
+            canSend ? "text-[var(--reader-text)]" : "text-[var(--color-app-text-muted)]"
+          }`}
         >
-          <AtSign size={16} strokeWidth={2} aria-hidden />
+          <SendHorizontal size={18} strokeWidth={2} aria-hidden />
         </button>
-      )}
-      <div className="relative min-w-0 flex-1">
-        {/* max-md: 16px, as globals.css sets every field there (iOS zoom). */}
-        <div aria-hidden ref={mirror} className="pointer-events-none absolute inset-0 truncate px-2 font-sans text-[15px]/9 whitespace-pre max-md:text-[16px]">
-          {splitMentions(value, mentions).map((run, i) =>
-            typeof run === "string" ? (
-              run
-            ) : (
-              <b key={i} className="text-[var(--color-app-brand)]">
-                {run.mention}
-              </b>
-            ),
-          )}
-        </div>
-        <input
-          ref={input}
-          autoFocus={autoFocus}
-          value={value}
-          onChange={(e) => onChange?.(e.target.value)}
-          onScroll={sync}
-          onKeyDown={onKeyDown}
-          maxLength={maxLength}
-          placeholder={placeholder}
-          aria-label={placeholder}
-          className="relative h-9 w-full bg-transparent px-2 font-sans text-[15px]/9 text-transparent caret-[var(--color-app-text)] outline-none placeholder:text-[var(--color-app-text-muted)]"
-        />
       </div>
-      <button
-        type="button"
-        aria-label="Send"
-        onClick={onSend}
-        className={`${ROUND} ${canSend ? "bg-[var(--color-app-text)] text-[var(--color-app-surface)] hover:opacity-85" : "bg-sand-100 text-[var(--color-app-text-muted)]"}`}
-      >
-        <ArrowUp size={18} strokeWidth={2.25} aria-hidden />
-      </button>
+      {below && (
+        // Only while you're writing: focused, or with a draft. Pressing it
+        // keeps the focus in the field, so it doesn't vanish mid-tap.
+        <div
+          onMouseDown={(e) => e.preventDefault()}
+          className={`${value ? "flex" : "hidden group-focus-within/box:flex"} mx-1.5 mt-1 border-t border-[var(--color-app-border)] px-1 pt-2 pb-1.5`}
+        >
+          {below}
+        </div>
+      )}
     </div>
   );
 }
@@ -187,7 +220,14 @@ export function useRoomMentions({
   initialTagged?: Tagged[];
 }) {
   const [active, setActive] = useState(0);
-  const m = useComposerMentions({ text, setText, inputRef, inline: true, groupSlug, initialTagged });
+  const m = useComposerMentions({
+    text,
+    setText,
+    inputRef,
+    inline: true,
+    groupSlug,
+    initialTagged,
+  });
   const people = m.pickable.slice(0, 6);
   const q = m.pickerQuery.toLowerCase();
   const chapterHits = chapters.filter((c) => c.toLowerCase().includes(q));
@@ -230,13 +270,16 @@ export function useRoomMentions({
 }
 
 /** The input with its picker, for a room. Sending hands over the text and
- * who's tagged; the stream shows the note as sending (NoteBubble). */
+ * who's tagged; the stream shows the note as sending (NoteBubble). With
+ * `canLock` (a book's room, in the reader or on its page), a "Make private" switch inside the box
+ * keeps the note private, and a private note tags no one (routeNote). */
 export default function RoomInput({
   placeholder,
   groupSlug = null,
   chapters = [],
   subFor = teamSub,
   autoFocus = false,
+  canLock = false,
   onSend,
 }: {
   placeholder: string;
@@ -244,41 +287,92 @@ export default function RoomInput({
   groupSlug?: string | null;
   chapters?: string[];
   subFor?: (c: MentionCandidate) => string | null;
-  onSend: (note: { text: string; mentions: string[] }) => void;
+  canLock?: boolean;
+  onSend: (note: { text: string; mentions: string[]; locked?: boolean }) => void;
 }) {
   const [text, setText] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-  const { m, picker, onKeyDown, onChange } = useRoomMentions({ text, setText, inputRef, groupSlug, chapters, subFor });
+  const [locked, setLocked] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { m, picker, onKeyDown, onChange } = useRoomMentions({
+    text,
+    setText,
+    inputRef,
+    groupSlug,
+    chapters,
+    subFor,
+  });
 
   const send = () => {
     const body = text.trim();
     if (!body) return;
-    onSend({ text: body, mentions: m.mentionReaderIds });
+    onSend({
+      text: body,
+      mentions: locked ? [] : m.mentionReaderIds,
+      ...(locked && { locked }),
+    });
     setText("");
     m.reset();
   };
 
+  const field = (
+    <RoomField
+      value={text}
+      onChange={onChange}
+      placeholder={locked ? "A note only you will see" : placeholder}
+      mentions={m.kept.map((t) => t.pseudonym)}
+      atOpen={m.picking}
+      inputRef={inputRef}
+      autoFocus={autoFocus}
+      onAt={locked ? undefined : m.togglePicker}
+      onSend={send}
+      below={
+        canLock && (
+          <ShareSwitch
+            on={locked}
+            onChange={(on) => {
+              m.closePicker();
+              setLocked(on);
+            }}
+          />
+        )
+      }
+      onKeyDown={(e) => {
+        if (onKeyDown(e)) return;
+        if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && hasKeyboard()) {
+          e.preventDefault();
+          send();
+        }
+      }}
+    />
+  );
+
   return (
     <div className="relative">
       {picker}
-      <RoomField
-        value={text}
-        onChange={onChange}
-        placeholder={placeholder}
-        mentions={m.kept.map((t) => t.pseudonym)}
-        atOpen={m.picking}
-        inputRef={inputRef}
-        autoFocus={autoFocus}
-        onAt={m.togglePicker}
-        onSend={send}
-        onKeyDown={(e) => {
-          if (onKeyDown(e)) return;
-          if (e.key === "Enter") {
-            e.preventDefault();
-            send();
-          }
-        }}
-      />
+      {field}
     </div>
+  );
+}
+
+/** "Make private": the label at the start of its own row, the switch at
+ * its end — the same row in a composer's box and on your highlight's card.
+ * Off by default; on, the note (or highlight) is private. */
+export function ShareSwitch({ on, onChange, disabled = false }: { on: boolean; onChange: (on: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={() => onChange(!on)}
+      className="flex w-full cursor-pointer items-center justify-between gap-3 border-none bg-transparent p-0 text-ui-caption whitespace-nowrap text-[var(--color-app-text-muted)] disabled:cursor-default disabled:opacity-50"
+    >
+      Make private
+      <span className={`relative h-4.5 w-8 flex-none rounded-full transition-colors duration-150 ease-out ${on ? "bg-[var(--color-app-brand)]" : "bg-sand-300"}`}>
+        <span
+          className={`absolute top-0.5 left-0.5 size-3.5 rounded-full bg-white shadow-sm transition-transform duration-150 ease-out ${on ? "translate-x-3.5" : ""}`}
+        />
+      </span>
+    </button>
   );
 }

@@ -39,28 +39,28 @@ export default function RoomRow({ href, name, mark, last, empty, unread, live, s
       <span className={`flex-none ${live ? `-m-1 border-2 border-brand-500 p-0.5 ${mark.group ? "rounded-full" : "rounded-sm"}` : ""}`}>
         {mark.group ? <GroupAvatar name={name} size={36} fontSize={14} /> : <BookCover src={mark.cover} alt="" className="aspect-2/3 w-9 rounded-xs ring-1 ring-sand-950/8" iconSize={14} />}
       </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex min-w-0 items-baseline gap-2">
-          <span className={`min-w-0 flex-1 truncate font-serif text-[15px]/[1.3] ${unread ? "font-bold" : "font-semibold"}`}>{name}</span>
-          {last && <span className={`flex-none text-ui-caption ${unread ? "text-[var(--color-app-brand)]" : "text-[var(--color-app-text-muted)]"}`}>{chatTime(last.at, now)}</span>}
+          <span className={`min-w-0 flex-1 truncate text-[13px] ${unread ? "font-bold" : "font-semibold"}`}>{name}</span>
+          {last && <span className={`flex-none text-ui-caption ${unread ? "text-[var(--color-app-brand)]" : "text-[var(--reader-text-muted)]"}`}>{chatTime(last.at, now)}</span>}
         </span>
         <span className="flex min-w-0 items-center gap-1.5">
           {last ? (
             <>
-              <RoomAvatar comrade={{ readerId: "", pseudonym: last.who, avatar: last.avatar }} size={16} />
-              <span className={`min-w-0 flex-1 truncate text-ui-sm ${unread ? "text-[var(--color-app-text)]" : "text-[var(--color-app-text-secondary)]"}`}>
-                <b className="font-semibold">{rowSender(last)}:</b> {last.text}
+              <RoomAvatar comrade={{ readerId: "", pseudonym: last.who, avatar: last.avatar }} size={20} />
+              <span className={`min-w-0 flex-1 truncate text-[13px] ${unread ? "text-[var(--color-app-text)]" : "text-[var(--reader-text-muted)]"}`}>
+                {rowSender(last)}: {last.text}
               </span>
             </>
           ) : (
-            <span className="min-w-0 flex-1 truncate text-ui-sm text-[var(--color-app-text-muted)]">{empty}</span>
+            <span className="min-w-0 flex-1 truncate text-ui-sm text-[var(--reader-text-muted)]">{empty}</span>
           )}
           {unread > 0 && (
             <span className="h-4.5 min-w-4.5 flex-none rounded-full bg-brand-500 px-1.5 text-center font-sans text-[10px]/4.5 font-bold text-sand-25">{unread}</span>
           )}
         </span>
         {signal && (
-          <span className={`flex items-center gap-1.5 text-ui-caption whitespace-nowrap ${live ? "font-semibold text-[var(--color-app-brand)]" : "text-[var(--color-app-text-muted)]"}`}>
+          <span className={`flex items-center gap-1.5 text-ui-caption whitespace-nowrap ${live ? "font-semibold text-[var(--color-app-brand)]" : "text-[var(--reader-text-muted)]"}`}>
             {signal.now && <PulseDot tone={live ? "live" : "forest"} />}
             {signal.text}
           </span>

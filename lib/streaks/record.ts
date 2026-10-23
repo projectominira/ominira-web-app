@@ -4,7 +4,7 @@ import { after } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { addDays, localDay, type LocalDay } from "@/lib/time/zone";
 import { advance, EMPTY_STREAK, restore, startFresh, streakState, type Streak } from "@/lib/streaks/rules";
-import type { StreakView } from "@/lib/streaks/types";
+import type { ReadingHistory, StreakView } from "@/lib/streaks/types";
 import { dailyGoal, toMinutes } from "@/lib/rooms/home";
 import type { StreakToday } from "@/lib/rooms/types";
 import type { Database } from "@/lib/supabase/database.types";
@@ -13,7 +13,8 @@ import type { Database } from "@/lib/supabase/database.types";
 // the recorder behind recordReadingDay, the reader's view, and Restore /
 // Start fresh for the thin app/api/auth/me/streak route. Also today's
 // reading time against the daily goal (rooms-spec §5.7), credited from the
-// same saves by record_reading_time (migrations/20261107_reading_time.sql).
+// same saves by record_reading_time (migrations/20261107_reading_time.sql,
+// per book since migrations/20261111_reading_history.sql).
 
 /** A gap between saves up to this long is reading; longer is a new sitting. */
 const IDLE_SECONDS = 300;
@@ -104,11 +105,11 @@ const timeSent = new Map<string, number>();
 
 /**
  * Counts today, the reader's local day, toward their streak, and credits the
- * time since their last save to today's minutes. Called only by
+ * time since their last save to today's minutes and the saved book. Called only by
  * recordReadingDay, when a reading position is saved (listening saves them
  * too). Runs after the response.
  */
-export function recordReadingActivity(readerId: string): void {
+export function recordReadingActivity(readerId: string, materialId: string): void {
   const now = Date.now();
   const day = new Date(now).toISOString().slice(0, 10);
   if (day !== utcDay) {
@@ -131,6 +132,7 @@ export function recordReadingActivity(readerId: string): void {
       if (timeDue) {
         const { error } = await getSupabaseAdminClient().rpc("record_reading_time", {
           reader: readerId,
+          material: materialId,
           today,
           at: new Date(now).toISOString(),
           idle_seconds: IDLE_SECONDS,
@@ -177,8 +179,7 @@ export async function setDailyGoal(readerId: string, minutes: number): Promise<v
 /** The reader's streak today (C1), the days read this past week (the home
  * card's strip), and a mark reached today for the milestone card. */
 export async function getStreakView(readerId: string): Promise<StreakView> {
-  const tz = await readerZone(readerId);
-  const today = localDay(Date.now(), tz);
+  const today = localDay(Date.now(), await readerZone(readerId));
   const admin = getSupabaseAdminClient();
   const [streak, marks, days] = await Promise.all([
     loadStreak(readerId),
@@ -193,6 +194,32 @@ export async function getStreakView(readerId: string): Promise<StreakView> {
     best: streak.best,
     days: days.data.map((d) => d.day),
     milestone: marks.data.length ? Math.max(...marks.data.map((m) => m.value)) : null,
+  };
+}
+
+/** `year` of the reader's reading, in their local days (/history). A
+ * restored day wasn't read, so it's left out. */
+export async function getReadingHistory(readerId: string, year: number): Promise<ReadingHistory> {
+  const today = localDay(Date.now(), await readerZone(readerId));
+  const from = `${year}-01-01`;
+  const to = `${year}-12-31`;
+  const admin = getSupabaseAdminClient();
+  const [read, time, first] = await Promise.all([
+    admin.from("reader_reading_days").select("day").eq("reader_id", readerId).eq("restored", false).gte("day", from).lte("day", to),
+    admin.from("reader_reading_time").select("day, seconds").eq("reader_id", readerId).gte("day", from).lte("day", to),
+    admin.from("reader_reading_days").select("day").eq("reader_id", readerId).eq("restored", false).order("day").limit(1).maybeSingle(),
+  ]);
+  for (const r of [read, time, first]) if (r.error) throw r.error;
+
+  const seconds = new Map<string, number>();
+  for (const d of read.data ?? []) seconds.set(d.day, 0);
+  for (const t of time.data ?? []) if (t.seconds > 0) seconds.set(t.day, t.seconds);
+
+  return {
+    year,
+    today,
+    days: [...seconds].map(([day, s]) => ({ day, seconds: s })).sort((a, b) => a.day.localeCompare(b.day)),
+    firstDay: first.data?.day ?? today,
   };
 }
 

@@ -46,7 +46,7 @@ export default async function MaterialDetailPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  /** `?tab=room` opens on the room (Home's conversations link so); the book's info otherwise. */
+  /** `?tab=room` opens on the room alone (Home's conversations link so); with the book's info over it otherwise. */
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { slug } = await params;
@@ -80,7 +80,7 @@ export default async function MaterialDetailPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
       />
-      <BookRoomView material={material} initialTab={tab === "room" ? "room" : "details"} />
+      <BookRoomView material={material} initialInfo={tab !== "room"} />
     </>
   );
 }

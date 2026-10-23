@@ -6,6 +6,7 @@ import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { materialKeys } from "@/lib/materials/queryKeys";
 import { useRoomStore } from "@/stores/room-store";
 import { confirmAction } from "@/stores/confirm-store";
+import { askToJoin } from "@/stores/join-store";
 import { showToast } from "@/stores/toast-store";
 
 /** Into a book's room: join the one live on it, or start one (interim
@@ -16,8 +17,8 @@ export type RoomEntry = { materialId: string } & (
   | { start: { bookTitle?: string; readers?: number } }
 );
 
-/** Asks first (unless `confirm` is false: the tap was already "Join"),
- * then joins or starts the room; true once you're in. Signed out, or on a
+/** Asks first (the join screen, or for a start a confirm; unless `confirm`
+ * is false: the tap was already "Join"), then joins or starts the room; true once you're in. Signed out, or on a
  * refusal, it says why in a toast. `pending` while it goes. */
 export function useEnterRoom() {
   const signedIn = useIsAuthenticated();
@@ -34,17 +35,15 @@ export function useEnterRoom() {
     const readers = "start" in entry ? (entry.start.readers ?? 0) : 0;
     const ok =
       !confirm ||
-      (await confirmAction(
-        "join" in entry
-          ? { title: `Join ${entry.join.title}?`, message: "You'll hear the room and can raise your hand to speak.", confirmLabel: "Join room" }
-          : {
-              title: "Start a reading room?",
-              message:
-                `Anyone reading ${entry.start.bookTitle ?? "this book"} can join and listen in.` +
-                (readers > 0 ? ` We’ll let the ${readers === 1 ? "comrade" : `${readers} comrades`} who read it today know.` : ""),
-              confirmLabel: "Start room",
-            },
-      ));
+      (await ("join" in entry
+        ? askToJoin(entry.join)
+        : confirmAction({
+            title: "Start a reading room?",
+            message:
+              `Anyone reading ${entry.start.bookTitle ?? "this book"} can join and listen in.` +
+              (readers > 0 ? ` We’ll let the ${readers === 1 ? "comrade" : `${readers} comrades`} who read it today know.` : ""),
+            confirmLabel: "Start room",
+          })));
     if (!ok) return false;
     setPending(true);
     try {

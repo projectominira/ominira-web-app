@@ -49,23 +49,22 @@ describe("chapterProgress", () => {
 });
 
 describe("bookHeader", () => {
-  const h = bookHeader(BOOK, { pct: 18, finished: false, listening: false }, ENDS, "me");
+  const h = bookHeader(BOOK, { pct: 18, finished: false, listening: false }, ENDS);
   test("the viewer's place in words", () => {
     expect(h.pct).toBe(18);
-    expect(h.progressLabel).toBe("Ch. 1 · 18%");
-    expect(bookHeader(BOOK, null, ENDS, "me")).toMatchObject({ pct: null, progressLabel: "Not started", cta: "Start reading" });
-    expect(bookHeader(BOOK, { pct: 99, finished: true, listening: false }, ENDS, "me")).toMatchObject({ pct: 100, progressLabel: "Finished" });
-    expect(bookHeader(BOOK, { pct: 18, finished: false, listening: false }, [], "me").progressLabel).toBe("18%");
+    expect(h.chapter).toBe("Ch. 1");
+    expect(bookHeader(BOOK, null, ENDS)).toMatchObject({ pct: null, chapter: null, cta: "Start reading" });
+    expect(bookHeader(BOOK, { pct: 99, finished: true, listening: false }, ENDS)).toMatchObject({ pct: 100, chapter: null });
+    expect(bookHeader(BOOK, { pct: 18, finished: false, listening: false }, []).chapter).toBeNull();
   });
-  test("reading now never counts the viewer, and shows no one's place", () => {
-    expect(h.readingNow).toBe(3);
-    expect(h.readers.map((r) => r.comrade.readerId)).toEqual(["kemi", "tunde"]);
-    expect(h.readers[0]).toEqual({ comrade: expect.any(Object) });
-    expect(bookHeader(BOOK, null, ENDS, null).readingNow).toBe(4);
+  test("everyone reading, the viewer too, and no one's place", () => {
+    expect(h.everyone.map((r) => r.comrade.readerId)).toEqual(["kemi", "me", "tunde"]);
+    expect(h.everyone[0]).toEqual({ comrade: expect.any(Object) });
+    expect(h.everyoneCount).toBe(4);
   });
   test("facts and contents", () => {
     expect(h.meta).toBe("EPUB · 1961 · 251 pages · Audiobook");
-    expect(bookHeader({ ...BOOK, publishedYear: null, materialType: "webpage", narratorCount: 0 }, null, ENDS, null).meta).toBe("251 pages");
+    expect(bookHeader({ ...BOOK, publishedYear: null, materialType: "webpage", narratorCount: 0 }, null, ENDS).meta).toBe("251 pages");
     expect(h.contents[0]).toEqual({ num: "1", label: "Chapter 1", pct: 72, id: "c1" });
   });
 });

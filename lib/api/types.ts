@@ -120,6 +120,8 @@ export type Highlight = {
   materialId: string;
   readerId: string;
   ranges: AnnotationRange[];
+  /** Public shows in the book's room with your name; private, to you only. */
+  visibility: NoteVisibility;
   createdAt: string;
   updatedAt: string;
 };

@@ -3,14 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
-import { useProfile } from "@/lib/auth/useProfile";
 import type { NoteVisibility } from "@/lib/api/types";
-import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import MembersOnlyPrompt, { type MembersOnlyAction } from "./MembersOnlyPrompt";
+import { ShareSwitch } from "@/app/components/rooms/RoomInput";
 import ComposerBox, { ComposerLinks } from "./ComposerBox";
 
-/** The note composer — a new note, a reply, or an edit in place: Home's
- * composer (ComposerBox). Every note is public. Voice notes
+/** The note composer — a new note, a reply, or an edit in place, in the
+ * chat input (ComposerBox). Public unless "Only you" is on. Voice notes
  * are left out for now. */
 export default function NoteComposer({
   initialText,
@@ -24,7 +23,7 @@ export default function NoteComposer({
   draftKey,
 }: {
   initialText: string;
-  /** Editing: the note's own visibility. Every fresh note is public. */
+  /** Editing: the note's own visibility. A fresh note starts public. */
   initialVisibility?: NoteVisibility;
   placeholder?: string;
   /** Show the signed-out membership prompt instead of nothing. */
@@ -40,7 +39,6 @@ export default function NoteComposer({
   draftKey?: string;
 }) {
   const isAuthenticated = useIsAuthenticated();
-  const { data: profile } = useProfile();
   const storageKey = draftKey ? `ominira-note-draft-${draftKey}` : null;
   const [text, setText] = useState(() => {
     if (!initialText && storageKey && typeof window !== "undefined") {
@@ -53,7 +51,8 @@ export default function NoteComposer({
     return initialText;
   });
   const editing = initialVisibility !== undefined;
-  const visibility: NoteVisibility = initialVisibility ?? "public";
+  const [visibility, setVisibility] = useState<NoteVisibility>(initialVisibility ?? "public");
+  const onlyYou = visibility === "private";
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -104,20 +103,20 @@ export default function NoteComposer({
   }
 
   return (
-    <ComposerBox
-      containerRef={containerRef}
-      avatar={<ReaderAvatar pseudonym={profile?.pseudonym ?? "Reader"} avatar={profile?.avatar} size={32} />}
-      value={text}
-      onChange={setText}
-      placeholder={placeholder}
-      autoFocus={Boolean(onCancel)}
-      title={editing ? "Edit note" : action === "reply" ? "Reply" : "New note"}
-      canPost={hasDraft && (!editing || text.trim() !== initialText.trim())}
-      postLabel={editing ? "Save" : "Post"}
-      onPost={handleSave}
-      onCancel={onCancel || hasDraft ? handleCancel : undefined}
-    >
-      <ComposerLinks text={text} />
-    </ComposerBox>
+    <div ref={containerRef}>
+      <ComposerBox
+        value={text}
+        onChange={setText}
+        placeholder={onlyYou ? "A note only you will see" : placeholder}
+        autoFocus={Boolean(onCancel)}
+        canPost={hasDraft && (!editing || text.trim() !== initialText.trim() || visibility !== initialVisibility)}
+        postLabel={editing ? "Save" : "Post"}
+        onPost={handleSave}
+        onCancel={onCancel || hasDraft ? handleCancel : undefined}
+        inside={<ShareSwitch on={onlyYou} onChange={(on) => setVisibility(on ? "private" : "public")} />}
+      >
+        <ComposerLinks text={text} />
+      </ComposerBox>
+    </div>
   );
 }

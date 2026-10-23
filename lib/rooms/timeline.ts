@@ -244,15 +244,6 @@ export function toRoomNote(item: FeedItem, ctx: NoteContext): RoomNote {
   };
 }
 
-/** Who's reading now (6a) heads today: after today's divider, or under a
- * divider of its own when nothing has been said today. An empty room stays
- * the empty state. Runs after withDays. */
-export function withReadingNow(items: RoomItem[], reading: RoomItem | null, today: string): RoomItem[] {
-  if (!reading || items.length === 0) return items;
-  const at = items.findIndex((it) => it.t === "day" && it.day === today);
-  return at < 0 ? [...items, { t: "day", day: today }, reading] : [...items.slice(0, at + 1), reading, ...items.slice(at + 1)];
-}
-
 /** A room as shown: its pages (newest page first, as fetched) joined oldest
  * first, joins collapsed, the cards placed, your notes on their way at the
  * bottom, day dividers and the unread divider. The room's first page
@@ -264,8 +255,6 @@ export function roomItems(
     viewerId: string | null;
     cards?: { ref: string; item: RoomItem }[];
     pending?: RoomItem[];
-    /** A book room's reading-now stack, under today (`reading.today`). */
-    reading?: { today: string; item: RoomItem } | null;
     /** What only the viewer has, merged in by time (the reader's own
      * highlights): only as far back as the pages loaded so far. */
     mine?: RoomItem[];
@@ -275,7 +264,7 @@ export function roomItems(
   const older = pages.length > 0 && pages[pages.length - 1].nextCursor !== null;
   const placed = mergeByTime(placeCards(collapseJoins(items, o.tz), o.cards ?? []), o.mine ?? [], older);
   const days = withDays([...placed, ...(o.pending ?? [])], o.tz);
-  return withUnread(o.reading ? withReadingNow(days, o.reading.item, o.reading.today) : days, pages[0]?.lastReadAt ?? null, o.viewerId);
+  return withUnread(days, pages[0]?.lastReadAt ?? null, o.viewerId);
 }
 
 /** Your note while it's sending (or failed): a bubble of its own, by the id

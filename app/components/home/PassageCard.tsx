@@ -1,6 +1,6 @@
 import ReaderLink from "@/app/components/ReaderLink";
 import type { HomePassage } from "@/lib/rooms/types";
-import PassageQuote from "./PassageQuote";
+import PassageQuote from "@/app/components/rooms/PassageQuote";
 
 /** The passage of the day on Home (home-spec §2 Home 3): the eyebrow with
  * how many answered, the question, and the quote, which opens the reader. */

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Info, LogOut, Mic, Settings, Trash2 } from "lucide-react";
+import { LogOut, Mic, Settings, Trash2 } from "lucide-react";
 import GroupRoom from "@/app/components/rooms/GroupRoom";
 import type { RoomOverlay } from "@/app/components/rooms/RoomPanel";
 import RoomInput from "@/app/components/rooms/RoomInput";
@@ -59,7 +59,7 @@ function useFinishPendingJoin(slug: string, joined: boolean | undefined) {
 
 /**
  * The study group's page (rooms-spec §2, 4a / 4b): the room, with Group info
- * a side panel (a full panel on mobile); a screen of its own on both. Everyone sees
+ * a side panel from the head's ⓘ (a full panel on mobile); a screen of its own on both. Everyone sees
  * the same room; only moderators get the cards' Start and Edit, and someone
  * outside the group gets Join where the input goes.
  */
@@ -177,8 +177,6 @@ export default function GroupView({ slug, initialAbout }: { slug: string; initia
     : myRole
       ? [{ label: "Leave group", icon: <LogOut size={13} />, onClick: () => void onLeave() }]
       : [];
-
-  menu.unshift({ label: "Group info", icon: <Info size={13} />, onClick: () => setAboutOpen(true) });
 
   return frame(
     <>

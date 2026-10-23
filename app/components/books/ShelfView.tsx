@@ -6,6 +6,7 @@ import BookListRow from "@/app/components/shell/BookListRow";
 import NoteCard from "@/app/components/reader/notes/NoteCard";
 import NoResults from "@/app/components/shared/NoResults";
 import ShelfAuthPrompt from "@/app/components/books/ShelfAuthPrompt";
+import HabitWindow from "@/app/components/history/HabitWindow";
 import UnderlineTabs from "@/app/components/UnderlineTabs";
 import { communityFeedItemHref } from "@/lib/community/useCommunityFeed";
 import { resolveBookThumbnailSrc } from "@/lib/materials/image";
@@ -201,8 +202,9 @@ export default function ShelfView() {
   });
 
   const header = (
-    <div className="mt-1 mb-7">
+    <div className="mt-1 mb-7 flex flex-wrap items-center justify-between gap-3">
       <h1 className="font-serif type-3 text-balance m-0 text-[var(--reader-text)]">Shelf</h1>
+      {isAuthenticated && <HabitWindow />}
     </div>
   );
 

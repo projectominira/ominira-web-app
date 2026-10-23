@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import dynamic from "next/dynamic";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bookmark, Mic } from "lucide-react";
 import type { OverflowMenuItem } from "@/app/components/reader/notes/OverflowMenu";
-import { ModeIcon } from "@/app/components/rooms/RoomHeader";
+import { ReadingBar } from "@/app/components/rooms/RoomHeader";
 import { useEnterRoom } from "@/lib/room/useEnterRoom";
+import { useOpenRoom } from "@/lib/room/useOpenRoom";
 import BookRoom from "@/app/components/rooms/BookRoom";
 import RoomScreen, { replaceTabParam } from "@/app/components/rooms/RoomScreen";
 import { useServerPositionReady } from "@/lib/reader/useServerPositionReady";
@@ -26,21 +26,21 @@ import { useBookRoom } from "@/lib/rooms/useBookRoom";
 import { useFeedStore } from "@/stores/feed-store";
 import { useReadingPositionStore } from "@/stores/reading-position-store";
 
-// Loaded only while you're in the book's live room.
-const RoomStage = dynamic(() => import("@/app/components/room/RoomPanel").then((m) => m.RoomStage), { ssr: false });
-const RoomChatComposer = dynamic(() => import("@/app/components/room/RoomChat").then((m) => m.RoomChatComposer), { ssr: false });
-
 /**
- * A book's page (rooms-spec §2 Book room, 6a–6c): Room, Live and Info tabs,
- * opening on Info unless `?tab=room` asks for the Room (Home's conversations). Server-rendered from the book's facts; the viewer's
- * progress, the stream and the live room load on the client. A live
- * reading room is the Live tab: Join there (or on its card) and the room
- * opens in place, as the mini-player's expand does here, rather than going
- * to the reader.
+ * A book's page (rooms-spec §2 Book room, 6a–6c): the room, with Book info
+ * over it, open to begin with unless `?tab=room` asks for the room alone
+ * (Home's conversations). Server-rendered from the book's facts; the viewer's
+ * progress, the stream and the live room load on the client. Join a live
+ * reading room (its pinned row or card) and its panel opens here, rather
+ * than going to the reader.
  */
-export default function BookRoomView({ material, initialTab }: { material: MaterialDetail; initialTab: "details" | "room" }) {
+export default function BookRoomView({ material, initialInfo }: { material: MaterialDetail; initialInfo: boolean }) {
   const router = useRouter();
-  const [tab, setTab] = useState(initialTab);
+  const [infoOpen, setInfoOpen] = useState(initialInfo);
+  const showInfo = (open: boolean) => {
+    setInfoOpen(open);
+    replaceTabParam(open ? "info" : "room");
+  };
   // Gates progress and the resume button on the server's position (see the hook).
   const positionReady = useServerPositionReady();
   // A quote opens the reader over the room (the `@modal` overlay).
@@ -48,30 +48,20 @@ export default function BookRoomView({ material, initialTab }: { material: Mater
     const href = quoteReaderHref(n);
     if (href) router.push(href);
   };
-  const { viewerId, stream, send, heart, reply, del, markRead, live, liveRoom, canStart, card, tz, today } = useBookRoom(material.id);
+  const { viewerId, stream, send, heart, reply, del, highlightVisibility, highlightDelete, markRead, live, liveRoom, canStart, card, tz, today } = useBookRoom(material.id);
   const position = useReadingPositionStore((s) => s.positions[material.id]);
   const isSaved = useBookmarkedMaterialIds().has(material.id);
 
-  // The Live tab is the feed store's Room tab for this book, so the
-  // mini-player can open it; the page holds it only while it's showing.
-  const liveOpen = useFeedStore((s) => s.openFor === material.id && s.tab === "room");
-  const setLiveOpen = (open: boolean) => (open ? useFeedStore.getState().open(material.id, "room") : useFeedStore.getState().close());
+  // Opening the room here keeps you on the page (useOpenRoom).
   useEffect(() => {
-    const feed = useFeedStore.getState();
-    feed.setPage(material.id);
+    useFeedStore.getState().setPage(material.id);
     return () => {
       const s = useFeedStore.getState();
       if (s.pageFor === material.id) s.setPage(null);
-      if (s.openFor === material.id) s.close();
     };
   }, [material.id]);
-  // Just joined (here, on its card or the tab): straight to the room.
   const inRoom = live.inRoomCount !== null;
-  const wasInRoom = useRef(inRoom);
-  useEffect(() => {
-    if (inRoom && !wasInRoom.current) useFeedStore.getState().open(material.id, "room");
-    wasInRoom.current = inRoom;
-  }, [inRoom, material.id]);
+  const openRoom = useOpenRoom();
   const toggleSave = useToggleMaterialBookmark();
   const { enter, pending: starting } = useEnterRoom();
 
@@ -99,10 +89,9 @@ export default function BookRoomView({ material, initialTab }: { material: Mater
           readerCount: material.currentReaderCount,
         },
         position ? { pct: positionPercent(position), finished: !!position.finishedAt, listening: position.mode === "listen" } : null,
-        ends,
-        viewerId
+        ends
       ),
-    [material, position, ends, viewerId]
+    [material, position, ends]
   );
   const items = useMemo((): RoomItem[] => {
     const all = roomItems(stream.data?.pages ?? [], {
@@ -110,10 +99,9 @@ export default function BookRoomView({ material, initialTab }: { material: Mater
       viewerId,
       cards: card ? [{ ref: card.session.id, item: { t: "session", card } }] : [],
       pending: send.items,
-      reading: header.readers.length ? { today, item: { t: "reading", count: header.readingNow, readers: header.readers } } : null,
     });
     return all.length ? all : [{ t: "empty" }];
-  }, [stream.data, card, send.items, tz, viewerId, today, header]);
+  }, [stream.data, card, send.items, tz, viewerId]);
 
   // One resume action in the mode last used; Listen switches mode.
   const resume = (mode: "read" | "listen") =>
@@ -129,23 +117,19 @@ export default function BookRoomView({ material, initialTab }: { material: Mater
     ...(isOwnUpload
       ? []
       : [{ label: isSaved ? "Saved" : "Save for later", icon: <Bookmark size={14} />, onClick: () => toggleSave.mutate(material.id) }]),
-    { label: header.cta, icon: <ModeIcon listening={header.listening} size={14} />, disabled: !positionReady, onClick: onContinue },
   ];
 
   return (
-    <RoomScreen sidebar={false} scroll={!liveOpen && tab === "details"}>
+    <RoomScreen sidebar={false}>
       <BookRoom
         header={header}
-        tab={liveOpen ? "live" : tab}
-        onTab={(next) => {
-          setLiveOpen(next === "live");
-          if (next === "live") return;
-          setTab(next);
-          replaceTabParam(next);
-        }}
         onBack={() => (window.history.length > 1 ? router.back() : router.push("/library"))}
         menu={menu}
-        details={
+        resume={(onClose) => <ReadingBar header={header} audiobook={material.narratorCount > 0} ready={positionReady} onContinue={onContinue} onSwitch={onSwitch} onClose={onClose} />}
+        infoOpen={infoOpen}
+        onInfo={() => showInfo(true)}
+        onCloseInfo={() => showInfo(false)}
+        info={
           <BookDetails
             material={material}
             header={header}
@@ -167,8 +151,8 @@ export default function BookRoomView({ material, initialTab }: { material: Mater
           inRoom || card?.state === "live"
             ? {
                 card,
-                joined: inRoom ? { stage: <RoomStage />, composer: <RoomChatComposer materialId={material.id} /> } : null,
-                onJoin: liveRoom ? () => void live.join(liveRoom.id) : undefined,
+                // In it already: Join reopens its panel.
+                onJoin: inRoom ? () => openRoom(material.id) : liveRoom ? () => void live.join(liveRoom.id, liveRoom.title) : undefined,
               }
             : null
         }
@@ -178,12 +162,14 @@ export default function BookRoomView({ material, initialTab }: { material: Mater
           onDelete: viewerId ? (n, replyId) => del.mutate({ noteId: replyId ?? n.note.id, rootId: n.note.id }) : undefined,
           onRetry: (n) => send.retry(n.note.id),
           onPassage: openPassage,
+          onHighlightVisibility: (id, visibility) => highlightVisibility.mutate({ id, visibility }),
+          onHighlightDelete: (id) => highlightDelete.mutate(id),
         }}
         input={
           viewerId ? (
-            <RoomInput placeholder={`Note on ${material.title}`} onSend={send.send} />
+            <RoomInput placeholder={`Note on ${material.title}`} canLock onSend={send.send} />
           ) : (
-            <button type="button" onClick={() => router.push("/auth/signup")} className="mx-auto flex min-h-12 cursor-pointer items-center justify-center px-4 text-ui-sm font-extrabold text-[var(--color-app-brand)] hover:text-brand-600 disabled:opacity-60">
+            <button type="button" onClick={() => router.push("/auth/login")} className="mx-auto flex min-h-12 cursor-pointer items-center justify-center px-4 text-ui-sm font-extrabold text-[var(--color-app-brand)] hover:text-brand-600 disabled:opacity-60">
               Join the conversation
             </button>
           )

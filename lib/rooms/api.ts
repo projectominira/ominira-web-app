@@ -14,7 +14,8 @@ export const getBookStream = (materialId: string, cursor: string | null) => page
 export const markRoomRead = (kind: RoomKind, roomId: string) =>
   apiFetch<void>("/auth/me/room-reads", { method: "POST", json: { kind, roomId } });
 
-/** The reader's book room head: the cover, and where your notes also go. */
-export type ReaderRoomHead = { cover: string | null; group: NoteGroup | null };
+/** The reader's book room head: the book as its page heads it, and where
+ * your notes also go. */
+export type ReaderRoomHead = { title: string; author: string; slug: string; cover: string | null; group: NoteGroup | null };
 
 export const getReaderRoomHead = (materialId: string) => apiFetch<ReaderRoomHead>(`/materials/${materialId}/reader-room`);

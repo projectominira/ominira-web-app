@@ -4,6 +4,7 @@ import { useState } from "react";
 import BottomSheet from "@/app/components/shared/BottomSheet";
 import TextField from "@/app/components/auth/TextField";
 import TextAreaField from "@/app/components/auth/TextAreaField";
+import SelectField from "@/app/components/auth/SelectField";
 import { errorMessage } from "@/lib/api/client";
 import { useCreateGroup } from "@/lib/groups/hooks";
 import { GROUP_DESCRIPTION_MAX, GROUP_NAME_MAX } from "@/lib/groups/types";
@@ -14,9 +15,10 @@ import SheetActions from "./SheetActions";
 export default function StartGroupSheet({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
   const create = useCreateGroup();
   const canStart = name.trim() !== "" && !create.isPending;
-  const start = () => canStart && create.mutate({ name: name.trim(), description: description.trim() });
+  const start = () => canStart && create.mutate({ name: name.trim(), description: description.trim(), isPrivate });
 
   return (
     <BottomSheet
@@ -53,6 +55,10 @@ export default function StartGroupSheet({ onClose }: { onClose: () => void }) {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
+        <SelectField label="Who can join" name="visibility" value={isPrivate ? "private" : "public"} onChange={(e) => setIsPrivate(e.target.value === "private")}>
+          <option value="public">Public: anyone can find and join</option>
+          <option value="private">Private: invite only</option>
+        </SelectField>
         {create.isError && <p className="m-0 text-xs font-medium text-red-500">{errorMessage(create.error) ?? "Couldn’t start the group. Try again."}</p>}
       </form>
     </BottomSheet>

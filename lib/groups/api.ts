@@ -15,7 +15,7 @@ import type {
 
 export const getGroups = () => apiFetch<{ groups: GroupSummary[] }>("/groups").then((r) => r.groups);
 
-export const createGroup = (input: { name: string; description: string }) =>
+export const createGroup = (input: { name: string; description: string; isPrivate: boolean }) =>
   apiFetch<{ slug: string }>("/groups", { method: "POST", json: input });
 
 export const getGroup = (slug: string) => apiFetch<GroupPage>(`/groups/${slug}`);

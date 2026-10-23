@@ -8,6 +8,7 @@ import { toMaterialSummary } from "@/lib/materials/summary";
 import { existingReaders } from "@/lib/community/mentions";
 import { notifyReaders } from "@/lib/notifications/notify";
 import { comradeName } from "@/lib/reader/authorDisplay";
+import { comradesById } from "@/lib/rooms/comrades";
 import { roomTitle } from "@/lib/room/title";
 import type { RoomInfo, RoomInvite } from "@/lib/room/types";
 
@@ -16,6 +17,9 @@ import type { RoomInfo, RoomInvite } from "@/lib/room/types";
 
 /** Who's invited when a room starts: readers of the book in the last day. */
 const INVITE_WINDOW_MS = 24 * 60 * 60_000;
+
+/** Faces on a room's link and its join screen. */
+const INVITE_FACES = 4;
 
 /** The book's live room, if any: a start then joins it rather than starting. */
 export async function liveRoomOn(materialId: string): Promise<string | null> {
@@ -64,29 +68,40 @@ export function inviteReaders(room: Pick<RoomInfo, "id" | "materialId" | "bookTi
   });
 }
 
-/** What a room's link shows: the room, its book, who started it and how
- * many are in. Null for no such room (or a group's, which isn't public). */
+/** What a room's link shows: the room, its book, who started it, how
+ * many are in and a few of their faces. Null for no such room (or a
+ * group's, which isn't public). */
 export async function roomInvite(roomId: string): Promise<RoomInvite | null> {
   const admin = getSupabaseAdminClient();
   const { data: room, error } = await admin.from("rooms").select("id, material_id, title, status, started_by, group_id").eq("id", roomId).maybeSingle();
   if (error) throw error;
   if (!room || room.group_id) return null;
-  const [material, host, members] = await Promise.all([
+  const live = room.status === "live";
+  const [material, members, inRoom] = await Promise.all([
     admin.from("materials").select(MATERIAL_SUMMARY_COLUMNS).eq("id", room.material_id).eq("status", "published").eq("visibility", "public").maybeSingle(),
-    admin.from("readers").select("pseudonym").eq("id", room.started_by).maybeSingle(),
-    room.status === "live" ? admin.rpc("room_active_count", { room: room.id }) : null,
+    live ? admin.rpc("room_active_count", { room: room.id }) : null,
+    live
+      ? admin.from("room_members").select("reader_id").eq("room_id", room.id).is("left_at", null).order("joined_at").limit(INVITE_FACES + 1)
+      : null,
   ]);
   if (material.error) throw material.error;
-  if (host.error) throw host.error;
   if (members?.error) throw members.error;
+  if (inRoom?.error) throw inRoom.error;
   if (!material.data) return null;
   const book = toMaterialSummary(material.data);
+  const inIds = (inRoom?.data ?? []).map((m) => m.reader_id);
+  // The host leads when they're in.
+  const faces = (inIds.includes(room.started_by) ? [room.started_by, ...inIds.filter((id) => id !== room.started_by)] : inIds).slice(0, INVITE_FACES);
+  const comrades = await comradesById([room.started_by, ...faces]);
+  const host = comrades.get(room.started_by);
   return {
     id: room.id,
     title: roomTitle(room.title, book.title),
-    live: room.status === "live",
+    live,
     members: members?.data ?? 0,
-    host: host.data ? comradeName(host.data.pseudonym) : null,
+    host: host ? comradeName(host.pseudonym) : null,
+    hostId: room.started_by,
+    people: faces.flatMap((id) => comrades.get(id) ?? []),
     materialId: book.id,
     bookTitle: book.title,
     bookAuthor: book.author,

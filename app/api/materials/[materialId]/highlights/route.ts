@@ -14,6 +14,7 @@ function toHighlight(row: HighlightRow): Highlight {
     materialId: row.material_id,
     readerId: row.reader_id,
     ranges: row.ranges as AnnotationRange[],
+    visibility: row.visibility,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -27,7 +28,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ mate
   const material = await resolveMaterialRow(materialId);
   if (!material) return notFound();
 
-  // Highlights have no `visibility` — always the caller's own only.
+  // The caller's own only; comrades' public ones are in the book's room.
   const { data, error } = await getSupabaseAdminClient()
     .from("highlights")
     .select("*")

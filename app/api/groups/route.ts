@@ -14,6 +14,7 @@ export async function GET(request: Request) {
 const GroupCreate = z.object({
   name: z.string().trim().min(1).max(GROUP_NAME_MAX),
   description: z.string().trim().max(GROUP_DESCRIPTION_MAX).default(""),
+  isPrivate: z.boolean().default(false),
 });
 
 /** `POST /api/groups`: start a group; you moderate it. Responds with its slug. */

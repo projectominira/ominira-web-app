@@ -21,6 +21,7 @@ export default function InviteDropdown({
   iconSize = 15,
   className,
   align = "left",
+  anchored = true,
   ariaLabel,
   groupSlug = null,
   share,
@@ -35,6 +36,9 @@ export default function InviteDropdown({
   className?: string;
   /** Which edge of the trigger the dropdown lines up with. */
   align?: "left" | "right";
+  /** false: the dropdown hangs from the nearest positioned ancestor rather
+   * than the trigger, spanning it (the room panel's head). */
+  anchored?: boolean;
   ariaLabel: string;
   /** Marks this group's members in the matches. */
   groupSlug?: string | null;
@@ -81,8 +85,16 @@ export default function InviteDropdown({
   };
 
   return (
-    <div className={`relative flex flex-col ${className ?? ""}`}>
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-haspopup="dialog" aria-expanded={open} className={triggerClassName}>
+    <div className={`${anchored ? "relative" : ""} flex flex-col ${className ?? ""}`}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        // Icon only: the dialog's label names it.
+        {...(label ? {} : { "aria-label": ariaLabel, title: "Invite" })}
+        className={triggerClassName}
+      >
         <Icon size={iconSize} strokeWidth={iconSize > 15 ? 1.75 : 2} />
         {label}
       </button>
@@ -92,7 +104,9 @@ export default function InviteDropdown({
           <div
             role="dialog"
             aria-label={ariaLabel}
-            className={`reader-menu-in absolute top-[calc(100%+6px)] z-20 w-[min(340px,calc(100vw-32px))] rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-2 shadow-md ${align === "right" ? "right-0" : "left-0"}`}
+            className={`reader-menu-in absolute top-[calc(100%+6px)] z-20 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-2 shadow-md ${
+              anchored ? `w-[min(340px,calc(100vw-32px))] ${align === "right" ? "right-0" : "left-0"}` : "inset-x-2"
+            }`}
           >
             <TagPicker
               query={query}

@@ -4,7 +4,7 @@
 
 import type { CurrentReaderSummary } from "@/lib/api/types";
 import type { ChapterEnd } from "@/lib/groups/progress";
-import { chapterAt } from "./cards";
+import { chapterLine } from "./home";
 import type { BookRoomHeader } from "./types";
 
 /** The viewer's place in the book; null before they've opened it. */
@@ -48,30 +48,18 @@ export function chapterProgress(ends: ChapterEnd[], p: BookProgress): (number | 
   });
 }
 
-/** "Ch. 2 · 18%", "18%" with no chapters, "Finished", "Not started". */
-function progressLabel(ends: ChapterEnd[], p: BookProgress): string {
-  if (!p) return "Not started";
-  if (p.finished) return "Finished";
-  const chapter = chapterAt(ends, p.pct);
-  return `${chapter ? `${chapter} · ` : ""}${Math.round(p.pct)}%`;
-}
-
-export function bookHeader(book: BookFacts, p: BookProgress, ends: ChapterEnd[], viewerId: string | null): BookRoomHeader {
+export function bookHeader(book: BookFacts, p: BookProgress, ends: ChapterEnd[]): BookRoomHeader {
   const started = p && (p.finished || p.pct > 0) ? p : null;
-  // Reading now never counts the viewer (Home's rule).
-  const others = book.readers.filter((r) => r.readerId !== viewerId);
   const pcts = chapterProgress(ends, p);
   return {
     title: book.title,
     author: book.author,
     cover: book.cover,
     pct: started && (started.finished ? 100 : Math.round(started.pct)),
-    progressLabel: progressLabel(ends, started),
+    chapter: started && !started.finished ? chapterLine(ends, started.pct) : null,
     cta: bookCta(p),
     listening: !!p?.listening,
-    readingNow: book.readerCount - (others.length < book.readers.length ? 1 : 0),
     noteCount: book.noteCount,
-    readers: others.map((r) => ({ comrade: { readerId: r.readerId, pseudonym: r.pseudonym, avatar: r.avatar } })),
     everyone: book.readers.map((r) => ({ comrade: { readerId: r.readerId, pseudonym: r.pseudonym, avatar: r.avatar } })),
     everyoneCount: book.readerCount,
     description: book.description,

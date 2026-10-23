@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { dayLabel } from "@/lib/rooms/days";
+import type { NoteVisibility } from "@/lib/api/types";
 import type { RoomItem, RoomNote } from "@/lib/rooms/types";
 import { useNow } from "@/lib/time/useNow";
 import type { LocalDay } from "@/lib/time/zone";
 import { MilestoneCard, SessionCard, TargetCard } from "./ActionCards";
-import { YourHighlight } from "./Highlights";
+import { HighlightCard } from "./Highlights";
 import NoteBubble, { type BubbleState } from "./NoteBubble";
 import Loader from "@/app/components/Loader";
-import { ReadingNow } from "./Shared";
 import SystemLine, { DayDivider, UnreadDivider } from "./SystemLine";
 
 // The stream shell every room shares (rooms-spec §2, 4a / 7a–7c): the
@@ -45,6 +45,12 @@ export type StreamHandlers = {
   onEditSession?: () => void;
   onJoin?: () => void;
   onContinue?: () => void;
+  /** Your highlight made public or private. */
+  onHighlightVisibility?: (id: string, visibility: NoteVisibility) => void;
+  /** Your highlight deleted (after asking). */
+  onHighlightDelete?: (id: string) => void;
+  /** A highlight's line opened; absent, it's a link to the reader. */
+  onHighlight?: (item: Extract<RoomItem, { t: "highlight" }>) => void;
 };
 
 const itemKey = (it: RoomItem, i: number) =>
@@ -63,6 +69,7 @@ export default function RoomStream({
   onReadToBottom,
   header,
   pinned,
+  overlay,
   input,
   footer,
   bodyClassName = "gap-4 px-4 pt-5 pb-6",
@@ -88,6 +95,8 @@ export default function RoomStream({
   onReadToBottom?: () => void;
   header?: ReactNode;
   pinned?: ReactNode;
+  /** Over the top of the stream, under `pinned` (a book's reading strip). */
+  overlay?: ReactNode;
   /** In the room's input bar; `footer` instead goes below the stream as it
    * is (the reader's NoteWriter bar brings its own). */
   input?: ReactNode;
@@ -225,8 +234,6 @@ export default function RoomStream({
           </div>
         );
       }
-      case "reading":
-        return <ReadingNow key={`reading-${i}`} count={it.count} readers={it.readers} />;
       case "empty":
         return (
           <div key="empty" className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-12 text-center">
@@ -236,8 +243,16 @@ export default function RoomStream({
         );
       case "highlight":
         return (
-          <div key={it.id} data-anchor={it.id}>
-            <YourHighlight item={it} flash={flash === it.id} />
+          <div key={it.id} data-anchor={it.id} className="mx-auto w-full shell:max-w-[560px]">
+            <HighlightCard
+              item={it}
+              viewerId={viewerId}
+              now={now}
+              flash={flash === it.id}
+              onVisibility={h.onHighlightVisibility && ((v) => h.onHighlightVisibility!(it.id, v))}
+              onDelete={h.onHighlightDelete && (() => h.onHighlightDelete!(it.id))}
+              onOpen={h.onHighlight && (() => h.onHighlight!(it))}
+            />
           </div>
         );
     }
@@ -249,13 +264,14 @@ export default function RoomStream({
       {/* A book's header unfolds in place, up to 72 % of the room, then scrolls. */}
       {header && <div className="flex max-h-[72%] flex-none flex-col border-b border-[var(--color-app-border)] bg-[var(--reader-bg)]">{header}</div>}
       {pinned}
-      <div className="relative min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1 overflow-hidden">
         <div ref={scroller} onScroll={onScroll} className="relative h-full overflow-y-auto bg-sand-50">
           <div style={cap} className={`mx-auto flex min-h-full flex-col justify-end ${bodyClassName}`}>
             {!loading && items.map(render)}
             {!loading && children}
           </div>
         </div>
+        {overlay}
         {loading && <Loader confined />}
       </div>
       {input && (

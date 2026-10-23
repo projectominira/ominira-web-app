@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import BookCover from "@/app/components/shared/BookCover";
 import { statusLook } from "@/lib/rooms/home";
 import type { StatusItem } from "@/lib/rooms/types";
-import { GroupAvatar } from "./RoomAvatar";
+import { GroupAvatar } from "@/app/components/rooms/RoomAvatar";
 
 const TILE = "flex w-19 flex-none cursor-pointer flex-col items-center gap-2.5 border-none bg-transparent p-0 text-[var(--color-app-text)] disabled:cursor-default disabled:opacity-60";
 const LABEL = "block truncate font-sans text-[12px]/[1.3] font-semibold";

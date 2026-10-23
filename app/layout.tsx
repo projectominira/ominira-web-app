@@ -9,6 +9,7 @@ import NowPlayingBar from "./components/NowPlayingBar";
 import RoomLayer from "./components/room/RoomLayer";
 import Toaster from "./components/shared/Toaster";
 import ConfirmDialog from "./components/shared/ConfirmDialog";
+import JoinRoomDialog from "./components/room/JoinRoomDialog";
 import ReturnTracker from "./components/auth/ReturnTracker";
 import ThemeProvider from "./components/ThemeProvider";
 import QueryProvider from "./components/QueryProvider";
@@ -133,6 +134,7 @@ export default function RootLayout({
           <RoomLayer />
           <Toaster />
           <ConfirmDialog />
+          <JoinRoomDialog />
           {/* `mode` is explicit (rather than relying on the "auto" default)
            * so a local `bun run dev` never reports as production even if
            * NODE_ENV gets overridden by tooling — only a real production

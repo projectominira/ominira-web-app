@@ -48,7 +48,7 @@ export function useReaderRoomHead(materialId: string) {
     enabled: hasHydrated,
     staleTime: 5 * 60_000,
   });
-  return { cover: data?.cover ?? null, group: data?.group ?? null };
+  return { book: data ?? null, group: data?.group ?? null };
 }
 
 /** Rewrites one note wherever a cache holds it. */

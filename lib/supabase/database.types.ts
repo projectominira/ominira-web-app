@@ -191,12 +191,14 @@ export type Database = {
           reader_id: string;
           material_id: string;
           ranges: Json;
+          visibility: "public" | "private";
         } & Timestamps;
         Insert: {
           id?: string;
           reader_id: string;
           material_id: string;
           ranges: Json;
+          visibility?: "public" | "private";
           created_at?: string;
           updated_at?: string;
         };
@@ -276,6 +278,12 @@ export type Database = {
         Row: { note_id: string; reader_id: string; created_at: string };
         Insert: { note_id: string; reader_id: string; created_at?: string };
         Update: Partial<Database["public"]["Tables"]["note_reactions"]["Insert"]>;
+        Relationships: [];
+      };
+      categories: {
+        Row: { name: string; position: number };
+        Insert: { name: string; position: number };
+        Update: Partial<Database["public"]["Tables"]["categories"]["Insert"]>;
         Relationships: [];
       };
       topics: {
@@ -579,6 +587,8 @@ export type Database = {
           /** IANA zone; weekly sessions recur in it. */
           timezone: string;
           pinned_post_id: string | null;
+          /** Invite only: unlisted, joined by a moderator's invite. */
+          is_private: boolean;
           created_by: string | null;
           created_at: string;
         };
@@ -589,6 +599,7 @@ export type Database = {
           description?: string;
           timezone: string;
           pinned_post_id?: string | null;
+          is_private?: boolean;
           created_by?: string | null;
           created_at?: string;
         };
@@ -760,6 +771,14 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["reader_reading_time"]["Insert"]>;
         Relationships: [];
       };
+      /** migrations/20261111_reading_history.sql: each book's seconds per
+       * local day, credited with the day's total by record_reading_time. */
+      reader_book_time: {
+        Row: { reader_id: string; day: string; material_id: string; seconds: number };
+        Insert: { reader_id: string; day: string; material_id: string; seconds?: number };
+        Update: Partial<Database["public"]["Tables"]["reader_book_time"]["Insert"]>;
+        Relationships: [];
+      };
       reader_milestones: {
         Row: { reader_id: string; kind: "streak"; value: number; reached_on: string; reached_at: string };
         Insert: { reader_id: string; kind: "streak"; value: number; reached_on: string; reached_at?: string };
@@ -877,8 +896,13 @@ export type Database = {
       add_group_book: { Args: { grp: string; material: string; reader: string }; Returns: "current" | "next" | "exists" };
       set_current_group_book: { Args: { grp: string; material: string; reader?: string | null }; Returns: boolean };
       reorder_group_books: { Args: { grp: string; materials: string[] }; Returns: undefined };
-      /** migrations/20261107_reading_time.sql: one reading-position save. */
-      record_reading_time: { Args: { reader: string; today: string; at: string; idle_seconds: number }; Returns: undefined };
+      /** migrations/20261111_reading_history.sql: one reading-position save, and its book. */
+      record_reading_time: { Args: { reader: string; material: string; today: string; at: string; idle_seconds: number }; Returns: undefined };
+      /** A reader's seconds per book per month (`month` is its first day). */
+      reading_history_day_books: {
+        Args: { reader: string; from_day: string; to_day: string };
+        Returns: { day: string; material_ids: string[] }[];
+      };
       collective_reading_seconds: { Args: { today: string }; Returns: number };
       /** Where a target set `today` starts (an edit keeps the running one's start). */
       group_target_start: {

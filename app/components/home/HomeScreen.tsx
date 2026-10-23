@@ -3,7 +3,6 @@
 import { useState } from "react";
 import SearchableAppPage from "@/app/components/shell/SearchableAppPage";
 import StartGroupSheet from "@/app/components/groups/StartGroupSheet";
-import Home from "@/app/components/rooms/Home";
 import StartRoomSheet from "@/app/components/rooms/StartRoomSheet";
 import { useShell } from "@/app/components/useShell";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
@@ -11,6 +10,7 @@ import { useEnterRoom, type RoomEntry } from "@/lib/room/useEnterRoom";
 import { useOpenRoom } from "@/lib/room/useOpenRoom";
 import { useHome, useSaveGoal } from "@/lib/rooms/useHome";
 import { activeRoom, useRoomStore } from "@/stores/room-store";
+import Home from "./Home";
 import HomeInstallBanner from "./HomeInstallBanner";
 import HomePushPrompt from "./HomePushPrompt";
 

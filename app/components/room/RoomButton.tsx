@@ -24,7 +24,7 @@ export function useRoomEntry(materialId: string) {
 /** The room's place on the notes rail — every way into the room lives on
  * the rail, so all of the book's social side is one button away. Starts a
  * room (interim host: any signed-in reader, public books only), joins the
- * one live on the book, or, once you're in, opens the feed on its Room tab,
+ * one live on the book, or, once you're in, opens the room's panel,
  * carrying chat's unread count. The live equaliser whenever the room is on. */
 export default function RoomButton({ materialId, onOpen }: { materialId: string; onOpen: () => void }) {
   const entry = useRoomEntry(materialId);

@@ -1,44 +1,45 @@
 import { describe, expect, test } from "bun:test";
 import type { StreakView } from "@/lib/streaks/types";
 import { chapterEnds } from "@/lib/groups/progress";
-import { buildStrip, chapterLine, dailyGoal, GOAL, goalAt, goalFrom, goalLabel, goalShare, isGoal, statusLook, streakCopy, toMinutes, weekChain, type StripCandidate } from "./home";
+import { buildStrip, chapterLine, dailyGoal, GOAL, goalLabel, goalStep, goalShare, ringTime, isGoal, statusLook, streakCopy, toMinutes, weekChain, type StripCandidate } from "./home";
 
 const streak = (state: StreakView["state"], days: string[], milestone: number | null): StreakView => ({ today: "2026-10-13", state, best: 30, days, milestone });
 const COLLECTIVE = 10100;
 
 describe("weekChain", () => {
   test("Monday read, Tuesday today", () => {
-    const { days, linked } = weekChain({ today: "2026-10-13", days: ["2026-10-12"] });
+    const days = weekChain({ today: "2026-10-13", days: ["2026-10-12"] });
     expect(days.map((d) => d.state)).toEqual(["done", "today", "next", "next", "next", "next", "next"]);
     expect(days[0].day).toBe("2026-10-12");
-    expect(linked).toEqual([false, true, false, false, false, false, false]);
   });
   test("today read", () => {
-    const { days, linked } = weekChain({ today: "2026-10-13", days: ["2026-10-12", "2026-10-13"] });
+    const days = weekChain({ today: "2026-10-13", days: ["2026-10-12", "2026-10-13"] });
     expect(days.map((d) => d.state).slice(0, 3)).toEqual(["done", "done", "next"]);
-    expect(linked.slice(0, 3)).toEqual([false, true, true]);
   });
 });
 
 describe("streakCopy", () => {
-  test("normal: minutes left and the collective", () => {
-    expect(streakCopy(streak({ kind: "open", days: 12 }, ["2026-10-12"], null), { minutes: 42, goal: 60, collectiveMinutes: COLLECTIVE })).toEqual({
+  test("not read today: the next day", () => {
+    expect(streakCopy(streak({ kind: "open", days: 12 }, ["2026-10-12"], null), { minutes: 0, goal: 60, collectiveMinutes: COLLECTIVE })).toEqual({
       title: "12-day streak",
-      sub: "18 more minutes to make it 13. The collective has read 10,100 minutes today.",
+      sub: "Start today's reading to make it day 13.",
     });
+  });
+  test("read today: what's left of the goal", () => {
+    expect(streakCopy(streak({ kind: "kept", days: 13 }, ["2026-10-13"], null), { minutes: 42, goal: 60, collectiveMinutes: COLLECTIVE }).sub).toBe("18 minutes left of today's goal.");
   });
   test("a milestone day reads like any other (the design has no milestone)", () => {
     const view = streak({ kind: "kept", days: 30 }, ["2026-10-12", "2026-10-13"], 30);
-    expect(streakCopy(view, { minutes: 60, goal: 60, collectiveMinutes: COLLECTIVE }).sub).toBe("Goal met for today. The collective has read 10,100 minutes today.");
+    expect(streakCopy(view, { minutes: 60, goal: 60, collectiveMinutes: COLLECTIVE }).sub).toBe("Goal met for today.");
   });
   test("a new reader", () => {
     expect(streakCopy(streak({ kind: "none" }, [], null), { minutes: 0, goal: 60, collectiveMinutes: COLLECTIVE })).toMatchObject({
       title: "Start a streak",
-      sub: "Read 60 minutes today to start one. The collective has read 10,100 minutes today.",
+      sub: "Read today to start one.",
     });
   });
   test("goal met", () => {
-    expect(streakCopy(streak({ kind: "open", days: 12 }, [], null), { minutes: 60, goal: 60, collectiveMinutes: 1 }).sub).toBe("Goal met for today. The collective has read 1 minute today.");
+    expect(streakCopy(streak({ kind: "open", days: 12 }, [], null), { minutes: 60, goal: 60, collectiveMinutes: 1 }).sub).toBe("Goal met for today.");
   });
 });
 
@@ -63,16 +64,18 @@ describe("reading time", () => {
     expect([30, 45, 90, 480].every(isGoal)).toBe(true);
     expect([0, 15, 40, 495, 60.5].some(isGoal)).toBe(false);
   });
-  test("the slider: labels, and positions snapped to a quarter hour", () => {
-    expect(goalLabel(45)).toBe("45 min");
-    expect(goalLabel(60)).toBe("1 hr");
-    expect(goalLabel(150)).toBe("2 hr 30 min");
-    expect(goalAt(GOAL.min)).toBe(0);
-    expect(goalAt(GOAL.max)).toBe(1);
-    expect(goalFrom(-1)).toBe(GOAL.min);
-    expect(goalFrom(2)).toBe(GOAL.max);
-    expect(goalFrom(0.5)).toBe(255);
-    expect(goalFrom(goalAt(120))).toBe(120);
+  test("labels, and the stepper held to the range", () => {
+    expect(goalLabel(45)).toBe("45 minutes");
+    expect(goalLabel(60)).toBe("1 hour");
+    expect(goalLabel(150)).toBe("2 hours 30 minutes");
+    expect(goalLabel(61)).toBe("1 hour 1 minute");
+    expect(ringTime(45)).toEqual({ value: "45", unit: "minutes" });
+    expect(ringTime(60)).toEqual({ value: "1", unit: "hour" });
+    expect(ringTime(125)).toEqual({ value: "2:05", unit: "hours" });
+    expect(goalStep(GOAL.min, -1)).toBe(GOAL.min);
+    expect(goalStep(GOAL.max, 1)).toBe(GOAL.max);
+    expect(goalStep(60, 1)).toBe(75);
+    expect(goalStep(20)).toBe(GOAL.min);
   });
 });
 

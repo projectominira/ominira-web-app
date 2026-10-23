@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import PassageQuote from "@/app/components/rooms/PassageQuote";
 import QuoteCard from "./QuoteCard";
 
 // One standard preview length everywhere a quote appears (the standalone
@@ -33,7 +34,10 @@ export function truncateQuote(text: string, max: number): { shown: string; isTru
  * everywhere; only `onJump` is opt in per caller. A caller that also needs
  * the book's own attribution (home feed/profile's book-context section)
  * renders a sibling BookPreview alongside this, not inside it — same
- * "content, then its preview" pattern every attachment type follows. */
+ * "content, then its preview" pattern every attachment type follows.
+ * Drawn as a room note's quote (PassageQuote), so a passage looks the same
+ * in the panel, the feed and the room; only the `bare` book-context row
+ * keeps QuoteCard. */
 export default function HighlightCard({
   text,
   onJump,
@@ -51,6 +55,7 @@ export default function HighlightCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const { shown, isTruncated } = truncateQuote(text, maxChars);
+  if (!bare) return <PassageQuote excerpt={text} onClick={onJump} />;
 
   return (
     <QuoteCard onClick={onJump} bare={bare}>

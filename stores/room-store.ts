@@ -71,7 +71,7 @@ export const activeRoom = (s: { snapshot: RoomSnapshot | null }) =>
   s.snapshot && !s.snapshot.ended && !s.snapshot.elsewhere ? s.snapshot : null;
 
 /** Unread room chat when you're in the room on this book, else null: the
- * feed panel's Room tab and the rail's room button (spec §1.4). */
+ * room's panel and the rail's room button (spec §1.4). */
 export const roomChatUnread = (s: { snapshot: RoomSnapshot | null }, materialId: string) => {
   const room = activeRoom(s);
   return room?.room.materialId === materialId ? room.chat.unread : null;

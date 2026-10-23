@@ -50,7 +50,7 @@ export default function DetailHeader({ onBack, title, shareAction, action, actio
             <>
               {lead}
               <span className="flex min-w-0 flex-col">
-                <h1 className="m-0 truncate text-[13px] font-bold text-[var(--reader-text)]">{title}</h1>
+                <h1 className={`m-0 truncate font-bold text-[var(--reader-text)] ${lead ? "text-[15px]" : "text-[13px]"}`}>{title}</h1>
                 {subtitle && <span className="truncate text-ui-caption text-[var(--color-app-text-secondary)]">{subtitle}</span>}
               </span>
             </>

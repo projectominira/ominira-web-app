@@ -16,9 +16,10 @@ import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import ReactionButton from "@/app/components/reader/notes/ReactionButton";
 import RoomAvatar from "@/app/components/rooms/RoomAvatar";
 import { ResumeButtons } from "@/app/components/rooms/RoomHeader";
+import ReadingProgress from "@/app/components/shared/ReadingProgress";
 import { ScreenPage } from "@/app/components/rooms/RoomScreen";
 
-// A book's Details tab: main's details page (the cover, title, author and
+// Book info, over the book's room: main's details page (the cover, title, author and
 // facts, who added it, the description, your progress and the one resume
 // button with the switch to the other mode), then who's reading now and the
 // contents, each chapter read, or the one you're in.
@@ -48,7 +49,7 @@ export default function BookDetails({
   const position = useReadingPositionStore((s) => s.positions[material.id]);
   const setFinished = useReadingPositionStore((s) => s.setFinished);
   return (
-    <ScreenPage outer>
+    <ScreenPage>
       <div className="flex flex-col items-center gap-5 text-center">
         <BookCover materialType={material.materialType} src={resolveBookCoverSrc(material)} alt={material.title} className="aspect-[2/3] w-48 flex-none shadow-lg shell:w-56" />
         <div className="w-full min-w-0">
@@ -58,14 +59,7 @@ export default function BookDetails({
           <ContributorRow material={material} />
           {h.description && <Description text={h.description} />}
 
-          {ready && h.pct !== null && (
-            <div className="mt-5 flex items-center gap-3">
-              <div className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--reader-surface-hover)]">
-                <div className="h-full rounded-full bg-brand-500" style={{ width: `${h.pct}%` }} />
-              </div>
-              <span className="flex-none text-xs font-semibold text-[var(--reader-text-muted)]">{h.progressLabel}</span>
-            </div>
-          )}
+          {ready && h.pct !== null && <ReadingProgress chapter={h.chapter} pct={h.pct} className="mt-5" />}
           <div className="mt-5">
             <ResumeButtons header={h} audiobook={audiobook} ready={ready} onContinue={onContinue} onSwitch={onSwitch} />
           </div>

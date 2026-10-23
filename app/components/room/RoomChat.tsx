@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ArrowDown, X } from "lucide-react";
-import { RoomField } from "@/app/components/rooms/RoomInput";
+import { RoomField, hasKeyboard } from "@/app/components/rooms/RoomInput";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import QuoteCard from "@/app/components/reader/notes/QuoteCard";
 import { comradeName } from "@/lib/reader/authorDisplay";
@@ -14,10 +14,10 @@ import { useSendPassage } from "@/lib/room/sharePassage";
 import { useNow } from "@/lib/time/useNow";
 import { useRoomStore } from "@/stores/room-store";
 
-// The room's chat, the last section of the feed panel's Room tab (spec §1.4,
-// §3.2): the notice first, then messages, shared passages and reaction
-// digests as they come, and the composer in the panel's footer.
-// Loaded with the Room tab, only while you're in the room on this book.
+// The room's chat, the room panel's Chat view (spec §1.4, §3.2): the
+// notice first, then messages, shared passages and reaction digests as
+// they come, and the composer over the panel's controls. Loaded with the
+// room's UI, only while you're in a room.
 
 /** Within this of the bottom, you're at the end: new lines keep you there. */
 const PINNED_PX = 80;
@@ -147,7 +147,7 @@ function Digest({ item }: { item: Extract<ChatItem, { kind: "digest" }> }) {
 }
 
 /** "Message the room" + send, in the panel's footer: the same field every
- * room uses (RoomField). Enter sends. Within 2 s of your last message, it's kept and the
+ * room uses (RoomField). Enter sends (on a phone, the send button). Within 2 s of your last message, it's kept and the
  * rate is explained. A passage shared from the reader waits above the box,
  * and your words go with it: saved as a note, then posted (sharePassage.ts). */
 export function RoomChatComposer({ materialId, className = "px-4 pt-2 pb-3" }: { materialId: string; className?: string }) {
@@ -159,7 +159,7 @@ export function RoomChatComposer({ materialId, className = "px-4 pt-2 pb-3" }: {
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!notice) return;
@@ -190,8 +190,8 @@ export function RoomChatComposer({ materialId, className = "px-4 pt-2 pb-3" }: {
     }
   };
 
-  const submit = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+  const submit = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing || !hasKeyboard()) return;
     e.preventDefault();
     void send();
   };

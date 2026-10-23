@@ -1,4 +1,4 @@
-import type { MaterialSummary, Note } from "@/lib/api/types";
+import type { AnnotationRange, MaterialSummary, Note } from "@/lib/api/types";
 import type { FeedItem } from "@/lib/community/feed";
 import type { GroupMilestone, GroupSession, TargetView } from "@/lib/groups/types";
 import type { StreakView } from "@/lib/streaks/types";
@@ -75,10 +75,19 @@ export type RoomItem =
   | { t: "target"; target: RoomTarget }
   | { t: "session"; card: RoomSession }
   | { t: "note"; note: RoomNote }
-  | { t: "reading"; count: number; readers: { comrade: Comrade }[] }
-  /** The reader's book room: your own highlight, only you see it; `count`
-   * is how many comrades marked the same line ("24 comrades marked this line"). */
-  | { t: "highlight"; id: string; excerpt: string; label: string; count: number; at: string }
+  /** A highlight in a book's room: a public one, or your own private one.
+   * `href` opens the reader at its line. */
+  | {
+      t: "highlight";
+      id: string;
+      author: Note["author"];
+      visibility: Note["visibility"];
+      excerpt: string;
+      label: string;
+      ranges: AnnotationRange[];
+      href: string | null;
+      at: string;
+    }
   | { t: "empty" };
 
 /** `GET /api/groups/{slug}/stream`, `GET /api/materials/{id}/stream`: one
@@ -94,14 +103,13 @@ export type BookRoomHeader = {
   cover: string | null;
   /** The viewer's progress; null when not started. */
   pct: number | null;
-  /** "Ch. 2 · 18%", "Finished", "Not started". */
-  progressLabel: string;
+  /** Where the viewer is, as Today has it ("Ch. 2 · The Pitfalls…"); null
+   * when not started, finished, or in a book with no chapters. */
+  chapter: string | null;
   cta: string;
   /** The CTA resumes listening; the switch then offers reading. */
   listening: boolean;
-  readingNow: number;
   noteCount: number;
-  readers: { comrade: Comrade }[];
   /** Everyone reading, the viewer too: the details column lists them all. */
   everyone: { comrade: Comrade }[];
   everyoneCount: number;

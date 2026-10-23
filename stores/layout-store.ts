@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useFeedStore } from "./feed-store";
 
 /**
  * Real rendered heights of persistent fixed chrome that other fixed
@@ -8,6 +9,8 @@ import { create } from "zustand";
  * middleware: it's meaningless before the DOM exists and gets re-measured
  * on every mount anyway.
  */
+export type RoomPlayerView = "stage" | "guests" | "chat";
+
 type LayoutState = {
   /** AppBottomNav's own rendered height (mobile tab bar), in px. */
   bottomNavHeight: number;
@@ -36,6 +39,10 @@ type LayoutState = {
   /** RoomMiniPlayer folded down to a small pill, to give the page back. */
   roomPlayerMinimised: boolean;
   setRoomPlayerMinimised: (minimised: boolean) => void;
+  /** What the expanded room panel shows: who's here, the full guest list or the chat. */
+  roomPlayerView: RoomPlayerView;
+  /** Expands the room panel on `view`. */
+  openRoomPlayer: (view?: RoomPlayerView) => void;
   /** The reader's chapter footer's height while it's showing (0 otherwise),
    * so RoomMiniPlayer floats above it rather than under it. */
   readerFooterHeight: number;
@@ -53,6 +60,15 @@ export const useLayoutStore = create<LayoutState>((set) => ({
   setRoomPlayerHeight: (roomPlayerHeight) => set({ roomPlayerHeight }),
   roomPlayerMinimised: false,
   setRoomPlayerMinimised: (roomPlayerMinimised) => set({ roomPlayerMinimised }),
+  roomPlayerView: "stage",
+  openRoomPlayer: (roomPlayerView = "stage") => set({ roomPlayerMinimised: false, roomPlayerView }),
   readerFooterHeight: 0,
   setReaderFooterHeight: (readerFooterHeight) => set({ readerFooterHeight }),
 }));
+
+/** Expands the room's panel on `view`. On phones the book's notes sheet
+ * would cover it, so that closes. */
+export function openRoomPlayer(view?: RoomPlayerView) {
+  if (!window.matchMedia("(min-width: 860px)").matches) useFeedStore.getState().close();
+  useLayoutStore.getState().openRoomPlayer(view);
+}

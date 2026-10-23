@@ -128,7 +128,7 @@ export function useCreateGroup() {
 export const useJoinGroup = (slug: string) => useGroupMutation<void>(() => api.joinGroup(slug));
 
 /** Join from anywhere (spec §6.1): signed in, joins at once; signed out,
- * remembers the group and goes to signup, and the group page finishes the
+ * remembers the group and goes to login, and the group page finishes the
  * join after auth. */
 export function useJoinAction(slug: string) {
   const router = useRouter();
@@ -137,7 +137,7 @@ export function useJoinAction(slug: string) {
   const start = () => {
     if (isAuthenticated) return join.mutate();
     setPendingJoin(slug);
-    router.push("/auth/signup");
+    router.push("/auth/login");
   };
   return { join: start, isPending: join.isPending };
 }

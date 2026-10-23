@@ -1,33 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import NoResults from "@/app/components/shared/NoResults";
+import BookCover from "@/app/components/shared/BookCover";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
+import { useReaderRoomHead } from "@/lib/rooms/hooks";
 import { comradeName } from "@/lib/reader/authorDisplay";
-import type { FeedEntry } from "@/lib/reader/annotationFeed";
+import type { FeedEntry, FeedLocator } from "@/lib/reader/annotationFeed";
 import type { FeedItem, FeedTab } from "@/lib/reader/useFeed";
-import type { Note } from "@/lib/api/types";
-import UnderlineTabs from "../../UnderlineTabs";
+import type { AnnotationRange, Note } from "@/lib/api/types";
 import PanelShell from "./PanelShell";
-import LiveChip from "@/app/components/room/LiveChip";
-import UnreadBadge from "@/app/components/room/UnreadBadge";
 import FeedHighlightThread from "./FeedHighlightThread";
 import GeneralNoteThread from "./GeneralNoteThread";
 import BookRoomPane from "./BookRoomPane";
 import { notesLabel } from "../ReaderPresence";
-import { roomChatUnread, useRoomStore } from "@/stores/room-store";
-
-// The Room tab, loaded only while you're in the room on this book.
-const RoomStage = dynamic(() => import("@/app/components/room/RoomPanel").then((m) => m.RoomStage), { ssr: false });
-const RoomChatComposer = dynamic(() => import("@/app/components/room/RoomChat").then((m) => m.RoomChatComposer), {
-  ssr: false,
-});
-
-// The book room tab: notes and the highlights shared into it. Live follows it while
-// you're in the room on this book.
-const FILTER_OPTIONS: { value: FeedTab; label: string }[] = [{ value: "notes", label: "Room" }];
 
 /** A stable DOM id per item — looked up via `document.getElementById` in an
  * effect to position the panel on open, same reasoning as the note panel's
@@ -99,8 +87,8 @@ function FeedItemLabel({ run, filter }: { run: FeedItemRun; filter: FeedTab }) {
   );
 }
 
-/** The book's feed panel: the live room while you're in one (RoomPanel, its chat RoomChat), and
- * the book-wide annotation feed — every mark of any kind, grouped under a
+/** The book's feed panel: the book room (its notes), and the book-wide
+ * annotation feed — every mark of any kind, grouped under a
  * context label per run (which chapter, or General discussion — see
  * FeedItemLabel), each item's own full, real interactive thread (see
  * FeedHighlightThread) sitting under it — a bare
@@ -122,10 +110,11 @@ export default function FeedPanel({
   items,
   notes,
   filter,
-  onFilterChange,
   activeSectionId,
   onJump,
+  onPassage,
   getPassageText,
+  locate,
   panelType,
   onClose,
   targetNoteId,
@@ -144,7 +133,11 @@ export default function FeedPanel({
   /** The run the reader is in now — the panel opens scrolled to it. */
   activeSectionId?: string;
   onJump: (entry: FeedEntry) => void;
+  /** A quote in the room opened: the reader scrolls to its passage. */
+  onPassage?: (sectionId: string, ranges: AnnotationRange[], mine: boolean) => void;
   getPassageText: (passageId: string) => string;
+  /** Where a passage sits — places your just-made highlights in the room. */
+  locate: FeedLocator;
   panelType?: "side" | "sheet";
   onClose: () => void;
   /** Deep-link from push notification for a general note — scrolls to and
@@ -158,41 +151,11 @@ export default function FeedPanel({
   focusedAuthor: { author: Note["author"]; count: number } | null;
   onClearAuthor: () => void;
 }) {
-  // The Room tab comes third while you're in the room on this book, with chat's
-  // unread count (spec §3.1); leaving the room leaves it.
-  const chatUnread = useRoomStore((s) => roomChatUnread(s, materialId));
-  const inRoom = chatUnread !== null;
-  const onRoom = filter === "room" && inRoom;
   const onNotes = filter === "notes";
-  useEffect(() => {
-    if (filter === "room" && !inRoom) onFilterChange("notes");
-  }, [filter, inRoom, onFilterChange]);
-  const tabOptions = inRoom
-    ? [
-        ...FILTER_OPTIONS,
-        {
-          value: "room" as const,
-          label: (
-            <span className="flex items-center gap-1.5">
-              <span aria-hidden="true" className="h-1.5 w-1.5 flex-none rounded-full bg-brand-500" />
-              Live
-              <UnreadBadge count={chatUnread} />
-            </span>
-          ),
-        },
-      ]
-    : FILTER_OPTIONS;
-  const tabs = (
-    <UnderlineTabs
-      bare
-      options={tabOptions}
-      value={filter}
-      onChange={(next) => {
-        onClearAuthor();
-        onFilterChange(next as FeedTab);
-      }}
-    />
-  );
+  const router = useRouter();
+  const { book } = useReaderRoomHead(materialId);
+  // One comrade's notes say so under the title, with All notes to undo it.
+  const narrowed = onNotes && focusedAuthor;
   const runs = useMemo(() => groupFeedItemsByCategory(items), [items]);
   // Positioning: fires once per "panel just opened" but also waits for items
   // to arrive when deep-linking to a specific general note. The panel mounts
@@ -277,20 +240,33 @@ export default function FeedPanel({
           ? "flex min-h-0 flex-1 flex-col"
           : "om-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-5 pb-10 flex flex-col gap-3.5"
       }
-      // The room's controls live in the mini-player; here, the chat's composer.
-      // The Notes tab is the book room, whose input is its own.
-      footer={onRoom ? <RoomChatComposer materialId={materialId} className="" /> : undefined}
-      footerClassName="px-3 py-2.5"
-      // Joins a live room from here; once you're in, the Room tab says it.
-      headerMenu={inRoom ? undefined : <LiveChip materialId={materialId} />}
-      // No title — the tabs already say what the panel holds, so they are
-      // the header, sharing its line with Close.
-      tabs={tabs}
+      // The book, headed as its page heads it; the title opens its info.
+      title={
+        <button
+          type="button"
+          onClick={() => book && router.push(`/library/${book.slug}?tab=info`)}
+          className="flex min-w-0 cursor-pointer items-center gap-2.5 border-none bg-transparent p-0 text-left"
+        >
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate text-[13px] font-bold text-[var(--reader-text)]">{book?.title ?? "\u00a0"}</span>
+          </span>
+        </button>
+      }
+      headerMenu={
+        narrowed ? (
+          <button
+            type="button"
+            onClick={onClearAuthor}
+            className="cursor-pointer rounded-full px-2 py-1 text-[12px] font-semibold text-[var(--reader-accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--reader-accent)_12%,transparent)]"
+          >
+            All notes
+          </button>
+        ) : undefined
+      }
+      divided
     >
-      {onRoom ? (
-        <RoomStage />
-      ) : onNotes ? (
-        <BookRoomPane materialId={materialId} authorId={focusedAuthor?.author.readerId} targetNoteId={targetNoteId ?? targetThreadId} />
+      {onNotes ? (
+        <BookRoomPane materialId={materialId} authorId={focusedAuthor?.author.readerId} targetNoteId={targetNoteId ?? targetThreadId} onPassage={onPassage} locate={locate} getPassageText={getPassageText} />
       ) : (
         <>
           {focusedAuthor && (

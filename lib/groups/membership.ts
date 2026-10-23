@@ -2,6 +2,7 @@ import "server-only";
 
 import { conflict, forbidden, notFound, validationError } from "@/lib/api/errors";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
+import { groupHref } from "@/lib/groups/copy";
 import { toAvatar } from "@/lib/avatar/avatar";
 import type { GroupMember, GroupPage, GroupRole, GroupSummary } from "@/lib/groups/types";
 import { READING_NOW_MS } from "@/lib/rooms/home";
@@ -19,6 +20,7 @@ export type Group = {
   description: string;
   timezone: string;
   pinned_post_id: string | null;
+  is_private: boolean;
 };
 
 /** What a group write can come back with; groupResponse turns it into HTTP. */
@@ -44,9 +46,11 @@ export type GroupOutcome =
   | "session_not_found"
   | "starts_in_past"
   // Creating (createGroup).
-  | "group_cap";
+  | "group_cap"
+  // Joining.
+  | "invite_only";
 
-export const GROUP_COLUMNS = "id, slug, name, description, timezone, pinned_post_id";
+export const GROUP_COLUMNS = "id, slug, name, description, timezone, pinned_post_id, is_private";
 
 export async function findGroup(slug: string): Promise<Group | null> {
   const { data, error } = await getSupabaseAdminClient().from("groups").select(GROUP_COLUMNS).eq("slug", slug).maybeSingle();
@@ -86,18 +90,20 @@ async function memberCount(groupId: string): Promise<number> {
   return count ?? 0;
 }
 
-/** Every group, oldest first, with the viewer's membership. */
+/** Every public group, oldest first, with the viewer's membership; private
+ * ones only for their members. */
 export async function listGroups(readerId: string | null): Promise<GroupSummary[]> {
   const admin = getSupabaseAdminClient();
   const [groupsRes, mineRes] = await Promise.all([
-    admin.from("groups").select("id, slug, name, description").order("created_at"),
+    admin.from("groups").select("id, slug, name, description, is_private").order("created_at"),
     readerId ? admin.from("group_members").select("group_id").eq("reader_id", readerId) : null,
   ]);
   if (groupsRes.error) throw groupsRes.error;
   if (mineRes?.error) throw mineRes.error;
   const mine = new Set(mineRes?.data.map((m) => m.group_id));
-  const counts = await Promise.all(groupsRes.data.map((g) => memberCount(g.id)));
-  return groupsRes.data.map((g, i) => ({ ...g, memberCount: counts[i], joined: mine.has(g.id) }));
+  const groups = groupsRes.data.filter((g) => !g.is_private || mine.has(g.id));
+  const counts = await Promise.all(groups.map((g) => memberCount(g.id)));
+  return groups.map(({ is_private: _, ...g }, i) => ({ ...g, memberCount: counts[i], joined: mine.has(g.id) }));
 }
 
 export async function getGroupPage(slug: string, readerId: string | null): Promise<GroupPage | null> {
@@ -110,8 +116,8 @@ export async function getGroupPage(slug: string, readerId: string | null): Promi
     readingNowIn(group.id, readerId),
   ]);
   if (mine?.error) throw mine.error;
-  const { id, name, description } = group;
-  return { group: { id, slug, name, description, memberCount: count }, myRole: mine?.data?.role ?? null, muted: mine?.data?.muted ?? false, readingNow };
+  const { id, name, description, is_private } = group;
+  return { group: { id, slug, name, description, memberCount: count, private: is_private }, myRole: mine?.data?.role ?? null, muted: mine?.data?.muted ?? false, readingNow };
 }
 
 /** Mute or unmute the group for one member (studygroup-spec §7): its kinds
@@ -175,6 +181,19 @@ export async function listMembers(groupId: string): Promise<GroupMember[]> {
     .sort((a, b) => Number(b.role === "moderator") - Number(a.role === "moderator"));
 }
 
+/** Whether a moderator has invited this reader to the group (the tagged
+ * `group_invite` notification, which opens the group's page). */
+export async function isInvited(group: Group, readerId: string): Promise<boolean> {
+  const { count, error } = await getSupabaseAdminClient()
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("reader_id", readerId)
+    .eq("kind", "group_invite")
+    .eq("url", groupHref(group.slug));
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
 /** Instant and idempotent (§4.1): joining twice keeps the first row and role. */
 export async function joinGroup(groupId: string, readerId: string): Promise<void> {
   const { error } = await getSupabaseAdminClient()
@@ -233,7 +252,7 @@ export const GROUP_CREATE_CAP = 5;
  * refusal. Sessions recur in the creator's zone. */
 export async function createGroup(
   readerId: string,
-  input: { name: string; description: string }
+  input: { name: string; description: string; isPrivate: boolean }
 ): Promise<GroupOutcome | { slug: string }> {
   const base = groupNameToSlug(input.name);
   if (base === "") return "name_unusable";
@@ -249,7 +268,7 @@ export async function createGroup(
   const insert = (slug: string) =>
     admin
       .from("groups")
-      .insert({ slug, name: input.name, description: input.description, timezone: reader.data.timezone ?? "UTC", created_by: readerId })
+      .insert({ slug, name: input.name, description: input.description, is_private: input.isPrivate, timezone: reader.data.timezone ?? "UTC", created_by: readerId })
       .select("id, slug")
       .single();
   let created = await insert(base);
@@ -305,6 +324,8 @@ export function groupResponse(outcome: GroupOutcome) {
       return notFound("No group found.");
     case "forbidden":
       return forbidden("Only moderators can do this.");
+    case "invite_only":
+      return forbidden("This group is invite only.");
     case "not_member":
       return notFound("Not a member of this group.");
     case "last_moderator":
