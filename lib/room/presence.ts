@@ -28,9 +28,12 @@ export function isSuperseded(me: RoomPresence, entries: readonly RoomPresence[])
   return entries.some((e) => e.readerId === me.readerId && e.sessionId !== me.sessionId && isNewer(e, me));
 }
 
-/** Everyone with their mic on, newest first. */
-export function selectSpeaking(roster: readonly RoomPresence[]): RoomPresence[] {
-  return roster.filter((p) => p.micOnAt !== null).sort((a, b) => b.micOnAt! - a.micOnAt!);
+/** Everyone with their mic on, newest first. `heard` (readerIds whose voice
+ * arrives) counts too: a voice can beat the presence that says mic on, and
+ * it's newest then. */
+export function selectSpeaking(roster: readonly RoomPresence[], heard: readonly string[] = []): RoomPresence[] {
+  const onAt = (p: RoomPresence) => p.micOnAt ?? (heard.includes(p.readerId) ? Infinity : null);
+  return roster.filter((p) => onAt(p) !== null).sort((a, b) => onAt(b)! - onAt(a)! || 0);
 }
 
 /** Raised hands, first come first. */

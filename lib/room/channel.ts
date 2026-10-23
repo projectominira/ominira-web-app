@@ -53,6 +53,9 @@ type Options = {
 /** Not back this long after a drop: give up on supabase-js's own rejoin and
  * start again on a fresh client; then retry at this pace until it's live. */
 const REBUILD_MS = 8_000;
+/** A presence push the server didn't take (timed out, refused) is retried
+ * this often until it does, or a newer one replaces it. */
+const TRACK_RETRY_MS = 1_000;
 
 export function openRoomChannel(options: Options): RoomChannel {
   const { join, readerId, accessToken, onRoster, onStatus } = options;
@@ -64,6 +67,7 @@ export function openRoomChannel(options: Options): RoomChannel {
   let trackedKey = "";
   const handlers = new Map<RoomEventName, Set<(payload: unknown) => void>>();
   let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+  let trackTimer: ReturnType<typeof setTimeout> | null = null;
 
   // supabase-js rejoins a dropped channel on its own, but with the token it
   // joined with: one that expired meanwhile (a laptop asleep) is refused,
@@ -115,13 +119,30 @@ export function openRoomChannel(options: Options): RoomChannel {
         if (live) {
           clearRebuild();
           // Every (re)join starts with no presence for us on the server.
-          if (tracked) void ch.track(tracked);
+          pushPresence();
         } else scheduleRebuild();
         onStatus(live ? "live" : "reconnecting");
       });
     });
     scheduleRebuild();
     return { supabase: client, channel: ch };
+  }
+
+  // Mic on, hands and the mesh all hang on presence, so a push is never
+  // fire-and-forget: until the server says ok, the latest one goes again.
+  function pushPresence() {
+    if (trackTimer !== null) clearTimeout(trackTimer);
+    trackTimer = null;
+    const sent = tracked;
+    const ch = channel;
+    if (!sent || !live || closed) return;
+    void ch.track(sent).then(
+      (status) => {
+        if (status === "ok" || closed || ch !== channel || sent !== tracked || trackTimer !== null) return;
+        trackTimer = setTimeout(pushPresence, TRACK_RETRY_MS);
+      },
+      () => {},
+    );
   }
 
   function scheduleRebuild() {
@@ -202,7 +223,7 @@ export function openRoomChannel(options: Options): RoomChannel {
       if (closed || key === trackedKey) return;
       tracked = presence;
       trackedKey = key;
-      if (live) void channel.track(presence);
+      pushPresence();
     },
 
     async readStatus() {
@@ -220,6 +241,7 @@ export function openRoomChannel(options: Options): RoomChannel {
       if (closed) return;
       closed = true;
       clearRebuild();
+      if (trackTimer !== null) clearTimeout(trackTimer);
       window.removeEventListener("online", wake);
       document.removeEventListener("visibilitychange", wake);
       for (const timer of timers.values()) clearTimeout(timer);

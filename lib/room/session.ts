@@ -117,6 +117,8 @@ type Engine = {
   /** The last `narration` word sent, so an unchanged one isn't sent again. */
   narrationKey: string;
   roster: RoomPresence[];
+  /** Sessions that sent us an offer: they send, before presence says so. */
+  offered: Set<string>;
   follow: Follow;
   chat: Chat;
   reactions: Reactions;
@@ -391,7 +393,14 @@ export class RoomSession {
       context: this.audio,
       onSuspended: (audioSuspended) => this.patch({ audioSuspended }),
     });
-    const signalling = createSignalling({ channel, sessionId });
+    const signalling = createSignalling({
+      channel,
+      sessionId,
+      onOffer: (from) => {
+        engine.offered.add(from);
+        this.reconcile();
+      },
+    });
 
     const mesh = createMesh<MeshEntry>({
       create: (remote) => {
@@ -483,6 +492,7 @@ export class RoomSession {
       narrationTrack: null,
       narrationKey: "null",
       roster: [],
+      offered: new Set(),
       follow,
       chat,
       reactions,
@@ -568,9 +578,15 @@ export class RoomSession {
     return { ...engine.stats, iceRestarts: engine.stats.iceRestarts + open };
   }
 
+  /** The mesh from presence, with anyone who has offered counted as sending
+   * (`sends` never turns back off within a session). */
   private reconcile(): void {
     const engine = this.engine;
-    if (engine && this.presence) engine.mesh.update(this.presence, engine.roster);
+    if (!engine || !this.presence) return;
+    const roster = engine.offered.size
+      ? engine.roster.map((p) => (!p.sends && engine.offered.has(p.sessionId) ? { ...p, sends: true } : p))
+      : engine.roster;
+    engine.mesh.update(this.presence, roster);
   }
 
   /** The room is over: stop everything, keep the snapshot for the ended screen. */

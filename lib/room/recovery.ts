@@ -2,7 +2,7 @@
 // tested; peer.ts feeds it connection states and timeouts and carries out
 // what it returns.
 //
-//   connecting ──(20 s, never connected)──▶ close
+//   connecting ──(12 s, never connected)──▶ close
 //   connected → disconnected ──(3 s)──▶ restartIce
 //   * → failed ──▶ restartIce once ──(10 s, still not connected)──▶ close
 //
@@ -10,7 +10,8 @@
 // the two sides don't both offer; the polite side runs the same clock and
 // waits for it. A closed peer that's still desired is rebuilt by the mesh.
 
-export const CONNECT_TIMEOUT_MS = 20_000;
+/** Setup takes ~1 s; this allows the offer two resends (peer.ts) first. */
+export const CONNECT_TIMEOUT_MS = 12_000;
 export const DISCONNECTED_GRACE_MS = 3_000;
 export const RESTART_TIMEOUT_MS = 10_000;
 

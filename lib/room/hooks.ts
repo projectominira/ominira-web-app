@@ -18,7 +18,7 @@ export const useInRoom = () => useRoomStore((s) => s.snapshot !== null);
 
 export const useRoster = () => useRoom((s) => s.roster);
 /** Mic on, newest first: the panel's Speaking now. */
-export const useSpeaking = () => useRoom((s) => selectSpeaking(s.roster));
+export const useSpeaking = () => useRoom((s) => selectSpeaking(s.roster, s.speakingIds));
 export const useHands = () => useRoom((s) => selectHands(s.roster));
 export const useListening = () => useRoom((s) => selectListening(s.roster));
 
@@ -27,7 +27,7 @@ export const useListening = () => useRoom((s) => selectListening(s.roster));
  * passages included. */
 export const useVoices = () =>
   useRoom((s): RoomPresence[] =>
-    selectSpeaking(s.roster).filter((p) => p.readingAloud !== null || s.speakingIds.includes(p.readerId))
+    selectSpeaking(s.roster, s.speakingIds).filter((p) => p.readingAloud !== null || s.speakingIds.includes(p.readerId))
   );
 
 /** One member's audio state, for their avatar. */
