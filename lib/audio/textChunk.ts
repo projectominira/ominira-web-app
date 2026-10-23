@@ -9,6 +9,14 @@
 // so an imperfect boundary (after "Dr.") only shifts where a clip ends — it
 // never makes a standalone clip of just "Dr.".
 const MAX_CHARS = 200;
+// A passage's first chunk is kept to about a sentence: synthesis time tracks
+// the audio's length (~2 s for a 26-char sentence, ~7.5 s for 180 chars), and
+// the first chunk is what the reader waits for when they press play or jump.
+// The rest synthesize while it plays.
+const FIRST_CHARS = 80;
+// No chunk shorter than this, so a wrong sentence break ("Dr.") still joins
+// the sentence after it.
+const MIN_CHARS = 20;
 
 // Where Intl.Segmenter picks a break point at all, it's still a better
 // guess than a blind mid-word character cut — real Unicode sentence-break
@@ -30,17 +38,18 @@ function getSegmenter(locale: string): Intl.Segmenter {
  * Splits passage text into pieces safely under a TTS request's practical
  * size, breaking on a sentence boundary when one exists near the budget so
  * a split (when one is even needed) doesn't cut mid-word. A short passage
- * (a heading, a one-sentence paragraph) comes back as a single untouched
- * chunk; a longer one splits every sentence or two.
+ * (a heading, a short sentence) comes back as a single untouched chunk; a
+ * longer one leads with its first sentence, then splits every sentence or two.
  */
 export function splitForSynthesis(text: string, locale = "en", maxChars = MAX_CHARS): string[] {
-  if (text.length <= maxChars) return [text];
+  if (text.length <= FIRST_CHARS) return [text];
 
   const sentences = Array.from(getSegmenter(locale).segment(text), (s) => s.segment);
   const chunks: string[] = [];
   let current = "";
   for (const sentence of sentences) {
-    if (current && current.length + sentence.length > maxChars) {
+    const budget = chunks.length === 0 ? FIRST_CHARS : maxChars;
+    if (current.trim().length >= MIN_CHARS && current.length + sentence.length > budget) {
       chunks.push(current.trim());
       current = "";
     }
