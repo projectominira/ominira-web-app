@@ -951,3 +951,19 @@ html[data-reader-theme="dark"] .theme-light-only,
 html:not([data-reader-theme="dark"]) .theme-dark-only {
   display: none;
 }
+
+/* Image viewer (reader): the library's variables, set to the app's palette. */
+.yarl__root.om-lightbox {
+  --yarl__color_backdrop: rgb(20 18 16);
+  --yarl__color_button: rgb(255 255 255 / 0.8);
+  --yarl__color_button_active: #fff;
+  --yarl__slide_captions_container_background: transparent;
+  --yarl__font_family: var(--font-sans, ui-sans-serif, system-ui);
+  --yarl__counter_font_size: 13px;
+}
+.yarl__root.om-lightbox .yarl__container {
+  background-color: rgb(20 18 16);
+}
+.yarl__root.om-lightbox .yarl__slide_image {
+  border-radius: var(--radius-sm, 0.25rem);
+}

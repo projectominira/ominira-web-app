@@ -1,7 +1,8 @@
 "use client";
 
-import { memo, type ReactElement, type ReactNode, useState } from "react";
+import { memo, type ReactElement, type ReactNode, useMemo, useState } from "react";
 import { Pause, Play } from "lucide-react";
+import { ImageLightbox } from "./ImageLightbox";
 import { ImagePassageBlock, MarkedText, PassageText, type NoteLookup } from "./PassageContent";
 import type { BookDocument, Passage, Section, TableCell } from "@/lib/book/schema";
 import type { Annotation } from "@/stores/library-store";
@@ -112,6 +113,15 @@ const BookContent = memo(function BookContent({
   isNarrationPlaying,
   endSlot,
 }: BookContentProps) {
+  // Every image in the book, in reading order, for the full-screen viewer.
+  const bookImages = useMemo(
+    () =>
+      orderedSections.flatMap((s) =>
+        s.passages.flatMap((p) => (p.type === "image" && p.src ? [{ id: p.id, src: p.src, alt: p.text, caption: p.caption }] : []))
+      ),
+    [orderedSections]
+  );
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const firstSectionId = orderedSections[0]?.id;
   const lastSectionId = orderedSections[orderedSections.length - 1]?.id;
   const section = orderedSections[activeIndex];
@@ -192,6 +202,7 @@ const BookContent = memo(function BookContent({
           <ImagePassageBlock
             passage={raw}
             maxWidthPx={isFrontCoverImage ? FRONT_COVER_MAX_WIDTH_PX : undefined}
+            onOpen={() => setLightboxIndex(bookImages.findIndex((img) => img.id === raw.id))}
           />
         </div>
       );
@@ -550,6 +561,8 @@ const BookContent = memo(function BookContent({
           {section.id === lastSectionId && endSlot}
         </div>
       </div>
+
+      <ImageLightbox images={bookImages} index={lightboxIndex} onClose={() => setLightboxIndex(null)} />
 
       {/* Hints that there's more below before hitting the docked
           ChapterNavFooter (Reader.tsx) — purely visual, pointer-events-none

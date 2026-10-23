@@ -471,7 +471,7 @@ export function MarkedText({
  * keep a front-matter cover from rendering edge-to-edge at the full text
  * column width (tuned for line length, not for a portrait cover image) on
  * wide reading panes, while ordinary in-book images stay unregulated. */
-export function ImagePassageBlock({ passage, maxWidthPx }: { passage: Passage; maxWidthPx?: number }) {
+export function ImagePassageBlock({ passage, maxWidthPx, onOpen }: { passage: Passage; maxWidthPx?: number; onOpen?: () => void }) {
   // min(), not a bare px value: a plain inline `maxWidth: 340` always wins
   // over the `max-w-full` class below (inline styles beat classes
   // regardless of specificity), so on a phone narrow enough that 340px is
@@ -487,8 +487,16 @@ export function ImagePassageBlock({ passage, maxWidthPx }: { passage: Passage; m
         <img
           src={passage.src}
           alt={passage.text}
-          className="max-w-full w-auto h-auto rounded-xs"
+          className={`max-w-full w-auto h-auto rounded-xs${onOpen ? " cursor-zoom-in" : ""}`}
           style={capStyle}
+          onClick={
+            onOpen
+              ? (e) => {
+                  e.stopPropagation();
+                  onOpen();
+                }
+              : undefined
+          }
         />
       ) : (
         <div
