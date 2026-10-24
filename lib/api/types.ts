@@ -189,6 +189,8 @@ export type ReaderProfile = {
   timeZone: string | null;
   /** Approved by an admin to upload books (/admin/readers), or an admin. */
   canUpload: boolean;
+  /** Listed in ADMIN_EMAILS — raises the upload limits (lib/materials/uploadLimits.ts). */
+  isAdmin: boolean;
   joinedAt: string;
   updatedAt: string;
 };

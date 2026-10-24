@@ -24,6 +24,7 @@ export function toReaderProfile(row: ReaderRow): ReaderProfile {
     emailAnnouncements: row.email_announcements,
     timeZone: row.timezone,
     canUpload: canUpload(row),
+    isAdmin: isAdminReader(row),
     joinedAt: row.joined_at,
     updatedAt: row.updated_at,
   };

@@ -6,7 +6,8 @@ import { CloudUpload, Plus, X } from "lucide-react";
 import { useUploadBook } from "@/lib/materials/useUploadBook";
 import type { UploadedBook } from "@/lib/materials/useUploadBook";
 import { useAttachmentMetadataEditor } from "@/lib/materials/useAttachmentMetadataEditor";
-import { ACCEPTED_FILE_TYPES, MEMBER_UPLOAD_LIMITS, formatBytes, type UploadLimits } from "@/lib/materials/uploadLimits";
+import { ACCEPTED_FILE_TYPES, ADMIN_UPLOAD_LIMITS, MEMBER_UPLOAD_LIMITS, formatBytes, type UploadLimits } from "@/lib/materials/uploadLimits";
+import { useProfile } from "@/lib/auth/useProfile";
 import { apiFetch } from "@/lib/api/client";
 import type { MaterialSummary } from "@/lib/api/types";
 import { resolveBookThumbnailSrc, type CoverSource } from "@/lib/materials/image";
@@ -128,9 +129,9 @@ function attachmentFromMaterial(material: MaterialSummary): FileAttachment {
  *
  * `layout="page"` renders the same composer inline instead of as a modal —
  * /admin/library/new's standalone page, with a drag-and-drop zone and a
- * sticky progress footer in place of the modal chrome — and `limits` raises the per-file
- * size/count caps there (the server enforces its own, see
- * lib/materials/uploadLimits.ts).
+ * sticky progress footer in place of the modal chrome. `limits` overrides the
+ * per-file size/count caps, which otherwise follow the reader (admin or
+ * member — the server enforces its own, see lib/materials/uploadLimits.ts).
  *
  * `publicOnly` hides the visibility toggle, so every book goes up public: a
  * group's reading list is public (studygroup-spec §4.6).
@@ -144,7 +145,7 @@ export default function AddBookModal({
   onMaterialSaved,
   onMaterialDeleted,
   layout = "modal",
-  limits = MEMBER_UPLOAD_LIMITS,
+  limits: limitsProp,
   publicOnly = false,
 }: {
   category?: string;
@@ -160,6 +161,10 @@ export default function AddBookModal({
   publicOnly?: boolean;
 }) {
   const { upload } = useUploadBook();
+  // Without an explicit `limits`, the reader's own caps (the server enforces
+  // the same split).
+  const { data: profile } = useProfile();
+  const limits = limitsProp ?? (profile?.isAdmin ? ADMIN_UPLOAD_LIMITS : MEMBER_UPLOAD_LIMITS);
   const metadataEditor = useAttachmentMetadataEditor();
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<FileAttachment[]>(() => (editMaterial ? [attachmentFromMaterial(editMaterial)] : []));
