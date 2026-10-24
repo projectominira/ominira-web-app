@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Download, Share, X } from "lucide-react";
 import { domToBlob } from "modern-screenshot";
 import { PLATFORM_HOST, PLATFORM_NAME } from "@/lib/config/platform";
-import { SPLASH_MARK } from "@/lib/config/brand-assets";
+import { SPLASH_MARK, WORDMARK } from "@/lib/config/brand-assets";
 
 type Props = {
   quote: string;
@@ -24,18 +24,65 @@ function cleanAuthor(author: string): string {
 const EXPORT_FILENAME = "ominira-quote.png";
 
 // Instagram's own standard square upload size — every export is
-// rasterized at this resolution regardless of the on-screen card's own
-// (possibly smaller, on a narrow phone) CSS size; see renderBlob.
+// rasterized at this resolution.
 const EXPORT_SIZE = 1080;
 
+// The card is always laid out at this fixed CSS size, on every device, and
+// only visually scaled down to fit a smaller screen — so the quote wraps and
+// clamps identically (and the exported PNG is identical) on phone and desktop.
+const CARD_SIZE = 640;
+
+/** Starting type for a quote of this length: short quotes read big, long ones
+ * smaller. fitQuote only ever shrinks from here, down to MIN_QUOTE_PX. */
+function quoteType(length: number): { size: number; leading: number } {
+  if (length <= 140) return { size: 36, leading: 1.35 };
+  if (length <= 320) return { size: 25, leading: 1.5 };
+  if (length <= 560) return { size: 19.5, leading: 1.6 };
+  return { size: 17.5, leading: 1.6 };
+}
+
+const MIN_QUOTE_PX = 15;
+
+/** Shrinks the quote until its block fits the space above the footer, and
+ * only clamps (to the lines that fit) if it still overflows at MIN_QUOTE_PX.
+ * Runs on the fixed CARD_SIZE layout, so the result is the same on every
+ * device and in the export. */
+function fitQuote(space: HTMLElement, block: HTMLElement, text: HTMLElement, length: number) {
+  const { size, leading } = quoteType(length);
+  let px = size;
+  text.style.lineHeight = String(leading);
+  text.style.webkitLineClamp = "none";
+  text.style.fontSize = `${px}px`;
+  while (px > MIN_QUOTE_PX && block.offsetHeight > space.clientHeight) {
+    px -= 0.5;
+    text.style.fontSize = `${px}px`;
+  }
+  const over = block.offsetHeight - space.clientHeight;
+  if (over > 0) {
+    text.style.webkitLineClamp = String(Math.max(1, Math.floor((text.offsetHeight - over) / (px * leading))));
+  }
+}
+
 async function renderBlob(node: HTMLElement): Promise<Blob> {
-  const scale = EXPORT_SIZE / node.getBoundingClientRect().width;
-  return domToBlob(node, { scale, backgroundColor: getComputedStyle(node).backgroundColor });
+  // Explicit size: left out, modern-screenshot measures getBoundingClientRect,
+  // which includes the on-screen fit scale on narrow screens and crops the
+  // full-size render to that smaller box.
+  return domToBlob(node, {
+    width: CARD_SIZE,
+    height: CARD_SIZE,
+    scale: EXPORT_SIZE / CARD_SIZE,
+    backgroundColor: getComputedStyle(node).backgroundColor,
+  });
 }
 
 
 export default function ShareQuoteModal({ quote, author, bookTitle, onClose }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const spaceRef = useRef<HTMLDivElement>(null);
+  const blockRef = useRef<HTMLDivElement>(null);
+  const quoteRef = useRef<HTMLParagraphElement>(null);
+  const [fit, setFit] = useState(1);
 
   const [busy, setBusy] = useState<"download" | "share" | null>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -51,6 +98,30 @@ export default function ShareQuoteModal({ quote, author, bookTitle, onClose }: P
     onResize();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useLayoutEffect(() => {
+    const fitNow = () => {
+      if (spaceRef.current && blockRef.current && quoteRef.current) {
+        fitQuote(spaceRef.current, blockRef.current, quoteRef.current, quote.length);
+      }
+    };
+    fitNow();
+    // Again once the web fonts are in, since fallback metrics differ.
+    let live = true;
+    document.fonts.ready.then(() => live && fitNow());
+    return () => {
+      live = false;
+    };
+  }, [quote, author, bookTitle]);
+
+  // Scale the fixed-size card down to the square's on-screen width.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const ro = new ResizeObserver(([entry]) => setFit(entry.contentRect.width / CARD_SIZE));
+    ro.observe(stage);
+    return () => ro.disconnect();
   }, []);
 
   const onDownload = async () => {
@@ -127,68 +198,86 @@ export default function ShareQuoteModal({ quote, author, bookTitle, onClose }: P
           </div>
         </div>
 
-        {/* max-w-[640px]: the largest square that still safely fits every
-            desktop-mode viewport (≥768px — see isMobile) at this dialog's
-            max-w-[860px]. On mobile the dialog is already full viewport
-            width, so max-w-[640px] never even applies there — the card is
-            capped by the viewport itself (a square can't be wider than the
-            screen), and this wrapper's own padding is the one remaining
-            thing eating into that. p-2 (not md:p-4's 16px) is deliberately
-            tighter on mobile for exactly that reason: every px reclaimed
-            here is a px the card actually gets, unlike on desktop where
-            there's slack to spare either way.
-            The quote's line-clamp is capped separately per breakpoint
-            (below) since a fixed line count can't be right for both a
-            mobile card and a 640px desktop one at the same font size — a
-            bigger card only shows more text if the clamp is raised to
-            match it. */}
+        {/* The square takes whatever room the dialog gives it (up to
+            CARD_SIZE); the card inside keeps its CARD_SIZE layout and is just
+            scaled to the square. The transform sits on a wrapper, not the
+            card, so the export (which clones only the card) is unscaled. */}
         <div className="flex flex-1 items-center justify-center overflow-hidden p-2 md:p-4">
-          <div
-            ref={cardRef}
-            style={{ background: "var(--color-sand-50)" }}
-            className="relative flex aspect-square w-full max-w-[640px] flex-none flex-col overflow-hidden px-6 py-7 text-left"
-          >
-            <span
-              aria-hidden="true"
-              className="mb-2 flex-none select-none font-serif text-[24px] leading-none text-[var(--color-brand-200)]"
+          <div ref={stageRef} className="aspect-square w-full flex-none overflow-hidden" style={{ maxWidth: CARD_SIZE }}>
+            <div
+              style={{ width: CARD_SIZE, height: CARD_SIZE, transform: `scale(${fit})`, transformOrigin: "top left" }}
             >
-              &ldquo;
-            </span>
+              <div
+                ref={cardRef}
+                style={{ background: "var(--color-sand-50)", width: CARD_SIZE, height: CARD_SIZE }}
+                className="relative flex flex-col overflow-hidden px-14 pt-12 pb-10 text-left"
+              >
+                {/* The space above the footer; the quote block centres in it
+                    (my-auto, which collapses to 0 rather than overflowing
+                    upward when the block is too tall — see fitQuote). */}
+                <div ref={spaceRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                  <div ref={blockRef} className="my-auto flex-none">
+                    {/* leading-none keeps the glyph's ink (≈11–32px down a
+                        96px line) inside this 36px box, so the space's
+                        overflow-hidden can't clip it; only the glyph's empty
+                        lower line hangs below. */}
+                    <span
+                      aria-hidden="true"
+                      className="mb-3 block h-9 select-none font-serif text-[96px] leading-none text-[var(--color-brand-300)]"
+                    >
+                      &ldquo;
+                    </span>
+                    <p
+                      ref={quoteRef}
+                      style={{ fontSize: quoteType(quote.length).size, lineHeight: quoteType(quote.length).leading }}
+                      className="m-0 overflow-hidden font-serif tracking-[-0.005em] text-[var(--color-sand-900)] [-webkit-box-orient:vertical] [display:-webkit-box]"
+                    >
+                      {quote}
+                    </p>
+                    {/* One quiet line, wrapping to at most two, so a long
+                        title or a missing author never reshapes the card. */}
+                    <p className="m-0 mt-6 line-clamp-2 font-sans text-[15px] leading-[1.5] text-[var(--color-sand-600)]">
+                      &mdash;{" "}
+                      {author && (
+                        <>
+                          <span className="font-semibold text-[var(--color-sand-800)]">{cleanAuthor(author)}</span>,{" "}
+                        </>
+                      )}
+                      {bookTitle}
+                    </p>
+                  </div>
+                </div>
 
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <p className="m-0 line-clamp-[6] font-serif text-[18px] leading-[1.4] text-[var(--color-sand-900)] md:line-clamp-[16]">
-                {quote}
-              </p>
-            </div>
-
-            {/* Brand watermark, placed right under the quote (not buried in
-                the footer) so it stays legible even when a share sheet or
-                social app crops the card's bottom edge. Sized to read at a
-                glance in a social feed thumbnail, not just up close. */}
-            <div aria-hidden="true" className="flex flex-none items-center gap-2.5 pt-5">
-              <img
-                src={SPLASH_MARK.light}
-                alt=""
-                width={32}
-                height={31}
-                className="h-[31px] w-auto"
-              />
-              <span className="text-[19px] font-serif font-bold uppercase tracking-[0.1em] text-[var(--color-brand-600)]">
-                {PLATFORM_NAME}
-              </span>
-            </div>
-
-            <div className="flex flex-none flex-col gap-1 pt-5">
-              <p className="m-0 text-[13px] font-medium text-[var(--color-sand-500)]">
-                {bookTitle}{author ? ` - ${cleanAuthor(author)}` : ""}
-              </p>
-              <p className="m-0 text-[11px] font-semibold tracking-[0.16em] text-[var(--color-sand-400)]">
-                {PLATFORM_HOST}
-              </p>
+                <div className="mt-7 flex flex-none flex-col items-start gap-2.5">
+                  <div className="flex items-center gap-3">
+                    <img src={SPLASH_MARK.light} alt="" width={41} height={40} className="h-10 w-auto" />
+                    <img src={WORDMARK.light} alt={PLATFORM_NAME} width={147} height={22} className="h-[22px] w-auto" />
+                  </div>
+                  <span className="font-sans text-[13px] font-semibold uppercase tracking-[0.2em] text-[var(--color-sand-600)]">
+                    {PLATFORM_HOST}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+/** The quote card, for the selection menu's Share, the notes panel's and
+ * /admin/passage's Export image — `share(quote)` opens it; render `modal`
+ * once anywhere (it's fixed). */
+export function useShareQuote(title: string, author?: string): { share: (quote: string) => void; modal: ReactNode } {
+  const [quote, setQuote] = useState<string | null>(null);
+  return {
+    share: setQuote,
+    modal:
+      quote !== null ? (
+        <div className="fixed inset-0 z-[80]">
+          <ShareQuoteModal quote={quote} author={author} bookTitle={title} onClose={() => setQuote(null)} />
+        </div>
+      ) : null,
+  };
 }
