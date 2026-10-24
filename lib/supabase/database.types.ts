@@ -822,6 +822,48 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["daily_passages"]["Insert"]>;
         Relationships: [];
       };
+      /** migrations/20261119_passage_sets.sql (passage-spec §1): what an
+       * editor's AI sends in, for /admin/passage. */
+      passage_sets: {
+        Row: { id: string; title: string; note: string; created_at: string };
+        Insert: { id?: string; title: string; note?: string; created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["passage_sets"]["Insert"]>;
+        Relationships: [];
+      };
+      /** `ranges` and `picked_ranges` are AnnotationRange[]; `context` is
+       * { passageId, text }[]. */
+      passage_quotes: {
+        Row: {
+          id: string;
+          set_id: string;
+          position: number;
+          material_id: string;
+          ranges: Json;
+          picked_ranges: Json;
+          context: Json;
+          why: string;
+          question: string;
+          status: "new" | "used" | "dismissed";
+          post_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          set_id: string;
+          position: number;
+          material_id: string;
+          ranges: Json;
+          picked_ranges: Json;
+          context: Json;
+          why?: string;
+          question?: string;
+          status?: "new" | "used" | "dismissed";
+          post_id?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["passage_quotes"]["Insert"]>;
+        Relationships: [];
+      };
       /** migrations/20261105_room_reads.sql (rooms-spec §5.2): how far a
        * reader has read a room; `room_id` is a group's or a material's. */
       room_reads: {
@@ -855,6 +897,8 @@ export type Database = {
     Functions: {
       /** migrations/20261005_admin_dashboard.sql — shape in lib/metrics/dashboard.ts. */
       admin_dashboard_metrics: { Args: Record<string, never>; Returns: Json };
+      /** migrations/20261118_admin_weekly_dashboard.sql — shape in lib/metrics/dashboard.ts. */
+      admin_weekly_metrics: { Args: { week_start: string }; Returns: Json };
       /** Reading Room (migrations/20261012…20261015). Null when the book can't host a room. */
       /** A group room needs `grp` (moderators only) and may carry its `session`. */
       start_room: {

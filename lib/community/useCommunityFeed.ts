@@ -18,7 +18,11 @@ import type { FeedItem } from "@/lib/community/feed";
  * the note's own (unrelated) row id. Null for a book-less discussion post —
  * there's no book to deep-link into, so callers render without a
  * `bookContext` at all rather than passing this. */
-export function communityFeedItemHref(item: FeedItem): string | null {
+export function communityFeedItemHref(item: {
+  material: Pick<NonNullable<FeedItem["material"]>, "slug" | "materialType"> | null;
+  sectionId: string | null;
+  note: Pick<FeedItem["note"], "ranges">;
+}): string | null {
   if (!item.material) return null;
   // A book-*attached* general note (no highlighted passage, so no
   // sectionId) still has somewhere to go: straight into the reader at the

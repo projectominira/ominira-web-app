@@ -15,7 +15,8 @@ import type { Annotation } from "@/stores/library-store";
 import FeedPanel from "./notes/FeedPanel";
 import NotesFeedFab from "./NotesFeedFab";
 import NotesSidebar from "./NotesSidebar";
-import SelectionActions, { useNarrowViewport, useShareQuote } from "./SelectionActions";
+import SelectionActions, { useNarrowViewport } from "./SelectionActions";
+import { useShareQuote } from "./ShareQuoteModal";
 
 /**
  * Highlighting and notes for a single-document reader (PDF, web article,

@@ -27,7 +27,7 @@ async function sign(message: string): Promise<string> {
 }
 
 /** Length-independent comparison, so timing doesn't leak how much matched. */
-function safeEqual(a: string, b: string): boolean {
+export function safeEqual(a: string, b: string): boolean {
   const len = Math.max(a.length, b.length);
   let diff = a.length ^ b.length;
   for (let i = 0; i < len; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);

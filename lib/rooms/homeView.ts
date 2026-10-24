@@ -145,11 +145,14 @@ async function activeCount(roomId: string): Promise<number> {
 /** Today's passage of the day (rooms-spec §5.5): its question and quote, and
  * how many have answered. Null when none is set today. */
 async function getPassage(): Promise<HomePassage | null> {
-  const admin = getSupabaseAdminClient();
-  const { data: day, error } = await admin.from("daily_passages").select("post_id, question").eq("day", passageDay(Date.now())).maybeSingle();
+  const { data: day, error } = await getSupabaseAdminClient().from("daily_passages").select("post_id, question").eq("day", passageDay(Date.now())).maybeSingle();
   if (error) throw error;
-  if (!day) return null;
-  const { data: post, error: postError } = await admin.from("posts").select("*").eq("id", day.post_id).eq("visibility", "public").maybeSingle();
+  return day && passageView(day);
+}
+
+/** A day's passage as Home shows it (/admin/passage's Today shows the same). */
+export async function passageView(day: { post_id: string; question: string }): Promise<HomePassage | null> {
+  const { data: post, error: postError } = await getSupabaseAdminClient().from("posts").select("*").eq("id", day.post_id).eq("visibility", "public").maybeSingle();
   if (postError) throw postError;
   if (!post) return null;
   const [item] = await enrichFeedItems([post], null);
