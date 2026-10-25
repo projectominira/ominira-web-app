@@ -9,7 +9,6 @@ import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useEnterRoom, type RoomEntry } from "@/lib/room/useEnterRoom";
 import { useOpenRoom } from "@/lib/room/useOpenRoom";
 import { useHome, useSaveGoal } from "@/lib/rooms/useHome";
-import { activeRoom, useRoomStore } from "@/stores/room-store";
 import Home from "./Home";
 import HomeInstallBanner from "./HomeInstallBanner";
 import HomePushPrompt from "./HomePushPrompt";
@@ -29,7 +28,6 @@ export default function HomeScreen() {
   const signedIn = useIsAuthenticated();
   const [starting, setStarting] = useState(false);
   const [startingGroup, setStartingGroup] = useState(false);
-  const myRoom = useRoomStore((s) => activeRoom(s)?.room ?? null);
 
   const go = async (entry: RoomEntry) => {
     if (await enter(entry)) openRoom(entry.materialId);
@@ -50,9 +48,7 @@ export default function HomeScreen() {
         }}
         onStartRoom={signedIn ? () => setStarting(true) : undefined}
         onStartGroup={signedIn ? () => setStartingGroup(true) : undefined}
-        myRoom={myRoom}
         signedIn={signedIn}
-        onOpenRoom={myRoom ? () => openRoom(myRoom.materialId) : undefined}
       />
       {starting && (
         <StartRoomSheet
