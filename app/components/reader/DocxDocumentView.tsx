@@ -6,6 +6,7 @@ import type { Locator } from "@/lib/reader/locator";
 import { useArticleProgress } from "@/lib/reader/useArticleProgress";
 import { useDocumentKeyboard } from "@/lib/reader/useDocumentKeyboard";
 import DocumentEndPanel from "./DocumentEndPanel";
+import { DocumentImages } from "./ImageLightbox";
 import ReaderHeader from "./ReaderHeader";
 import { ARTICLE_SCROLL_CLASS, useArticleAnnotations } from "./useArticleAnnotations";
 import { ArticleNarrationFollower, useArticleNarration } from "./useArticleNarration";
@@ -152,6 +153,7 @@ export default function DocxDocumentView({
       </div>
       {highlights}
       {chrome}
+      <DocumentImages contentEl={contentEl} />
       <ArticleNarrationFollower materialId={materialId} contentEl={contentEl} scrollEl={scrollElement} />
     </div>
   );

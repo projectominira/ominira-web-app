@@ -36,7 +36,7 @@ const LocatorSchema: z.ZodType<Locator> = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("block"), blockIndex: z.int().nonnegative() }),
 ]);
 
-const RangeSchema: z.ZodType<AnnotationRange> = z.object({
+export const RangeSchema: z.ZodType<AnnotationRange> = z.object({
   passageId: z.string().max(200),
   start: z.int().nonnegative(),
   end: z.int().nonnegative(),

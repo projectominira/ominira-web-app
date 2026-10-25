@@ -8,7 +8,8 @@ import { roomChatUnread, useRoomStore } from "@/stores/room-store";
 // passage goes to the room chat's composer; sending it saves a normal public
 // note on the passage, through the notes' own create path (useCreateNote),
 // then posts its quote card to the chat ("Saved as a note"). Nothing about
-// the note is room-specific (group rooms add `group_id` in Phase 5).
+// the note is room-specific, except that a group room's note is posted to
+// the group (`group_id`), so it shows on the group's Notes tab.
 
 /** A selection waiting in the chat composer. */
 export type PendingPassage = { ranges: AnnotationRange[]; quote: string; label: string };
@@ -29,7 +30,14 @@ export function useSendPassage(materialId: string) {
     const session = useRoomStore.getState().session;
     if (!session?.chatReady()) return "wait";
     try {
-      await createNote.mutateAsync({ ranges: passage.ranges, content: { kind: "text", text: text.trim() }, visibility: "public" });
+      // In a group room, the note is the group's too (studygroup-spec §11).
+      const groupSlug = useRoomStore.getState().snapshot?.room.group?.slug;
+      await createNote.mutateAsync({
+        ranges: passage.ranges,
+        content: { kind: "text", text: text.trim() },
+        visibility: "public",
+        ...(groupSlug && { groupSlug }),
+      });
     } catch {
       return "failed";
     }

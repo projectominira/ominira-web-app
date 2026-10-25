@@ -27,8 +27,10 @@ export default function PanelShell({
   onBack,
   headerMenu,
   subheader,
+  divided = false,
   bodyClassName = "om-scroll flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-5 pb-10 flex flex-col gap-3.5",
   footer,
+  footerClassName = "px-5 py-3",
   onClose,
   children,
 }: {
@@ -60,6 +62,9 @@ export default function PanelShell({
    * book feed's browse bar (prev/next + jump). Stays visible while the
    * body beneath it scrolls, unlike anything passed as `children`. */
   subheader?: ReactNode;
+  /** A rule under the header — for a body that isn't the panel's own
+   * surface (the book room's stream), so the header doesn't float on it. */
+  divided?: boolean;
   /** Overrides the scrollable body's own className — default is a padded
    * `flex flex-col gap-3.5` stack, right for every existing caller's list-
    * of-cards content. The chapters outline's rows manage their own spacing
@@ -79,6 +84,8 @@ export default function PanelShell({
    * composer that grew *inline* inside a flex region; the idle pill this
    * slot actually holds is a fixed, non-growing row. */
   footer?: ReactNode;
+  /** Padding around the footer. */
+  footerClassName?: string;
   onClose: () => void;
   children: React.ReactNode;
 }) {
@@ -201,7 +208,7 @@ export default function PanelShell({
             </div>
           </div>
         ) : (
-          <div className="px-5 py-4 flex-none flex items-center justify-between gap-2">
+          <div className={`px-5 ${isSheet ? "pt-1 pb-3" : "py-4"} flex-none flex items-center justify-between gap-2 ${divided ? "border-b border-[var(--reader-border)]" : ""}`}>
             <div className="flex items-center gap-2 min-w-0">
               {onBack && (
                   <button
@@ -211,7 +218,7 @@ export default function PanelShell({
                     <ArrowLeft size={16} />
                   </button>
               )}
-              <span className="truncate font-serif font-semibold text-base text-[var(--reader-text)]">{title}</span>
+              {typeof title === "string" ? <span className="truncate font-serif font-semibold text-base text-[var(--reader-text)]">{title}</span> : title}
             </div>
             <div className="flex items-center gap-3.5 flex-none">
               {headerMenu}
@@ -229,7 +236,7 @@ export default function PanelShell({
         <div className={bodyClassName}>{children}</div>
         {footer && (
           <div
-            className="flex-none border-t border-[var(--reader-border)] bg-[var(--reader-surface)] px-5 py-3"
+            className={`flex-none border-t border-[var(--reader-border)] bg-[var(--reader-surface)] ${footerClassName}`}
             style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
           >
             {footer}

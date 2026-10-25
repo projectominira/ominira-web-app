@@ -4,10 +4,13 @@ import { getAuthenticatedReader } from "@/lib/auth/session";
 import { notFound } from "@/lib/api/errors";
 import { resolveMaterialRow } from "@/lib/materials/resolve";
 import { decodeCursor, encodeCursor, keysetBeforeFilter, type Keyset } from "@/lib/api/cursor";
-import { hydrateNotes, visibleToFilter, type NoteRow } from "@/lib/community/notes";
+import { hydrateNotes, type NoteRow } from "@/lib/community/notes";
+import { visiblePostsFilter } from "@/lib/community/visibility";
+import { loadPostViewer } from "@/lib/community/viewer";
 import { resolveExcerpt } from "@/lib/community/excerpt";
 import { loadSectionLabels } from "@/lib/materials/sectionLabels";
 import type { AnnotationRange } from "@/lib/api/types";
+import { materialMarks } from "@/lib/rooms/highlights";
 
 type Sort = "recent" | "top";
 type TopCursor = { reactionCount: number; createdAt: string; id: string };
@@ -22,6 +25,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ mate
   if (!material) return notFound();
 
   const reader = await getAuthenticatedReader(request);
+  const viewer = await loadPostViewer(reader?.readerId);
   const url = new URL(request.url);
   const sectionId = url.searchParams.get("sectionId");
   const sort = (url.searchParams.get("sort") as Sort | null) ?? "recent";
@@ -33,6 +37,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ mate
   // one that does, since it renders each note the same way the home feed
   // does (quote above the thread).
   const withExcerpts = url.searchParams.get("withExcerpts") === "true";
+  // Opt-in too: the reader's dotted underlines (rooms-spec §5.4), read
+  // alongside the page's notes, on the first page only. Never fails the
+  // notes: a failed read is no underlines.
+  const marks =
+    url.searchParams.get("withMarks") === "true" && !url.searchParams.get("cursor")
+      ? materialMarks(material.id, reader?.readerId ?? null).catch(() => [])
+      : null;
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 20, 1), 100);
   const cursorParam = url.searchParams.get("cursor");
   const cursor = sort === "top" ? decodeCursor<TopCursor>(cursorParam) : decodeCursor<Keyset>(cursorParam);
@@ -44,7 +55,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ mate
     .select("*")
     .eq("material_id", material.id)
     .is("parent_id", null)
-    .or(visibleToFilter(reader?.readerId));
+    .or(visiblePostsFilter(viewer));
   // A passage id is its section's id plus "-p<n>", so a section's notes are
   // the ones whose first range starts in one of its passages.
   if (sectionId) query = query.like("ranges->0->>passageId", `${sectionId.replace(/[\\%_]/g, "\\$&")}-p%`);
@@ -88,7 +99,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ mate
           "parent_id",
           page.map((r) => r.id)
         )
-        .or(visibleToFilter(reader?.readerId))
+        .or(visiblePostsFilter(viewer))
         .order("created_at", { ascending: true })
     : { data: [] as NoteRow[] };
 
@@ -100,5 +111,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ mate
     ...(withExcerpts ? resolveExcerpt(root.ranges as AnnotationRange[], labels) : {}),
   }));
 
-  return NextResponse.json({ items, nextCursor });
+  return NextResponse.json({ items, nextCursor, ...(marks && { marks: await marks }) });
 }

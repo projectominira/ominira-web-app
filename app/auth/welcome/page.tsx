@@ -6,12 +6,14 @@ import SunriseMark from "@/app/components/auth/SunriseMark";
 import AuthButton from "@/app/components/auth/AuthButton";
 import { useProfile } from "@/lib/auth/useProfile";
 import { useCompleteOnboarding } from "@/lib/auth/useCompleteOnboarding";
+import { takeReturnPage } from "@/lib/auth/returnTo";
 
 export default function WelcomePage() {
   const router = useRouter();
   const { data: reader } = useProfile();
   const completeOnboarding = useCompleteOnboarding();
-  const enter = () => completeOnboarding.mutate(undefined, { onSuccess: () => router.push("/home") });
+  // Onboarding done: back to the page they came from (a room invite, a book), else Home.
+  const enter = () => completeOnboarding.mutate(undefined, { onSuccess: () => router.push(takeReturnPage() ?? "/home") });
   const pseudonym = reader?.pseudonym ?? "Comrade";
 
   return (

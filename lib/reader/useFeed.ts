@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useFeedStore } from "@/stores/feed-store";
+import { openRoomPlayer, type RoomPlayerView } from "@/stores/layout-store";
 import type { Note } from "@/lib/api/types";
 import { useSessionStore } from "@/stores/session-store";
 import { useAnnotations } from "./useAnnotations";
@@ -12,9 +13,7 @@ import { buildAnnotationFeedEntries, type FeedEntry, type FeedLocator } from "./
  * nothing discussed yet. Every entry is exactly one or the other, so these
  * two exhaust the feed on their own. Purely a display filter — totals below
  * are always computed from the full, unfiltered set, so the header badge
- * never appears to shrink just because the reader narrowed their own view.
- * "room" is the live room (app/components/room/RoomPanel), offered only while
- * you're in the room on this book; no feed items. */
+ * never appears to shrink just because the reader narrowed their own view. */
 export type { FeedTab } from "@/stores/feed-store";
 
 /** One row the panel actually renders — a highlighted passage's discussion
@@ -81,7 +80,6 @@ export function useFeed({
   const flatEntries: FeedEntry[] = useMemo(() => buildAnnotationFeedEntries(allAnnotations, locate), [allAnnotations, locate]);
 
   const items: FeedItem[] = useMemo(() => {
-    if (filter === "room") return [];
     const byAuthor = (n: Note) => n.author.readerId === authorId;
     const highlightItems: FeedItem[] = flatEntries
       .filter((e) => (filter === "notes" ? e.annotation.notes.length > 0 : e.annotation.notes.length === 0))
@@ -186,11 +184,11 @@ export function useFeed({
     },
     [materialId]
   );
-  /** Opens the feed on the Room tab. */
-  const openRoom = useCallback(() => {
+  /** Expands the room's panel (RoomMiniPlayer), on its chat when given. */
+  const openRoom = useCallback((view?: RoomPlayerView) => {
     setAuthorId(null);
-    useFeedStore.getState().open(materialId, "room");
-  }, [materialId]);
+    openRoomPlayer(view);
+  }, []);
   const close = useCallback(() => {
     useFeedStore.getState().close();
     setAuthorId(null);

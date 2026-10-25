@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ArrowDown, X } from "lucide-react";
-import ComposerBox from "@/app/components/reader/notes/ComposerBox";
+import { RoomField, hasKeyboard } from "@/app/components/rooms/RoomInput";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import QuoteCard from "@/app/components/reader/notes/QuoteCard";
 import { comradeName } from "@/lib/reader/authorDisplay";
-import { formatShortTimeAgo } from "@/lib/reader/timeAgo";
+import { formatShortTimeAgo } from "@/lib/time/relative";
 import { useRoom } from "@/lib/room/hooks";
 import type { ChatItem, ChatPerson } from "@/lib/room/chat";
 import { MAX_CHAT_LENGTH } from "@/lib/room/events";
@@ -14,10 +14,10 @@ import { useSendPassage } from "@/lib/room/sharePassage";
 import { useNow } from "@/lib/time/useNow";
 import { useRoomStore } from "@/stores/room-store";
 
-// The room's chat, the last section of the feed panel's Room tab (spec §1.4,
-// §3.2): the notice first, then messages, shared passages and reaction
-// digests as they come, and the composer in the panel's footer.
-// Loaded with the Room tab, only while you're in the room on this book.
+// The room's chat, the room panel's Chat view (spec §1.4, §3.2): the
+// notice first, then messages, shared passages and reaction digests as
+// they come, and the composer over the panel's controls. Loaded with the
+// room's UI, only while you're in a room.
 
 /** Within this of the bottom, you're at the end: new lines keep you there. */
 const PINNED_PX = 80;
@@ -146,12 +146,11 @@ function Digest({ item }: { item: Extract<ChatItem, { kind: "digest" }> }) {
   );
 }
 
-/** "Message the room" + send, in the panel's footer: the note composer's
- * box (ComposerBox): just the writing and Send. Enter sends, Shift+Enter
- * starts a new line. Within 2 s of your last message, it's kept and the
+/** "Message the room" + send, in the panel's footer: the same field every
+ * room uses (RoomField). Enter sends (on a phone, the send button). Within 2 s of your last message, it's kept and the
  * rate is explained. A passage shared from the reader waits above the box,
  * and your words go with it: saved as a note, then posted (sharePassage.ts). */
-export function RoomChatComposer({ materialId }: { materialId: string }) {
+export function RoomChatComposer({ materialId, className = "px-4 pt-2 pb-3" }: { materialId: string; className?: string }) {
   const session = useRoomStore((s) => s.session);
   const passage = useRoomStore((s) => s.passage);
   const clearPassage = useRoomStore((s) => s.clearPassage);
@@ -191,27 +190,14 @@ export function RoomChatComposer({ materialId }: { materialId: string }) {
     }
   };
 
+  const submit = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing || !hasKeyboard()) return;
+    e.preventDefault();
+    void send();
+  };
+
   return (
-    <ComposerBox
-      inputRef={inputRef}
-      value={text}
-      onChange={setText}
-      placeholder={passage ? "Say something about it" : "Message the room"}
-      label="Message the room"
-      maxLength={MAX_CHAT_LENGTH}
-      submitOnEnter
-      immersive={false}
-      canPost={!!text.trim() && !saving && connecting === false}
-      postLabel={passage ? "Share to room" : "Send"}
-      onPost={() => void send()}
-      footer={
-        notice && (
-          <p role="status" className="m-0 text-[11px] text-[var(--reader-text-muted)]">
-            {notice}
-          </p>
-        )
-      }
-    >
+    <div className={`flex flex-col gap-2 ${className}`}>
       {passage && (
         <div className="flex items-start gap-2 rounded-sm border border-[var(--reader-border)] bg-[var(--color-app-surface-muted)] py-2 pr-1.5 pl-3">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -231,7 +217,22 @@ export function RoomChatComposer({ materialId }: { materialId: string }) {
           </button>
         </div>
       )}
-    </ComposerBox>
+      <RoomField
+        value={text}
+        onChange={setText}
+        placeholder={passage ? "Say something about it" : "Message the room"}
+        inputRef={inputRef}
+        maxLength={MAX_CHAT_LENGTH}
+        canSend={!!text.trim() && !saving && connecting === false}
+        onSend={() => void send()}
+        onKeyDown={submit}
+      />
+      {notice && (
+        <p role="status" className="m-0 text-[11px] text-[var(--reader-text-muted)]">
+          {notice}
+        </p>
+      )}
+    </div>
   );
 }
 

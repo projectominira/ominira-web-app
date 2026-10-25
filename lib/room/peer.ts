@@ -9,8 +9,9 @@ import type { Signal, Signalling } from "@/lib/room/signalling";
 //   do, the impolite one), and the other side takes on the one the offer
 //   creates. A listener's first mic-on flips it to sendrecv: the peer's one
 //   renegotiation. Muting is replaceTrack, never a renegotiation.
-// - Non-trickle ICE: a description goes out once gathering completes, or
-//   after 2.5 s with what has gathered. One offer and one answer per pair.
+// - Non-trickle ICE: a description goes out once it can connect anywhere: on
+//   its first relay (TURN) candidate, once gathering completes, or after
+//   2.5 s with what has gathered. One offer and one answer per pair.
 // - Negotiation and incoming signals run through one queue, so nothing races.
 
 const GATHER_CAP_MS = 2_500;
@@ -244,17 +245,23 @@ export class Peer {
     }, RESEND_OFFER_MS);
   }
 
+  /** Ready to send: a relay candidate reaches the other side from any
+   * network (host and srflx come before it), so waiting for TURN over TCP
+   * and TLS to finish only delays the first sound. */
   private gathered(): Promise<void> {
-    if (this.pc.iceGatheringState === "complete") return Promise.resolve();
+    if (this.pc.iceGatheringState === "complete" || hasRelay(this.pc.localDescription)) return Promise.resolve();
     return new Promise((resolve) => {
       const done = () => {
         clearTimeout(cap);
         this.pc.removeEventListener("icegatheringstatechange", check);
+        this.pc.removeEventListener("icecandidate", onCandidate);
         resolve();
       };
       const check = () => this.pc.iceGatheringState === "complete" && done();
+      const onCandidate = ({ candidate }: RTCPeerConnectionIceEvent) => candidate?.type === "relay" && done();
       const cap = setTimeout(done, GATHER_CAP_MS);
       this.pc.addEventListener("icegatheringstatechange", check);
+      this.pc.addEventListener("icecandidate", onCandidate);
     });
   }
 
@@ -293,4 +300,8 @@ export class Peer {
     this.close();
     this.options.onClosed();
   }
+}
+
+function hasRelay(description: RTCSessionDescription | null): boolean {
+  return description?.sdp.includes(" typ relay") ?? false;
 }

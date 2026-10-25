@@ -1,42 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import dynamic from "next/dynamic";
+import { useEffect, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import NoResults from "@/app/components/shared/NoResults";
+import BookCover from "@/app/components/shared/BookCover";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
+import { useReaderRoomHead } from "@/lib/rooms/hooks";
 import { comradeName } from "@/lib/reader/authorDisplay";
-import type { FeedEntry } from "@/lib/reader/annotationFeed";
+import type { FeedEntry, FeedLocator } from "@/lib/reader/annotationFeed";
 import type { FeedItem, FeedTab } from "@/lib/reader/useFeed";
-import type { Note } from "@/lib/api/types";
-import { useCreateNote } from "@/lib/community/useNoteMutations";
-import UnderlineTabs from "../../UnderlineTabs";
+import type { AnnotationRange, Note } from "@/lib/api/types";
 import PanelShell from "./PanelShell";
-import LiveChip from "@/app/components/room/LiveChip";
-import UnreadBadge from "@/app/components/room/UnreadBadge";
 import FeedHighlightThread from "./FeedHighlightThread";
 import GeneralNoteThread from "./GeneralNoteThread";
-import NoteComposer from "./NoteComposer";
+import BookRoomPane from "./BookRoomPane";
 import { notesLabel } from "../ReaderPresence";
-import { roomChatUnread, useRoomStore } from "@/stores/room-store";
-
-// The Room tab, loaded only while you're in the room on this book.
-const RoomStage = dynamic(() => import("@/app/components/room/RoomPanel").then((m) => m.RoomStage), { ssr: false });
-const RoomChatComposer = dynamic(() => import("@/app/components/room/RoomChat").then((m) => m.RoomChatComposer), {
-  ssr: false,
-});
-
-// Notes and Highlights split every entry between them (see FeedTab's doc
-// comment), so there's no "All" to combine them back into. Labeled just
-// "Notes", not "Public notes" — this tab's own data (GET
-// /api/materials/{id}/notes) already mixes in the reader's own private
-// notes/replies alongside public ones, so each private entry marks itself
-// instead (see AuthorRow's own "Only you" chip). Room follows them while
-// you're in the room on this book.
-const FILTER_OPTIONS: { value: FeedTab; label: string }[] = [
-  { value: "notes", label: "Notes" },
-  { value: "highlights", label: "Highlights" },
-];
 
 /** A stable DOM id per item — looked up via `document.getElementById` in an
  * effect to position the panel on open, same reasoning as the note panel's
@@ -108,8 +87,8 @@ function FeedItemLabel({ run, filter }: { run: FeedItemRun; filter: FeedTab }) {
   );
 }
 
-/** The book's feed panel: the live room while you're in one (RoomPanel, its chat RoomChat), and
- * the book-wide annotation feed — every mark of any kind, grouped under a
+/** The book's feed panel: the book room (its notes), and the book-wide
+ * annotation feed — every mark of any kind, grouped under a
  * context label per run (which chapter, or General discussion — see
  * FeedItemLabel), each item's own full, real interactive thread (see
  * FeedHighlightThread) sitting under it — a bare
@@ -131,10 +110,11 @@ export default function FeedPanel({
   items,
   notes,
   filter,
-  onFilterChange,
   activeSectionId,
   onJump,
+  onPassage,
   getPassageText,
+  locate,
   panelType,
   onClose,
   targetNoteId,
@@ -153,7 +133,11 @@ export default function FeedPanel({
   /** The run the reader is in now — the panel opens scrolled to it. */
   activeSectionId?: string;
   onJump: (entry: FeedEntry) => void;
+  /** A quote in the room opened: the reader scrolls to its passage. */
+  onPassage?: (sectionId: string, ranges: AnnotationRange[], mine: boolean) => void;
   getPassageText: (passageId: string) => string;
+  /** Where a passage sits — places your just-made highlights in the room. */
+  locate: FeedLocator;
   panelType?: "side" | "sheet";
   onClose: () => void;
   /** Deep-link from push notification for a general note — scrolls to and
@@ -167,42 +151,11 @@ export default function FeedPanel({
   focusedAuthor: { author: Note["author"]; count: number } | null;
   onClearAuthor: () => void;
 }) {
-  const createNote = useCreateNote(materialId);
-  // The Room tab comes third while you're in the room on this book, with chat's
-  // unread count (spec §3.1); leaving the room leaves it.
-  const chatUnread = useRoomStore((s) => roomChatUnread(s, materialId));
-  const inRoom = chatUnread !== null;
-  const onRoom = filter === "room" && inRoom;
-  useEffect(() => {
-    if (filter === "room" && !inRoom) onFilterChange("notes");
-  }, [filter, inRoom, onFilterChange]);
-  const tabOptions = inRoom
-    ? [
-        ...FILTER_OPTIONS,
-        {
-          value: "room" as const,
-          label: (
-            <span className="flex items-center gap-1.5">
-              <span aria-hidden="true" className="h-1.5 w-1.5 flex-none rounded-full bg-brand-500" />
-              Room
-              <UnreadBadge count={chatUnread} />
-            </span>
-          ),
-        },
-      ]
-    : FILTER_OPTIONS;
-  const tabs = (
-    <UnderlineTabs
-      bare
-      options={tabOptions}
-      value={filter}
-      onChange={(next) => {
-        onClearAuthor();
-        onFilterChange(next as FeedTab);
-      }}
-    />
-  );
-  const [generalComposerError, setGeneralComposerError] = useState<string | null>(null);
+  const onNotes = filter === "notes";
+  const router = useRouter();
+  const { book } = useReaderRoomHead(materialId);
+  // One comrade's notes say so under the title, with All notes to undo it.
+  const narrowed = onNotes && focusedAuthor;
   const runs = useMemo(() => groupFeedItemsByCategory(items), [items]);
   // Positioning: fires once per "panel just opened" but also waits for items
   // to arrive when deep-linking to a specific general note. The panel mounts
@@ -282,47 +235,38 @@ export default function FeedPanel({
       // second, sand-colored (.om-scroll's own scrollbar-thumb color)
       // horizontal scrollbar across the bottom of the list — the "weird
       // background" band sitting above the footer composer.
-      bodyClassName="om-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-5 pb-10 flex flex-col gap-3.5"
-      footer={
-        onRoom ? (
-          // The room's controls live in the mini-player; here, the chat's composer.
-          <RoomChatComposer materialId={materialId} />
-        ) : (
-          // Bottom-docked and independent of `filter` — a general, book-level
-          // thought isn't specific to a passage or a selection, so it stays
-          // reachable the same way regardless of which tab the reader's
-          // browsing (highlights included), the same way a chat app's own
-          // message input never disappears depending on which channel view
-          // you're scrolled through.
-          <div className="flex flex-col gap-2">
-            <NoteComposer
-              initialText=""
-              placeholder="Share a note"
-              showMemberPrompt
-              action="note"
-              draftKey={`book-${materialId}`}
-              onSave={(content, visibility) => {
-                setGeneralComposerError(null);
-                createNote.mutate(
-                  { ranges: [], content, visibility },
-                  { onError: () => setGeneralComposerError("Couldn't save your note — check your connection and try again.") }
-                );
-              }}
-            />
-            {generalComposerError && (
-              <p className="m-0 text-[11px] text-[var(--reader-text-muted)]">{generalComposerError}</p>
-            )}
-          </div>
-        )
+      bodyClassName={
+        onNotes
+          ? "flex min-h-0 flex-1 flex-col"
+          : "om-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-5 pb-10 flex flex-col gap-3.5"
       }
-      // Joins a live room from here; once you're in, the Room tab says it.
-      headerMenu={inRoom ? undefined : <LiveChip materialId={materialId} />}
-      // No title — the tabs already say what the panel holds, so they are
-      // the header, sharing its line with Close.
-      tabs={tabs}
+      // The book, headed as its page heads it; the title opens its info.
+      title={
+        <button
+          type="button"
+          onClick={() => book && router.push(`/library/${book.slug}?tab=info`)}
+          className="flex min-w-0 cursor-pointer items-center gap-2.5 border-none bg-transparent p-0 text-left"
+        >
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate text-[13px] font-bold text-[var(--reader-text)]">{book?.title ?? "\u00a0"}</span>
+          </span>
+        </button>
+      }
+      headerMenu={
+        narrowed ? (
+          <button
+            type="button"
+            onClick={onClearAuthor}
+            className="cursor-pointer rounded-full px-2 py-1 text-[12px] font-semibold text-[var(--reader-accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--reader-accent)_12%,transparent)]"
+          >
+            All notes
+          </button>
+        ) : undefined
+      }
+      divided
     >
-      {onRoom ? (
-        <RoomStage />
+      {onNotes ? (
+        <BookRoomPane materialId={materialId} authorId={focusedAuthor?.author.readerId} targetNoteId={targetNoteId ?? targetThreadId} onPassage={onPassage} locate={locate} getPassageText={getPassageText} />
       ) : (
         <>
           {focusedAuthor && (
@@ -347,14 +291,7 @@ export default function FeedPanel({
             </div>
           )}
           {items.length === 0 ? (
-            <NoResults
-              className="mt-5 text-center"
-              message={
-                filter === "notes"
-                  ? "No notes"
-                  : "No highlights"
-              }
-            />
+            <NoResults className="mt-5 text-center" message="No highlights" />
           ) : (
             // pt-4 — PanelShell's own body has no top padding by default (its
             // bottom padding is for scroll clearance above the footer, not a

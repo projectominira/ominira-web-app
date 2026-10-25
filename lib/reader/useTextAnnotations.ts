@@ -19,6 +19,10 @@ export type SelectionState = TextSelection;
  * yet). */
 export const PENDING_ANNOTATION_ID = "pending-selection";
 
+/** The synthetic id of a jumped-to quote with no mark of its own in this
+ * reader's text (someone else's highlight) — see `flash` below. */
+export const FLASH_ANNOTATION_ID = "jumped-quote";
+
 /** Replaces the SelectionMenu pill in place, anchored at whatever selection
  * triggered it (see SelectionMenu's own `override` prop) — "auth" for a
  * signed-out reader's highlight attempt (MembersOnlyPrompt, stays up until
@@ -70,6 +74,7 @@ export function useTextAnnotations(materialId: string) {
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [notesPanel, setNotesPanel] = useState<NotesPanelState | null>(null);
   const [overlay, setOverlay] = useState<SelectionOverlay | null>(null);
+  const [flashRanges, setFlashRanges] = useState<AnnotationRange[] | null>(null);
 
   // The "error" overlay is purely informational (no links to click, unlike
   // "auth") — self-clears rather than waiting on an outside tap.
@@ -187,7 +192,9 @@ export function useTextAnnotations(materialId: string) {
   // Annotation is already rendering correctly on its own.
   const getForPassageWithPending = useCallback(
     (passageId: string): Annotation[] => {
-      const real = getForPassage(passageId);
+      const real = flashRanges?.some((r) => r.passageId === passageId)
+        ? [...getForPassage(passageId), { id: FLASH_ANNOTATION_ID, ranges: flashRanges, highlighted: false, notes: [], savedAt: 0 }]
+        : getForPassage(passageId);
       if (!notesPanel || notesPanel.annotationId || !notesPanel.ranges) return real;
       const range = notesPanel.ranges.find((r) => r.passageId === passageId);
       if (!range) return real;
@@ -200,7 +207,7 @@ export function useTextAnnotations(materialId: string) {
       };
       return [...real, pending];
     },
-    [getForPassage, notesPanel]
+    [getForPassage, notesPanel, flashRanges]
   );
 
   // Every annotation in the document, plus the pending one while the notes
@@ -217,6 +224,9 @@ export function useTextAnnotations(materialId: string) {
   return {
     annotations,
     getForPassage: getForPassageWithPending,
+    /** Marks `ranges` in the text (a jump onto a quote with no mark of its
+     * own); null clears it. */
+    flash: setFlashRanges,
     selection,
     notesPanel,
     overlay,

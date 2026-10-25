@@ -5,31 +5,18 @@ import { createPortal } from "react-dom";
 import { Check, Tag, X } from "lucide-react";
 
 /**
- * The minimal shape either caller needs — community topics
- * (lib/community/useTopics.ts's `Topic`, which also carries `slug`/
- * `post_count`) or the library composer's plain category strings
- * (AddBookModal maps each one to `{ id: category, name: category }`, a
- * category being its own identifier). Both structurally satisfy this, so
- * one picker UI serves two different underlying concepts without either
- * caller reimplementing the chips/popover interaction — see AddBookModal's
- * own doc comment for why topics and categories stay separate data even
- * though they now share this one picker.
+ * The minimal shape a caller needs — the library composer's and the admin
+ * editor's plain category strings (each mapped to `{ id: category, name:
+ * category }`, a category being its own identifier). Named for community
+ * topics, its first caller; posts no longer carry topics
+ * (studygroup-spec.md §4.5).
  */
 export type PickableItem = { id: string; name: string };
 
 /**
- * `selectedIds`'s own order is the only place "which topic is the default"
- * lives — the first id is it, full stop, mirroring how post_topics rows are
- * inserted (see lib/community/notes.ts's insertPostTopics) and read back
- * (getTopicNamesForPosts orders by created_at). Toggling a topic on always
- * appends it to the end (never disturbs the existing default); removing
- * the current default promotes whichever was picked next. That's what the
- * "Default" badge on the first chip is for — it has to stay legible which
- * one a reader is about to bump into that role before they remove it.
- *
- * Callers with no such default concept (the category picker) just never
- * read anything into that ordering — it's harmless, not meaningful, for
- * them.
+ * `selectedIds`'s own order is kept as picked: toggling one on appends it,
+ * and the first chip carries the "Default" badge. Callers with no default
+ * concept (the category picker) just never read anything into that order.
  */
 function resolveSelectedTopics(topics: PickableItem[], selectedIds: string[]): PickableItem[] {
   return selectedIds.map((id) => topics.find((t) => t.id === id)).filter((t): t is PickableItem => Boolean(t));

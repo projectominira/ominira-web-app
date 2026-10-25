@@ -33,7 +33,7 @@ export async function PUT(request: Request) {
   });
 
   if (!saved) return validationError("Could not save reading position.");
-  recordReadingDay(reader.readerId);
+  recordReadingDay(reader.readerId, body.materialId);
   return new Response(null, { status: 204 });
 }
 

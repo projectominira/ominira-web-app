@@ -13,7 +13,7 @@ import { isSuperseded, selectRoster, selectSpeaking } from "@/lib/room/presence"
 import { createReactions, type Reactions, type RisingReaction } from "@/lib/room/reactions";
 import { createSignalling, type Signalling } from "@/lib/room/signalling";
 import { startSpeakingDetector } from "@/lib/room/speaking";
-import type { RoomInfo, RoomJoinPayload, RoomLeaveStats } from "@/lib/room/types";
+import type { RoomInfo, RoomJoinPayload, RoomLeaveStats, RoomStartHost } from "@/lib/room/types";
 import type { ReaderView } from "@/lib/room/view";
 import { comradeName } from "@/lib/reader/authorDisplay";
 
@@ -117,6 +117,8 @@ type Engine = {
   /** The last `narration` word sent, so an unchanged one isn't sent again. */
   narrationKey: string;
   roster: RoomPresence[];
+  /** Sessions that sent us an offer: they send, before presence says so. */
+  offered: Set<string>;
   follow: Follow;
   chat: Chat;
   reactions: Reactions;
@@ -148,9 +150,10 @@ export class RoomSession {
     private readonly deps: SessionDeps = REAL_DEPS,
   ) {}
 
-  /** Starts a room on the book, or joins the one already live on it. */
-  async start(materialId: string, title?: string): Promise<void> {
-    this.enter(await this.deps.api.startRoom(materialId, title));
+  /** Starts a room on the book, or joins the one already live on it (in the
+   * group, for a group room). */
+  async start(materialId: string, title?: string, host?: RoomStartHost): Promise<void> {
+    this.enter(await this.deps.api.startRoom(materialId, title, host));
   }
 
   async join(roomId: string): Promise<void> {
@@ -390,7 +393,14 @@ export class RoomSession {
       context: this.audio,
       onSuspended: (audioSuspended) => this.patch({ audioSuspended }),
     });
-    const signalling = createSignalling({ channel, sessionId });
+    const signalling = createSignalling({
+      channel,
+      sessionId,
+      onOffer: (from) => {
+        engine.offered.add(from);
+        this.reconcile();
+      },
+    });
 
     const mesh = createMesh<MeshEntry>({
       create: (remote) => {
@@ -482,6 +492,7 @@ export class RoomSession {
       narrationTrack: null,
       narrationKey: "null",
       roster: [],
+      offered: new Set(),
       follow,
       chat,
       reactions,
@@ -567,9 +578,15 @@ export class RoomSession {
     return { ...engine.stats, iceRestarts: engine.stats.iceRestarts + open };
   }
 
+  /** The mesh from presence, with anyone who has offered counted as sending
+   * (`sends` never turns back off within a session). */
   private reconcile(): void {
     const engine = this.engine;
-    if (engine && this.presence) engine.mesh.update(this.presence, engine.roster);
+    if (!engine || !this.presence) return;
+    const roster = engine.offered.size
+      ? engine.roster.map((p) => (!p.sends && engine.offered.has(p.sessionId) ? { ...p, sends: true } : p))
+      : engine.roster;
+    engine.mesh.update(this.presence, roster);
   }
 
   /** The room is over: stop everything, keep the snapshot for the ended screen. */

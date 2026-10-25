@@ -3,9 +3,11 @@
 // and one 150 ms timer (not requestAnimationFrame, so background tabs stay
 // cheap) that reports only when the set changes.
 
-/** RMS of the time-domain signal; speech sits well above, suppressed room noise below. */
-export const SPEAKING_THRESHOLD = 0.015;
-/** Consecutive frames above the threshold before speaking starts. */
+/** The loudest 20 ms RMS in a tick (playback.ts). Speech without auto gain
+ * peaks well above it, noise-suppressed room sound sits below. */
+export const SPEAKING_THRESHOLD = 0.01;
+/** Consecutive ticks above the threshold before speaking starts: each covers
+ * its whole 150 ms, so two filter out a lone click or bump. */
 export const START_FRAMES = 2;
 /** Below the threshold this long before speaking ends. */
 export const HOLD_MS = 600;

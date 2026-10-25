@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Check, Headphones, Lock, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -68,7 +68,7 @@ import { confirmAction } from "@/stores/confirm-store";
  * a threshold on `pct` — it's the reader's own explicit mark (see
  * DocumentEndPanel).
  */
-function ProgressLine({ pct, isFinished, wasListening }: { pct: number; isFinished: boolean; wasListening: boolean }) {
+export function ProgressLine({ pct, isFinished, wasListening }: { pct: number; isFinished: boolean; wasListening: boolean }) {
   if (isFinished) {
     return (
       <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[var(--color-forest-500)]">
@@ -98,6 +98,8 @@ function ProgressLine({ pct, isFinished, wasListening }: { pct: number; isFinish
   );
 }
 
+export type BookRowAction = RowMenuItem;
+
 type RowMenuItem = {
   label: string;
   icon: LucideIcon;
@@ -124,7 +126,7 @@ type RowMenuItem = {
  * look, and on touch there's no hover to discover it with. It stays quiet by
  * being a small muted glyph, not by hiding.
  */
-function RowMenu({ items, className = "" }: { items: RowMenuItem[]; className?: string }) {
+function RowMenu({ items, label = "Book options", className = "" }: { items: RowMenuItem[]; label?: string; className?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -142,7 +144,7 @@ function RowMenu({ items, className = "" }: { items: RowMenuItem[]; className?: 
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Book options"
+        aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
         className="flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-none bg-transparent p-0 text-[var(--reader-text-subtle)] hover:bg-[var(--reader-surface-hover)] hover:text-[var(--reader-text-muted)]"
@@ -189,6 +191,10 @@ export default function BookListRow({
   onRemove,
   onUpdated,
   onDeleted,
+  onPick,
+  note,
+  detail,
+  actions,
 }: {
   material: MaterialSummary;
   /** Shelf page only (ShelfView's Reading and Finished tabs) — every row
@@ -226,9 +232,22 @@ export default function BookListRow({
   onRemove?: () => void;
   onUpdated?: (updated: Pick<MaterialSummary, "id" | "title" | "author" | "visibility" | "categories" | "coverSource">) => void;
   onDeleted?: (id: string) => void;
+  /** "Start a room"'s book list (StartRoomSheet): the whole row is one
+   * button that picks the book, progress and all, instead of a link. */
+  onPick?: () => void;
+  /** A line under the author in the accent colour ("2 comrades read this
+   * today"). */
+  note?: string;
+  /** A list's own line under the author (a group's reading-list dates).
+   * Sits above the row's link, so it may hold a button. */
+  detail?: ReactNode;
+  /** A list's own ⋯ menu for a book that isn't yours (a group moderator's
+   * Read this now / Edit dates / Mark as done / Remove). */
+  actions?: RowMenuItem[];
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const position = useReadingPositionStore((s) => s.positions[material.id]);
+  const setFinished = useReadingPositionStore((s) => s.setFinished);
   // positionPercent, not progressPercent: a finished material reads 100 here
   // and nowhere else could, since tracked progress can't reach it (see
   // lib/reader/locator.ts).
@@ -264,13 +283,24 @@ export default function BookListRow({
       Remove
     </button>
   );
+  // Shelf rows only (they carry a resumeTarget and onRemove): flip the
+  // finished mark without opening the book.
+  const finishLink = onRemove && resumeTarget && position && (
+    <button
+      type="button"
+      onClick={() => setFinished(material.id, !isFinished)}
+      className="relative z-10 cursor-pointer border-none bg-transparent p-0 text-[11px] font-semibold text-[var(--reader-text-subtle)] hover:text-[var(--reader-text)] hover:underline"
+    >
+      {isFinished ? "Mark as unfinished" : "Mark as finished"}
+    </button>
+  );
   const privateBadge = isPrivate && (
     <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-[var(--reader-text-subtle)]">
       <Lock size={11} />
       Only you
     </span>
   );
-  const hasExtras = Boolean(privateBadge || removeLink);
+  const hasExtras = Boolean(privateBadge || finishLink || removeLink);
   // Progress bar on its own line; "Finished" is short enough to share the
   // line with the extras. Only-you/Remove follow on the next line otherwise.
   const statusRow = (showProgress || hasExtras) && (
@@ -281,6 +311,7 @@ export default function BookListRow({
         </div>
       )}
       {privateBadge}
+      {finishLink}
       {removeLink}
     </div>
   );
@@ -310,16 +341,29 @@ export default function BookListRow({
 
   const textColumn = (
     <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
-      <div className="font-serif text-[14px] font-semibold leading-tight text-[var(--reader-text)] group-hover:text-brand-500">
+      <div
+        className={`font-serif text-[14px] font-semibold leading-tight text-[var(--reader-text)] group-hover:text-brand-500 ${actions?.length ? "pr-5" : ""}`}
+      >
         {material.title}
       </div>
       <div className="text-[11px] font-semibold capitalize tracking-[0.04em] text-[var(--reader-text-muted)]">
         {material.author}
       </div>
+      {note && <div className="text-[11px] font-semibold text-[var(--reader-accent)]">{note}</div>}
+      {!selection && detail && <div className="relative z-10">{detail}</div>}
       {!selection && statusRow}
       {!selection && <PresenceLine readers={material.currentReaders} totalCount={material.currentReaderCount} />}
     </div>
   );
+
+  if (onPick) {
+    return (
+      <button type="button" onClick={onPick} className={`${className} w-full cursor-pointer border-0 border-solid bg-transparent px-0 text-left`}>
+        {cover}
+        {textColumn}
+      </button>
+    );
+  }
 
   if (selection) {
     return (
@@ -398,6 +442,7 @@ export default function BookListRow({
       <LinkComponent href={href} aria-label={material.title} className="absolute inset-0 z-0" />
       {cover}
       {textColumn}
+      {actions && actions.length > 0 && <RowMenu items={actions} label={`Manage ${material.title}`} />}
     </div>
   );
 }

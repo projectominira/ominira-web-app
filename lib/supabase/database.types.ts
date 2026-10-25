@@ -11,7 +11,12 @@
 // `Json` on write. Nothing here should leak into JSON API responses verbatim; that
 // snake_case -> camelCase translation is the route handler's job (api-spec.md's
 // Conventions).
+import type { NotificationKind } from "@/lib/notifications/types";
+import type { RoomKind } from "@/lib/rooms/types";
+
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+
+export type GroupEventKind = "joined" | "target_set" | "book_current" | "book_added" | "session_scheduled" | "room_started";
 
 type Timestamps = { created_at: string; updated_at: string };
 
@@ -35,6 +40,10 @@ export type Database = {
           avatar_url: string | null;
           email_announcements: boolean;
           upload_approved: boolean;
+          /** IANA zone synced from the device — migrations/20261017_reader_timezone.sql. */
+          timezone: string | null;
+          /** The Ominira account (migrations/20261106_daily_passages.sql). */
+          official: boolean;
           joined_at: string;
           updated_at: string;
         };
@@ -54,6 +63,8 @@ export type Database = {
           avatar_url?: string | null;
           email_announcements?: boolean;
           upload_approved?: boolean;
+          timezone?: string | null;
+          official?: boolean;
           joined_at?: string;
           updated_at?: string;
         };
@@ -180,12 +191,14 @@ export type Database = {
           reader_id: string;
           material_id: string;
           ranges: Json;
+          visibility: "public" | "private";
         } & Timestamps;
         Insert: {
           id?: string;
           reader_id: string;
           material_id: string;
           ranges: Json;
+          visibility?: "public" | "private";
           created_at?: string;
           updated_at?: string;
         };
@@ -267,6 +280,12 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["note_reactions"]["Insert"]>;
         Relationships: [];
       };
+      categories: {
+        Row: { name: string; position: number };
+        Insert: { name: string; position: number };
+        Update: Partial<Database["public"]["Tables"]["categories"]["Insert"]>;
+        Relationships: [];
+      };
       topics: {
         Row: {
           id: string;
@@ -337,7 +356,8 @@ export type Database = {
         Row: {
           id: string;
           reader_id: string;
-          topic_id: string;
+          // Optional since migrations/20261024_group_notes.sql: new posts write none.
+          topic_id: string | null;
           material_id: string | null;
           ranges: Json | null;
           parent_id: string | null;
@@ -348,11 +368,15 @@ export type Database = {
           visibility: "public" | "private";
           reaction_count: number;
           reply_count: number;
+          /** Posted from this group's composer (studygroup-spec.md §4.5). */
+          group_id: string | null;
+          /** "Whole circle": a private post this group's members can read. */
+          mentions_group_id: string | null;
         } & Timestamps;
         Insert: {
           id?: string;
           reader_id: string;
-          topic_id: string;
+          topic_id?: string | null;
           material_id?: string | null;
           ranges?: Json | null;
           parent_id?: string | null;
@@ -363,10 +387,20 @@ export type Database = {
           visibility?: "public" | "private";
           reaction_count?: number;
           reply_count?: number;
+          group_id?: string | null;
+          mentions_group_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["posts"]["Insert"]>;
+        Relationships: [];
+      };
+      // Who a post tags (migrations/20261024_group_notes.sql): each can read
+      // it even when private, and gets `mention`.
+      post_mentions: {
+        Row: { post_id: string; reader_id: string; created_at: string };
+        Insert: { post_id: string; reader_id: string; created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["post_mentions"]["Insert"]>;
         Relationships: [];
       };
       reactions: {
@@ -458,7 +492,7 @@ export type Database = {
         Row: {
           id: string;
           reader_id: string;
-          kind: "reaction" | "reply" | "broadcast" | "digest" | "material_reaction";
+          kind: NotificationKind;
           title: string;
           body: string;
           url: string;
@@ -478,7 +512,7 @@ export type Database = {
         Insert: {
           id?: string;
           reader_id: string;
-          kind: "reaction" | "reply" | "broadcast" | "digest" | "material_reaction";
+          kind: NotificationKind;
           title: string;
           body: string;
           url: string;
@@ -491,6 +525,13 @@ export type Database = {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["notifications"]["Insert"]>;
+        Relationships: [];
+      };
+      /** Dedupe claims — migrations/20261019_notification_deliveries.sql. */
+      notification_deliveries: {
+        Row: { kind: NotificationKind; ref: string; reader_id: string; sent_on: string };
+        Insert: { kind: NotificationKind; ref: string; reader_id: string; sent_on?: string };
+        Update: Partial<Database["public"]["Tables"]["notification_deliveries"]["Insert"]>;
         Relationships: [];
       };
       /** Reading Room — migrations/20261011_rooms.sql … 20261015_room_membership.sql.
@@ -535,6 +576,325 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["room_members"]["Insert"]>;
         Relationships: [];
       };
+      /** Study groups (migrations/20261021_groups.sql). Readable by everyone;
+       * written by the API routes' admin client. */
+      groups: {
+        Row: {
+          id: string;
+          slug: string;
+          name: string;
+          description: string;
+          /** IANA zone; weekly sessions recur in it. */
+          timezone: string;
+          pinned_post_id: string | null;
+          /** This week's target is pinned to the room's strip. */
+          pin_target: boolean;
+          /** A session pinned to the strip: its series_id, else its id. */
+          pinned_session_id: string | null;
+          /** Invite only: unlisted, joined by a moderator's invite. */
+          is_private: boolean;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          name: string;
+          description?: string;
+          timezone: string;
+          pinned_post_id?: string | null;
+          pin_target?: boolean;
+          pinned_session_id?: string | null;
+          is_private?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["groups"]["Insert"]>;
+        Relationships: [];
+      };
+      /** Role changes and leaving go through set_group_role / leave_group
+       * (last-moderator rule), never a direct update or delete. */
+      group_members: {
+        Row: { group_id: string; reader_id: string; role: "moderator" | "member"; muted: boolean; joined_at: string };
+        Insert: { group_id: string; reader_id: string; role?: "moderator" | "member"; muted?: boolean; joined_at?: string };
+        Update: Partial<Database["public"]["Tables"]["group_members"]["Insert"]>;
+        Relationships: [];
+      };
+      /** migrations/20261023_group_books.sql. Adding and "Read this now" go
+       * through add_group_book / set_current_group_book (one current book);
+       * position (20261031_group_books_position.sql) orders Up next. */
+      group_books: {
+        Row: {
+          group_id: string;
+          material_id: string;
+          status: "current" | "next" | "done";
+          starts_on: string | null;
+          ends_on: string | null;
+          finished_on: string | null;
+          added_by: string | null;
+          created_at: string;
+          position: number | null;
+        };
+        Insert: {
+          group_id: string;
+          material_id: string;
+          status?: "current" | "next" | "done";
+          starts_on?: string | null;
+          ends_on?: string | null;
+          finished_on?: string | null;
+          added_by?: string | null;
+          created_at?: string;
+          position?: number | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["group_books"]["Insert"]>;
+        Relationships: [];
+      };
+      /** This week's target (migrations/20261025_group_targets.sql): one
+       * active (superseded_at null) per group, set through set_group_target. */
+      group_targets: {
+        Row: {
+          id: string;
+          group_id: string;
+          material_id: string;
+          start_pct: number;
+          end_pct: number;
+          end_label: string;
+          end_chapter: number | null;
+          chapter_count: number | null;
+          starts_on: string;
+          due_on: string;
+          created_by: string | null;
+          created_at: string;
+          superseded_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          material_id: string;
+          start_pct: number;
+          end_pct: number;
+          end_label: string;
+          end_chapter?: number | null;
+          chapter_count?: number | null;
+          starts_on: string;
+          due_on: string;
+          created_by?: string | null;
+          created_at?: string;
+          superseded_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["group_targets"]["Insert"]>;
+        Relationships: [];
+      };
+      /** Sessions (migrations/20261026_group_sessions.sql): one row per
+       * occurrence; a weekly series links its rows by series_id. Added
+       * through add_group_session. */
+      group_sessions: {
+        Row: {
+          id: string;
+          group_id: string;
+          series_id: string | null;
+          topic: string;
+          material_id: string | null;
+          section_label: string | null;
+          starts_at: string;
+          repeat: "once" | "weekly";
+          number: number;
+          created_by: string | null;
+          created_at: string;
+          cancelled_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          series_id?: string | null;
+          topic: string;
+          material_id?: string | null;
+          section_label?: string | null;
+          starts_at: string;
+          repeat: "once" | "weekly";
+          number: number;
+          created_by?: string | null;
+          created_at?: string;
+          cancelled_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["group_sessions"]["Insert"]>;
+        Relationships: [];
+      };
+      /** Who came to a session: written by join_room on a session's room. */
+      session_attendance: {
+        Row: { session_id: string; reader_id: string; joined_at: string };
+        Insert: { session_id: string; reader_id: string; joined_at?: string };
+        Update: Partial<Database["public"]["Tables"]["session_attendance"]["Insert"]>;
+        Relationships: [];
+      };
+      /** Remind me off, for a series (its series_id) or one session (its id). */
+      session_reminder_optouts: {
+        Row: { series_or_session_id: string; reader_id: string; created_at: string };
+        Insert: { series_or_session_id: string; reader_id: string; created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["session_reminder_optouts"]["Insert"]>;
+        Relationships: [];
+      };
+      /** migrations/20261029_streaks.sql: reader-local reading days. */
+      reader_reading_days: {
+        Row: { reader_id: string; day: string; restored: boolean };
+        Insert: { reader_id: string; day: string; restored?: boolean };
+        Update: Partial<Database["public"]["Tables"]["reader_reading_days"]["Insert"]>;
+        Relationships: [];
+      };
+      /** The run ending at last_day (lib/streaks/rules.ts `Streak`). */
+      reader_streaks: {
+        Row: {
+          reader_id: string;
+          current: number;
+          best: number;
+          last_day: string | null;
+          previous: number;
+          restore_month: string | null;
+          declined_on: string | null;
+          /** The reader's daily goal; null is the default (GOAL.fallback). */
+          daily_goal_minutes: number | null;
+          updated_at: string;
+        };
+        Insert: {
+          reader_id: string;
+          current?: number;
+          best?: number;
+          last_day?: string | null;
+          previous?: number;
+          restore_month?: string | null;
+          declined_on?: string | null;
+          daily_goal_minutes?: number | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["reader_streaks"]["Insert"]>;
+        Relationships: [];
+      };
+      /** migrations/20261107_reading_time.sql (rooms-spec §5.7): seconds read
+       * per local day, credited by record_reading_time. */
+      reader_reading_time: {
+        Row: { reader_id: string; day: string; seconds: number; last_at: string };
+        Insert: { reader_id: string; day: string; seconds?: number; last_at: string };
+        Update: Partial<Database["public"]["Tables"]["reader_reading_time"]["Insert"]>;
+        Relationships: [];
+      };
+      /** migrations/20261111_reading_history.sql: each book's seconds per
+       * local day, credited with the day's total by record_reading_time. */
+      reader_book_time: {
+        Row: { reader_id: string; day: string; material_id: string; seconds: number };
+        Insert: { reader_id: string; day: string; material_id: string; seconds?: number };
+        Update: Partial<Database["public"]["Tables"]["reader_book_time"]["Insert"]>;
+        Relationships: [];
+      };
+      reader_milestones: {
+        Row: { reader_id: string; kind: "streak"; value: number; reached_on: string; reached_at: string };
+        Insert: { reader_id: string; kind: "streak"; value: number; reached_on: string; reached_at?: string };
+        Update: Partial<Database["public"]["Tables"]["reader_milestones"]["Insert"]>;
+        Relationships: [];
+      };
+      /** migrations/20261030_group_milestones.sql: feed items, copy frozen. */
+      group_milestones: {
+        Row: {
+          id: string;
+          group_id: string;
+          kind: "session_held" | "book_finished" | "target_reached";
+          ref: string;
+          material_id: string | null;
+          title: string;
+          detail: string | null;
+          reached: number | null;
+          total: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          kind: "session_held" | "book_finished" | "target_reached";
+          ref: string;
+          material_id?: string | null;
+          title: string;
+          detail?: string | null;
+          reached?: number | null;
+          total?: number | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["group_milestones"]["Insert"]>;
+        Relationships: [];
+      };
+      /** migrations/20261106_daily_passages.sql (rooms-spec §5.5): the day's
+       * passage, a note in the group, and its question. */
+      daily_passages: {
+        Row: { day: string; post_id: string; question: string; set_by: string | null; created_at: string };
+        Insert: { day: string; post_id: string; question: string; set_by?: string | null; created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["daily_passages"]["Insert"]>;
+        Relationships: [];
+      };
+      /** migrations/20261119_passage_sets.sql (passage-spec §1): what an
+       * editor's AI sends in, for /admin/passage. */
+      passage_sets: {
+        Row: { id: string; title: string; note: string; created_at: string };
+        Insert: { id?: string; title: string; note?: string; created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["passage_sets"]["Insert"]>;
+        Relationships: [];
+      };
+      /** `ranges` and `picked_ranges` are AnnotationRange[]; `context` is
+       * { passageId, text }[]. */
+      passage_quotes: {
+        Row: {
+          id: string;
+          set_id: string;
+          position: number;
+          material_id: string;
+          ranges: Json;
+          picked_ranges: Json;
+          context: Json;
+          why: string;
+          question: string;
+          status: "new" | "used" | "dismissed";
+          post_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          set_id: string;
+          position: number;
+          material_id: string;
+          ranges: Json;
+          picked_ranges: Json;
+          context: Json;
+          why?: string;
+          question?: string;
+          status?: "new" | "used" | "dismissed";
+          post_id?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["passage_quotes"]["Insert"]>;
+        Relationships: [];
+      };
+      /** migrations/20261105_room_reads.sql (rooms-spec §5.2): how far a
+       * reader has read a room; `room_id` is a group's or a material's. */
+      room_reads: {
+        Row: { reader_id: string; room_kind: RoomKind; room_id: string; last_read_at: string };
+        Insert: { reader_id: string; room_kind: RoomKind; room_id: string; last_read_at?: string };
+        Update: Partial<Database["public"]["Tables"]["room_reads"]["Insert"]>;
+        Relationships: [];
+      };
+      /** migrations/20261104_group_events.sql (rooms-spec §5.1): the group
+       * stream's system lines, written by the SQL functions only. `payload`
+       * is the line's frozen words (GroupEventPayload in lib/rooms/timeline). */
+      group_events: {
+        Row: {
+          id: string;
+          group_id: string;
+          kind: GroupEventKind;
+          actor_id: string | null;
+          ref: string | null;
+          payload: Json;
+          created_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
     };
     // Required by supabase-js's GenericSchema shape even with no views —
     // omitting it collapses the whole schema (and every table's row type) to
@@ -543,8 +903,15 @@ export type Database = {
     Functions: {
       /** migrations/20261005_admin_dashboard.sql — shape in lib/metrics/dashboard.ts. */
       admin_dashboard_metrics: { Args: Record<string, never>; Returns: Json };
+      /** migrations/20261118_admin_weekly_dashboard.sql — shape in lib/metrics/dashboard.ts. */
+      admin_weekly_metrics: { Args: { week_start: string }; Returns: Json };
+      admin_weekly_readers: { Args: { week_start: string }; Returns: Json };
       /** Reading Room (migrations/20261012…20261015). Null when the book can't host a room. */
-      start_room: { Args: { material: string; reader: string; room_title: string | null }; Returns: string | null };
+      /** A group room needs `grp` (moderators only) and may carry its `session`. */
+      start_room: {
+        Args: { material: string; reader: string; room_title: string | null; grp?: string | null; session?: string | null };
+        Returns: string | null;
+      };
       join_room: {
         Args: { room: string; reader: string };
         Returns: "joined" | "not_found" | "ended" | "forbidden" | "full";
@@ -558,6 +925,75 @@ export type Database = {
       can_join_room: { Args: { room: string; reader: string }; Returns: boolean };
       /** Called by the reader in the room (authenticated). False: aged out or ended, rejoin. */
       room_heartbeat: { Args: { room: string }; Returns: boolean };
+      /** Study groups (migrations/20261021_groups.sql). */
+      is_group_member: { Args: { grp: string; reader: string }; Returns: boolean };
+      is_group_moderator: { Args: { grp: string; reader: string }; Returns: boolean };
+      /** migrations/20261024_group_notes.sql: "Bring in", most shared books first. */
+      reading_comrades: { Args: { reader: string; max_rows?: number }; Returns: { reader_id: string; shared: number }[] };
+      /** migrations/20261101_mention_comrades.sql — the tag picker before a name is typed. */
+      mention_comrades: { Args: { reader: string; max_rows?: number }; Returns: { reader_id: string; score: number }[] };
+      /** migrations/20261110_book_rooms.sql — Home's rooms column. */
+      book_rooms: {
+        Args: { reader: string | null };
+        Returns: { material_id: string; author: string; kind: "citation" | "text" | "link" | "video" | "book_share" | "voice"; content: Json; created_at: string; unread: number }[];
+      };
+      /** migrations/20261110_book_rooms.sql — readers per book, the day's and now. */
+      book_readers: { Args: { day_since: string; now_since: string; reader: string | null }; Returns: { material_id: string; day: number; now: number }[] };
+      leave_group: { Args: { grp: string; reader: string }; Returns: "left" | "not_member" | "last_moderator" };
+      set_group_role: {
+        Args: { grp: string; reader: string; new_role: "moderator" | "member" };
+        Returns: "updated" | "not_member" | "last_moderator";
+      };
+      add_group_book: { Args: { grp: string; material: string; reader: string }; Returns: "current" | "next" | "exists" };
+      set_current_group_book: { Args: { grp: string; material: string; reader?: string | null }; Returns: boolean };
+      reorder_group_books: { Args: { grp: string; materials: string[] }; Returns: undefined };
+      /** migrations/20261111_reading_history.sql: one reading-position save, and its book. */
+      record_reading_time: { Args: { reader: string; material: string; today: string; at: string; idle_seconds: number }; Returns: undefined };
+      /** A reader's seconds per book per month (`month` is its first day). */
+      reading_history_day_books: {
+        Args: { reader: string; from_day: string; to_day: string };
+        Returns: { day: string; material_ids: string[] }[];
+      };
+      collective_reading_seconds: { Args: { today: string }; Returns: number };
+      /** Where a target set `today` starts (an edit keeps the running one's start). */
+      group_target_start: {
+        Args: { grp: string; material: string; today: string };
+        Returns: { from_pct: number; from_day: string }[];
+      };
+      /** The new target's id, or 'below_start' when it ends at or before where it starts. */
+      set_group_target: {
+        Args: {
+          grp: string;
+          material: string;
+          new_end_pct: number;
+          new_end_label: string;
+          new_end_chapter: number | null;
+          new_chapter_count: number | null;
+          today: string;
+          new_due_on: string;
+          reader: string;
+        };
+        Returns: string;
+      };
+      /** The new session's id; null when that occurrence of the series exists. */
+      add_group_session: {
+        Args: {
+          grp: string;
+          series: string | null;
+          new_topic: string;
+          material: string | null;
+          new_section_label: string | null;
+          new_starts_at: string;
+          new_repeat: "once" | "weekly";
+          reader: string | null;
+        };
+        Returns: string | null;
+      };
+      /** The latest row of every running weekly series (of one group, or all). */
+      group_session_series: {
+        Args: { grp?: string | null };
+        Returns: Database["public"]["Tables"]["group_sessions"]["Row"][];
+      };
     };
   };
 };

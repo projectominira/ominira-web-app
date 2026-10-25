@@ -8,6 +8,8 @@ type Options = {
   /** Omitted or "All" — no server-side category filter. */
   category?: string | null;
   limit?: number;
+  /** Also match saved web pages (excluded from the library shelf). */
+  includeWebpages?: boolean;
 };
 
 /**
@@ -23,7 +25,7 @@ type Options = {
  * way a real query key would imply.
  */
 export function useMaterialsSearch(query: string, opts: Options = {}) {
-  const { category, limit = 24 } = opts;
+  const { category, limit = 24, includeWebpages = false } = opts;
   const [results, setResults] = useState<MaterialSummary[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
@@ -38,13 +40,14 @@ export function useMaterialsSearch(query: string, opts: Options = {}) {
     const timer = setTimeout(() => {
       const params = new URLSearchParams({ search: q, limit: String(limit) });
       if (category && category !== "All") params.set("category", category);
+      if (includeWebpages) params.set("includeWebpages", "true");
       apiFetch<{ items: MaterialSummary[] }>(`/materials?${params.toString()}`)
         .then((r) => setResults(r.items))
         .catch(() => setResults([]))
         .finally(() => setIsSearching(false));
     }, 250);
     return () => clearTimeout(timer);
-  }, [query, category, limit]);
+  }, [query, category, limit, includeWebpages]);
 
   return { results, isSearching };
 }

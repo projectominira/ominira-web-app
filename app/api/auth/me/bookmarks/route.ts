@@ -6,6 +6,8 @@ import { listBookmarkedIds } from "@/lib/bookmarks/store";
 import { toMaterialSummary } from "@/lib/materials/summary";
 import { MATERIAL_SUMMARY_COLUMNS } from "@/lib/materials/columns";
 import { enrichFeedItems } from "@/lib/community/feed";
+import { canReadPost } from "@/lib/community/visibility";
+import { loadPostViewer } from "@/lib/community/viewer";
 import type { NoteRow } from "@/lib/community/notes";
 
 /**
@@ -54,15 +56,15 @@ export async function GET(request: Request) {
 
   const { data, error } = await admin.from("posts").select("*").in("id", ids);
   if (error) throw new Error(`bookmarks: post hydration failed — ${error.message}`);
-  // Same visibility rule as every other notes-reading path: a private post
-  // is only ever visible to its own author (who is the only one who could
-  // have bookmarked it anyway, but the filter stays for the case where a
-  // post was public when saved and has since been made private).
-  const rows = ((data ?? []) as NoteRow[]).filter((r) => r.visibility === "public" || r.reader_id === reader.readerId);
+  // Same visibility rule as every other notes-reading path
+  // (lib/community/visibility.ts): a post saved while public may since have
+  // been made private.
+  const viewer = await loadPostViewer(reader.readerId);
+  const rows = ((data ?? []) as NoteRow[]).filter((r) => canReadPost(r, viewer));
   const byId = new Map(rows.map((r) => [r.id, r]));
   const ordered = ids.flatMap((id) => {
     const row = byId.get(id);
     return row ? [row] : [];
   });
-  return NextResponse.json({ items: await enrichFeedItems(ordered, reader.readerId) });
+  return NextResponse.json({ items: await enrichFeedItems(ordered, viewer) });
 }

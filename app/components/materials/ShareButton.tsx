@@ -3,6 +3,22 @@
 import { useState } from "react";
 import { Check, Share } from "lucide-react";
 
+/** Shares this page's link: the native share sheet, else copied. True when
+ * copied, for the caller to say so. */
+export async function shareLink(title: string, text?: string): Promise<boolean> {
+  const url = window.location.href;
+  if (typeof navigator.share === "function") {
+    try {
+      await navigator.share({ title, text, url });
+    } catch {
+      // Reader dismissed the native share sheet — not an error.
+    }
+    return false;
+  }
+  await navigator.clipboard.writeText(url);
+  return true;
+}
+
 /**
  * Real, zero-backend sharing: the native share sheet where available
  * (navigator.share needs no server support, just a title/text/url), a
@@ -13,9 +29,17 @@ export default function ShareButton({
   text,
   ariaLabel = "Share this book",
   bordered = true,
+  label = "Share",
+  className,
+  iconSize = 15,
 }: {
   title: string;
   text?: string;
+  /** The group page says "Invite" (D1). */
+  label?: string;
+  /** Replaces the default look, for a surface with its own buttons. */
+  className?: string;
+  iconSize?: number;
   /** Defaults to the original (only) caller's own book-page wording — a
    * different surface reusing this button (ReaderProfileView) passes its
    * own instead of every reader hearing "Share this book" for a profile. */
@@ -26,18 +50,8 @@ export default function ShareButton({
   bordered?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
-
   const onClick = async () => {
-    const url = window.location.href;
-    if (typeof navigator.share === "function") {
-      try {
-        await navigator.share({ title, text, url });
-      } catch {
-        // Reader dismissed the native share sheet — not an error.
-      }
-      return;
-    }
-    await navigator.clipboard.writeText(url);
+    if (!(await shareLink(title, text))) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 1200);
   };
@@ -46,12 +60,15 @@ export default function ShareButton({
     <button
       onClick={onClick}
       aria-label={ariaLabel}
-      className={`flex flex-none cursor-pointer items-center gap-1.5 rounded-sm px-3 py-2 text-xs font-semibold text-[var(--reader-text)] transition-colors hover:bg-[var(--reader-surface-hover)] ${
-        bordered ? "border border-[var(--reader-border)] bg-[var(--reader-surface)]" : "border-none bg-transparent"
-      }`}
+      className={
+        className ??
+        `flex flex-none cursor-pointer items-center gap-1.5 rounded-sm px-3 py-2 text-xs font-semibold text-[var(--reader-text)] transition-colors hover:bg-[var(--reader-surface-hover)] ${
+          bordered ? "border border-[var(--reader-border)] bg-[var(--reader-surface)]" : "border-none bg-transparent"
+        }`
+      }
     >
-      {copied ? <Check size={15} /> : <Share size={15} />}
-      {copied ? "Copied" : "Share"}
+      {copied ? <Check size={iconSize} /> : <Share size={iconSize} />}
+      {copied && label ? "Copied" : label}
     </button>
   );
 }

@@ -9,7 +9,7 @@ import { getCategories } from "@/lib/categories/config";
  * migrations/20260919_topics_and_posts.sql's own header comment) and
  * anything not `status = 'active'`.
  *
- * Ordered to match config/categories.json — the same fixed list Library's
+ * Ordered to match the `categories` table — the same list Library's
  * CategoryPills already reads (lib/categories/config.ts) — rather than
  * `post_count` descending: a topic naming a Categories-migration genre
  * (most of them; see migrations/20260919_topics_and_posts.sql's own

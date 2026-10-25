@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Copy, Headphones, Highlighter, MessageCircle, MessageSquareQuote, Share, Trash2 } from "lucide-react";
 import { useDockedHeight } from "@/app/components/useBottomDock";
 import { quoteForRanges } from "@/lib/reader/annotationSelection";
@@ -9,7 +9,6 @@ import { useShareToRoom } from "@/lib/room/sharePassage";
 import { useReaderStore } from "@/stores/reader-store";
 import MembersOnlyPrompt from "./notes/MembersOnlyPrompt";
 import SelectionMenu, { type Item } from "./SelectionMenu";
-import ShareQuoteModal from "./ShareQuoteModal";
 import { confirmAction, DELETE_ANNOTATION } from "@/stores/confirm-store";
 
 const NARROW_QUERY = "(max-width: 859px)";
@@ -25,21 +24,6 @@ export function useNarrowViewport() {
     () => window.matchMedia(NARROW_QUERY).matches,
     () => false
   );
-}
-
-/** The quote card, for the selection menu's Share and the notes panel's —
- * `share(quote)` opens it; render `modal` once anywhere (it's fixed). */
-export function useShareQuote(title: string, author?: string): { share: (quote: string) => void; modal: ReactNode } {
-  const [quote, setQuote] = useState<string | null>(null);
-  return {
-    share: setQuote,
-    modal:
-      quote !== null ? (
-        <div className="fixed inset-0 z-[80]">
-          <ShareQuoteModal quote={quote} author={author} bookTitle={title} onClose={() => setQuote(null)} />
-        </div>
-      ) : null,
-  };
 }
 
 /**

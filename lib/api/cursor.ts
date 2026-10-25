@@ -25,9 +25,10 @@ export type AlphabeticalKeyset = { title: string; id: string };
 
 /** The `.or(...)` fragment for "strictly before this (created_at, id) pair,
  * both descending" — the plain recency-ordered case every `recent`-sorted
- * list below uses. */
-export function keysetBeforeFilter(cursor: Keyset): string {
-  return `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`;
+ * list below uses. `column` names the time column when it isn't
+ * created_at (a room's started_at / ended_at in a room's stream). */
+export function keysetBeforeFilter(cursor: Keyset, column = "created_at"): string {
+  return `${column}.lt.${cursor.createdAt},and(${column}.eq.${cursor.createdAt},id.lt.${cursor.id})`;
 }
 
 /** The `.or(...)` fragment for "strictly after this (title, id) pair,

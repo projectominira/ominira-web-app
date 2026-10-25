@@ -1,6 +1,8 @@
 // Shapes shared by the room routes (server) and lib/room/api.ts (client).
 
 import type { Avatar } from "@/lib/avatar/avatar";
+import type { GroupLiveRoom, GroupSession } from "@/lib/groups/types";
+import type { Comrade } from "@/lib/rooms/types";
 
 export type RoomInfo = {
   id: string;
@@ -14,6 +16,8 @@ export type RoomInfo = {
   startedBy: string;
   startedAt: string;
   maxMembers: number;
+  /** The host group of a group room (studygroup-spec §11); null standalone. */
+  group: { id: string; slug: string; name: string } | null;
 };
 
 /** What room-start and room-join return (spec §7): everything a client
@@ -32,12 +36,37 @@ export type RoomJoinPayload = {
   supabase: { url: string; key: string };
 };
 
+/** What a room's link (/room/{id}) shows before you join
+ * (GET /api/rooms/{roomId}), signed in or out. */
+export type RoomInvite = {
+  id: string;
+  title: string;
+  live: boolean;
+  /** In the room now; 0 once it ended. */
+  members: number;
+  /** "Comrade Yeast"; null if their account is gone. */
+  host: string | null;
+  hostId: string;
+  /** A few of those in, by face, the host first when they're in. */
+  people: Comrade[];
+  materialId: string;
+  bookTitle: string;
+  bookAuthor: string;
+  bookSlug: string;
+  cover: string | null;
+};
+
+/** Who a room-start is for: a group (its moderators only) and, optionally,
+ * the session (studygroup-spec §11). Absent for a standalone room. */
+export type RoomStartHost = { groupSlug: string; sessionId: string | null };
+
 /** A book's room state, for the Live chip and "Start a room"
  * (GET /api/materials/{materialId}/room). */
 export type MaterialRoom = {
   /** Public, published books only (start_room's rule). */
   canStart: boolean;
-  live: { id: string; title: string; members: number; maxMembers: number } | null;
+  /** Its card in the book room (6c) as well as the chip. */
+  live: (GroupLiveRoom & { maxMembers: number }) | null;
 };
 
 /** The ended screen (spec §3.4), for readers who joined the room
@@ -51,7 +80,12 @@ export type RoomSummary = {
   fullSeconds: number;
   moderatorNames: string[];
   joined: { total: number; first: { readerId: string; name: string; avatar: Avatar }[] };
+  /** A group room's next session, for its card (studygroup-spec §11). */
+  next: NextSession | null;
 };
+
+/** The host group's next session (lib/groups/rooms.ts). */
+export type NextSession = { groupSlug: string; groupName: string; session: GroupSession };
 
 /** One beacon per visit, with the leave (spec §8.10). */
 export type RoomLeaveStats = {

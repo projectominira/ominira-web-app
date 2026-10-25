@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useCurrentReaders } from "@/lib/materials/useCurrentReaders";
 import { useSessionStore } from "@/stores/session-store";
 
@@ -17,10 +18,12 @@ export const notesLabel = (n: number) => `${compact(n)} ${n === 1 ? "note" : "no
 export function usePresence(materialId: string) {
   const readerId = useSessionStore((s) => s.readerId);
   const { data, isFetched } = useCurrentReaders(materialId);
-  const all = data?.readers ?? [];
-  const others = all.filter((r) => r.readerId !== readerId);
-  const count = Math.max(others.length, (data?.totalCount ?? 0) - (all.length - others.length));
-  return { others, count, anyReading: others.some((r) => r.mode === "read"), isFetched };
+  return useMemo(() => {
+    const all = data?.readers ?? [];
+    const others = all.filter((r) => r.readerId !== readerId);
+    const count = Math.max(others.length, (data?.totalCount ?? 0) - (all.length - others.length));
+    return { others, count, anyReading: others.some((r) => r.mode === "read"), isFetched };
+  }, [data, readerId, isFetched]);
 }
 
 /** The brand "live" dot with a ping ripple behind it — positioned by the

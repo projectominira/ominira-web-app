@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
+import { recordReadingActivity } from "@/lib/streaks/record";
 
 // Readers already recorded today by this server instance. Every signed-in API
 // request passes through here, so without it an active reader would cost a
@@ -39,8 +40,15 @@ function dayRecorder(read: boolean) {
  */
 export const recordActiveDay = dayRecorder(false);
 
+const recordReadDay = dayRecorder(true);
+
 /**
  * Also flags today's row as a reading day (`read`, migrations/
- * 20261009_reader_active_days_read.sql). Called when a reading position is saved.
+ * 20261009_reader_active_days_read.sql), counts the reader's local day
+ * toward their streak and credits their reading time to the day and
+ * `materialId` (lib/streaks). Called when a reading position is saved.
  */
-export const recordReadingDay = dayRecorder(true);
+export function recordReadingDay(readerId: string, materialId: string): void {
+  recordReadDay(readerId);
+  recordReadingActivity(readerId, materialId);
+}

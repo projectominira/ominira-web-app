@@ -145,29 +145,33 @@ export type CurrentReaderSnippet = CurrentReaderSummary;
  */
 export async function listCurrentReaders(
   materialIds: string[],
-  cap: number = CURRENT_READERS_DISPLAY_CAP
+  cap: number = CURRENT_READERS_DISPLAY_CAP,
+  /** Only readers active this recently (a book room's "reading now",
+   * READING_NOW_MS); every unfinished reader when absent. */
+  withinMs?: number
 ): Promise<Map<string, { readers: CurrentReaderSnippet[]; totalCount: number }>> {
   const result = new Map<string, { readers: CurrentReaderSnippet[]; totalCount: number }>();
   if (materialIds.length === 0) return result;
 
-  const { data: activityRows, error } = await getSupabaseAdminClient()
+  let query = getSupabaseAdminClient()
     .from("reader_activities")
-    .select("reader_id, material_id, mode, updated_at")
+    .select("reader_id, material_id, mode, updated_at, progress_percent")
     .in("material_id", materialIds)
     // A reader who's finished a material isn't "currently" reading/listening
     // to it any more — their row otherwise lingers here forever (nothing else
     // ever deletes a reader_activities row), which is what let a finished
     // reader keep showing in the presence line/reading-room roster.
-    .is("finished_at", null)
-    .order("updated_at", { ascending: false });
+    .is("finished_at", null);
+  if (withinMs) query = query.gt("updated_at", new Date(Date.now() - withinMs).toISOString());
+  const { data: activityRows, error } = await query.order("updated_at", { ascending: false });
   if (error || !activityRows || activityRows.length === 0) return result;
 
   // materialId -> every active reader's row, most recently updated first
   // (preserved from the query's own order() above).
-  type ActivityRow = { readerId: string; mode: ReaderMode; updatedAt: string };
+  type ActivityRow = { readerId: string; mode: ReaderMode; updatedAt: string; pct: number };
   const rowsByMaterial = new Map<string, ActivityRow[]>();
   for (const row of activityRows) {
-    const entry: ActivityRow = { readerId: row.reader_id, mode: row.mode, updatedAt: row.updated_at };
+    const entry: ActivityRow = { readerId: row.reader_id, mode: row.mode, updatedAt: row.updated_at, pct: row.progress_percent };
     const list = rowsByMaterial.get(row.material_id);
     if (list) list.push(entry);
     else rowsByMaterial.set(row.material_id, [entry]);
@@ -198,6 +202,7 @@ export async function listCurrentReaders(
               avatar: toAvatar(reader),
               mode: row.mode,
               updatedAt: row.updatedAt,
+              pct: row.pct,
               city: reader.city,
               country: reader.country,
             }

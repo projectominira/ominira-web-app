@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowDownRight, ArrowUpRight, CircleAlert, CircleCheck, CircleDashed, Library, Send, Users } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import AdminPageHeader from "./AdminPageHeader";
-import ActivityChart from "./ActivityChart";
 import InfoTip from "./InfoTip";
-import { TARGETS, getDashboardMetrics, growthRate, ratio } from "@/lib/metrics/dashboard";
+import ActivityChart from "./ActivityChart";
+import AdminMenu from "./AdminMenu";
+import { currentWeekStart, getWeeklyMetrics, getWeeklyReaders, growthRate, type WeekDay } from "@/lib/metrics/dashboard";
+import { pseudonymToSlug } from "@/lib/reader/profileSlug";
+import { formatDuration } from "@/lib/time/duration";
+import { addDays, weekdayOf } from "@/lib/time/zone";
 
 export const dynamic = "force-dynamic";
 
@@ -13,220 +17,255 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
-const formatCount = (n: number) => (n < 10_000 ? n.toLocaleString("en") : compact.format(n));
-const formatPercent = (r: number | null) => (r === null ? "—" : `${Math.round(r * 100)}%`);
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-// "This week" is the UTC day today and the 6 before it; "last week" the 7
-// before that — the same bounds admin_dashboard_metrics() counts over.
-const rangeFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" });
-const DAY_MS = 86_400_000;
-function weekRanges(): string {
-  const today = Math.floor(Date.now() / DAY_MS) * DAY_MS;
-  const range = (endDaysAgo: number) =>
-    rangeFormat.formatRange(new Date(today - (endDaysAgo + 6) * DAY_MS), new Date(today - endDaysAgo * DAY_MS));
-  return `${range(0)} vs. ${range(7)}`;
+// Days are calendar dates ("2026-10-20"); format them as UTC so they never shift.
+const dayFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+const weekRange = (start: string) =>
+  dayFormat.formatRange(new Date(`${start}T00:00:00Z`), new Date(`${addDays(start, 6)}T00:00:00Z`));
+
+const formatCount = (n: number) => n.toLocaleString("en");
+const minutes = (seconds: number) => Math.round(seconds / 60);
+/** "30 h 40 min"; nothing read reads "0 min" rather than "<1 min". */
+const duration = (seconds: number) => (seconds ? formatDuration(seconds * 1000) : "0 min");
+
+const sum = (days: WeekDay[], key: "readers" | "seconds" | "newMembers") => days.reduce((n, d) => n + d[key], 0);
+
+/** `part` as a whole percentage of `whole`. */
+const share = (part: number, whole: number) => (whole ? Math.round((part / whole) * 100) : 0);
+
+/** `?week=` when it's a Monday no later than this week's, else this week. */
+function weekFrom(param: string | undefined, current: string): string {
+  if (!param || !/^\d{4}-\d{2}-\d{2}$/.test(param) || Number.isNaN(Date.parse(param))) return current;
+  return weekdayOf(param) === 0 && param <= current ? param : current;
 }
 
-type Goal = { met: boolean | null; text: string };
+export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ week?: string }> }) {
+  const current = currentWeekStart();
+  const week = weekFrom((await searchParams).week, current);
+  const [m, readers] = await Promise.all([getWeeklyMetrics(week), getWeeklyReaders(week)]);
 
-/** Judge `value` against `target`; null (no data or no baseline) stays unjudged. */
-const goal = (value: number | null, target: number, text: string): Goal => ({
-  met: value === null ? null : value >= target,
-  text,
-});
-const growthGoalText = `+${Math.round(TARGETS.weeklyGrowth * 100)}% vs last week`;
-const shareGoalText = (target: number) => `${Math.round(target * 100)}% or more`;
+  const lastWeek = m.days.slice(14, 21);
+  const thisWeek = m.days.slice(21);
+  // While a week runs, compare only the days that have begun with the same weekdays last week.
+  const partial = m.elapsed < 7;
+  const soFar = thisWeek.slice(0, m.elapsed);
+  const sameDaysLastWeek = lastWeek.slice(0, m.elapsed);
+  const through = WEEKDAYS[m.elapsed - 1];
+  const lastWeekDetail = (n: string) => (partial ? `${n} by ${through} last week` : `${n} last week`);
 
-export default async function AdminDashboardPage() {
-  const { totals, engagement: e, daily } = await getDashboardMetrics();
+  const seconds = sum(soFar, "seconds");
+  const secondsPrev = sum(sameDaysLastWeek, "seconds");
+  const joined = sum(soFar, "newMembers");
+  // Share of members who read: this week against last week's members, who are
+  // everyone that had joined by this week's start.
+  const reading = share(m.readers, m.members);
+  const readingPrev = share(m.readersPrev, m.membersAtStart);
 
-  const core = [
-    { label: "Members", key: "members", info: "Everyone who has created an account, since launch." },
-    { label: "Books", key: "books", info: "Every item in the library, including members' private uploads, not just public books." },
-    { label: "Posts", key: "posts", info: "Every post members have written in the community feed, since launch." },
-    { label: "Reactions", key: "reactions", info: "Every reaction members have left on posts, since launch." },
-  ] as const;
-
-  const newMembersChange = growthRate(totals.members_week, totals.members_prev_week);
-  const wauChange = growthRate(e.wau, e.wau_prev);
-  const monthlyActive = ratio(e.mau, totals.members);
-  const stickiness = ratio(e.wau, e.mau);
-  const activation = ratio(e.activated, e.recent_members);
-  const retention = ratio(e.retained, e.cohort);
-  const completion = ratio(e.finished, e.started);
-  const contributors = ratio(e.contributors, e.wau);
+  const rows = [
+    { label: "Readers", value: (d: WeekDay) => formatCount(d.readers), week: formatCount(m.readers) },
+    { label: "Time read", value: (d: WeekDay) => duration(d.seconds), week: duration(seconds) },
+    { label: "New members", value: (d: WeekDay) => formatCount(d.newMembers), week: formatCount(joined) },
+  ];
 
   return (
     <div className="mx-auto w-full max-w-6xl">
       <AdminPageHeader
         title="Dashboard"
-        subtitle={weekRanges()}
         back={null}
         actions={
           <>
-            <QuickAction href="/admin/library" icon={<Library size={14} />} label="Library" />
-            <QuickAction href="/admin/readers" icon={<Users size={14} />} label="Readers" />
-            <QuickAction href="/admin/push" icon={<Send size={14} />} label="Send" primary />
+            <nav aria-label="Week" className="mr-2 flex items-center gap-1">
+              <WeekLink href={`/admin?week=${addDays(week, -7)}`} label="Previous week" icon={<ChevronLeft size={16} />} />
+              <span className="px-1 text-[14px] font-bold text-[var(--reader-text)]">{weekRange(week)}</span>
+              <WeekLink
+                href={week < current ? (addDays(week, 7) === current ? "/admin" : `/admin?week=${addDays(week, 7)}`) : null}
+                label="Next week"
+                icon={<ChevronRight size={16} />}
+              />
+            </nav>
+            <AdminMenu />
           </>
         }
       />
 
-      <section aria-label="Core metrics" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {core.map(({ label, key, info }) => (
+
+      {/* One card divided into cells by hairlines. Each cell draws its own
+          right + bottom border; the grid overhangs by 1px so the outer
+          edge's are clipped. */}
+      <section aria-label="This week" className="overflow-hidden rounded-sm border border-[var(--reader-border)]">
+        <div className="-mr-px -mb-px grid grid-cols-1 sm:grid-cols-3">
           <Tile
-            key={key}
-            label={label}
-            info={info}
-            value={formatCount(totals[key])}
-            detail={`+${formatCount(totals[`${key}_week`])} this week`}
-            change={growthRate(totals[`${key}_week`], totals[`${key}_prev_week`])}
+            label="Members"
+            info="Everyone who has created an account, as of the end of this week, and how much that grew over the week."
+            value={formatCount(m.members)}
+            detail={`+${formatCount(m.members - m.membersAtStart)} this week, from ${formatCount(m.membersAtStart)}`}
+            change={growthRate(m.members, m.membersAtStart)}
           />
-        ))}
-      </section>
-
-      <section aria-labelledby="activity-heading" className="mt-3 rounded-sm border border-[var(--reader-border)] p-5">
-        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="activity-heading" className="m-0 text-[14px] font-bold text-[var(--reader-text)]">
-            Reader activity
-          </h2>
-          <div className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold text-[var(--reader-text-muted)]">Active members per day · last 30 days</span>
-            <InfoTip label="Reader activity">
-              How many members used Ominira while signed in on each of the last 30 days. Each day also tracks members who read, new
-              members, posts and reactions.
-            </InfoTip>
-          </div>
+          <Tile
+            label="Members reading"
+            info="The share of members who read on at least one day this week."
+            value={`${reading}%`}
+            detail={`${formatCount(m.readers)} of ${formatCount(m.members)} · ${lastWeekDetail(`${readingPrev}%`)}`}
+            change={m.membersAtStart ? (reading - readingPrev) / 100 : null}
+            points
+          />
+          <Tile
+            label="Time read"
+            info="Total time members spent reading or listening this week."
+            value={duration(seconds)}
+            detail={lastWeekDetail(duration(secondsPrev))}
+            change={growthRate(seconds, secondsPrev)}
+          />
         </div>
-        <ActivityChart data={daily} />
       </section>
 
-      {/* One card divided into cells by hairlines — not bordered tiles nested
-          inside a bordered section. Each cell draws its own right + bottom
-          border; the grid overhangs by 1px so the outer edge's are clipped.
-          (A gap-px backdrop drops lines at fractional column widths.) */}
-      <section aria-labelledby="growth-heading" className="mt-3 overflow-hidden rounded-sm border border-[var(--reader-border)]">
-        <h2 id="growth-heading" className="m-0 px-5 py-4 text-[14px] font-bold text-[var(--reader-text)]">
-          Growth &amp; engagement
+      <section aria-labelledby="days-heading" className="mt-3 rounded-sm border border-[var(--reader-border)] p-5">
+        <h2 id="days-heading" className="m-0 mb-4 text-[14px] font-bold text-[var(--reader-text)]">
+          Reading activity
         </h2>
-        <div className="-mr-px -mb-px grid grid-cols-2 border-t border-[var(--reader-border)] lg:grid-cols-4">
-          <Tile
-            cell
-            label="New members"
-            info="Members who created an account this week."
-            value={formatCount(totals.members_week)}
-            detail={`${formatCount(totals.members_prev_week)} last week`}
-            change={newMembersChange}
-            goal={goal(newMembersChange, TARGETS.weeklyGrowth, growthGoalText)}
-          />
-          <Tile
-            cell
-            label="Active this week"
-            info="Members who used Ominira while signed in on at least one day this week. Any visit counts, whether reading, browsing or posting."
-            value={formatCount(e.wau)}
-            detail={`${formatCount(e.wau_prev)} last week`}
-            change={wauChange}
-            goal={goal(wauChange, TARGETS.weeklyGrowth, growthGoalText)}
-          />
-          <Tile
-            cell
-            label="Active this month"
-            info="Members who used Ominira while signed in on at least one of the last 30 days, and what share of all members that is."
-            value={formatCount(e.mau)}
-            detail={`${formatPercent(monthlyActive)} of all ${formatCount(totals.members)} members`}
-            goal={goal(monthlyActive, TARGETS.monthlyActive, `${shareGoalText(TARGETS.monthlyActive)} of members`)}
-          />
-          <Tile
-            cell
-            label="Stickiness"
-            info="Active this week divided by active this month. Higher means members make Ominira a weekly habit rather than dropping in once in a while."
-            value={formatPercent(stickiness)}
-            detail="Of this month's active members, the share also active this week"
-            goal={goal(stickiness, TARGETS.stickiness, shareGoalText(TARGETS.stickiness))}
-          />
-          <Tile
-            cell
-            label="Activation"
-            info="Of the members who joined in the last 30 days, the share who have started at least one book, the first sign they found something worth reading."
-            value={formatPercent(activation)}
-            detail={`${e.activated} of ${e.recent_members} members who joined this month started a book`}
-            goal={goal(activation, TARGETS.activation, shareGoalText(TARGETS.activation))}
-          />
-          <Tile
-            cell
-            label="Week-1 retention"
-            info="Of the members who joined 8 to 14 days ago, the share who came back on any of the 7 days after they joined."
-            value={formatPercent(retention)}
-            detail={`${e.retained} of ${e.cohort} members who joined last week came back within 7 days`}
-            goal={goal(retention, TARGETS.week1Retention, shareGoalText(TARGETS.week1Retention))}
-          />
-          <Tile
-            cell
-            label="Completion rate"
-            info="Of every book any member has started, the share they've finished. Counted since launch, so it moves slowly."
-            value={formatPercent(completion)}
-            detail={`${formatCount(e.finished)} of ${formatCount(e.started)} books started have been finished`}
-            goal={goal(completion, TARGETS.completion, shareGoalText(TARGETS.completion))}
-          />
-          <Tile
-            cell
-            label="Contributors"
-            info="Of this week's active members, the share who wrote a post/note or left a reaction."
-            value={formatPercent(contributors)}
-            detail={`${e.contributors} of this week's active members posted or reacted`}
-            goal={goal(contributors, TARGETS.contributors, shareGoalText(TARGETS.contributors))}
-          />
+        <ActivityChart
+          weekStart={week}
+          data={m.days.map((d, i) => ({
+            day: d.day,
+            readers: i < 21 + m.elapsed ? d.readers : null,
+            minutes: i < 21 + m.elapsed ? minutes(d.seconds) : null,
+          }))}
+        />
+
+        <div className="-mx-5 mt-5 overflow-x-auto border-t border-[var(--reader-border)] px-5">
+          <table className="w-full min-w-[560px] border-collapse text-[13px] tabular-nums">
+            <thead>
+              <tr className="text-[12px] font-semibold text-[var(--reader-text-muted)]">
+                <th scope="col" className="py-3 text-left font-semibold">
+                  <span className="sr-only">Figure</span>
+                </th>
+                {WEEKDAYS.map((d) => (
+                  <th key={d} scope="col" className="py-3 text-right font-semibold">
+                    {d}
+                  </th>
+                ))}
+                <th scope="col" className="py-3 pl-4 text-right font-semibold">
+                  Week
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <Row key={row.label} {...row} days={thisWeek} elapsed={m.elapsed} />
+              ))}
+            </tbody>
+          </table>
         </div>
+      </section>
+
+      <section aria-labelledby="readers-heading" className="mt-3 rounded-sm border border-[var(--reader-border)] p-5">
+        <div className="flex items-start justify-between gap-2">
+          <h2 id="readers-heading" className="m-0 text-[14px] font-bold text-[var(--reader-text)]">
+            Readers this week
+            <span className="ml-2 font-semibold text-[var(--reader-text-muted)]">{formatCount(readers.length)}</span>
+          </h2>
+          <InfoTip label="Readers this week">Everyone who read this week and their time read each day, most time read first.</InfoTip>
+        </div>
+        {readers.length ? (
+          <div className="-mx-5 mt-4 overflow-x-auto border-t border-[var(--reader-border)] px-5">
+            <table className="w-full min-w-[560px] border-collapse text-[13px] tabular-nums">
+              <thead>
+                <tr className="text-[12px] font-semibold text-[var(--reader-text-muted)]">
+                  <th scope="col" className="py-3 text-left font-semibold">
+                    Reader
+                  </th>
+                  {WEEKDAYS.map((d) => (
+                    <th key={d} scope="col" className="py-3 text-right font-semibold">
+                      {d}
+                    </th>
+                  ))}
+                  <th scope="col" className="py-3 pl-4 text-right font-semibold">
+                    Week
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {readers.map((r) => (
+                  <tr key={r.pseudonym} className="border-t border-[var(--reader-border)] text-[var(--reader-text)]">
+                    <th scope="row" className="max-w-[200px] truncate py-2.5 text-left font-semibold">
+                      <Link href={`/@${pseudonymToSlug(r.pseudonym)}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                        {r.pseudonym}
+                      </Link>
+                    </th>
+                    {r.seconds.map((s, i) => (
+                      <td key={WEEKDAYS[i]} className="py-2.5 text-right">
+                        {i >= m.elapsed || !s ? <span className="text-[var(--reader-text-subtle)]">–</span> : duration(s)}
+                      </td>
+                    ))}
+                    <td className="py-2.5 pl-4 text-right font-bold">{duration(r.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="m-0 mt-3 text-[13px] text-[var(--reader-text-muted)]">No one has read this week yet.</p>
+        )}
       </section>
     </div>
   );
 }
 
-function QuickAction({ href, icon, label, primary }: { href: string; icon: React.ReactNode; label: string; primary?: boolean }) {
+/** A figure for each day of the week, then its week total; days yet to come show a dash. */
+function Row({ label, value, week, days, elapsed }: { label: string; value: (d: WeekDay) => string; week: string; days: WeekDay[]; elapsed: number }) {
   return (
-    <Link
-      href={href}
-      className={`inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-sm)] border px-3.5 text-[12px] font-bold transition-colors ${
-        primary
-          ? "border-brand-500 bg-brand-500 text-white hover:border-brand-600 hover:bg-brand-600"
-          : "border-[var(--reader-border)] text-[var(--reader-text)] hover:bg-[var(--reader-surface-hover)]"
-      }`}
-    >
+    <tr className="border-t border-[var(--reader-border)] text-[var(--reader-text)]">
+      <th scope="row" className="py-2.5 text-left font-semibold">
+        {label}
+      </th>
+      {days.map((d, i) => (
+        <td key={d.day} className="py-2.5 text-right">
+          {i < elapsed ? value(d) : <span className="text-[var(--reader-text-subtle)]">–</span>}
+        </td>
+      ))}
+      <td className="py-2.5 pl-4 text-right font-bold">{week}</td>
+    </tr>
+  );
+}
+
+/** A ‹ or › step; without an `href` (no later week) it stays in place, disabled. */
+function WeekLink({ href, label, icon }: { href: string | null; label: string; icon: React.ReactNode }) {
+  const base = "inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--reader-border)]";
+  if (!href) {
+    return (
+      <span aria-label={label} aria-disabled="true" className={`${base} text-[var(--reader-text-subtle)]`}>
+        {icon}
+      </span>
+    );
+  }
+  return (
+    <Link href={href} aria-label={label} className={`${base} text-[var(--reader-text)] hover:bg-[var(--reader-surface-hover)]`}>
       {icon}
-      {label}
     </Link>
   );
 }
 
-/**
- * One stat tile: label · value · detail line, plus an optional week-over-week
- * change. `goal` adds the benchmark the figure is judged against and the
- * verdict, with an icon + word so it never rests on color alone.
- */
 function Tile({
   label,
   info,
   value,
   detail,
   change,
-  goal,
-  cell,
+  points,
 }: {
   label: string;
   info: string;
   value: string;
   detail: string;
   change?: number | null;
-  goal?: Goal;
-  /** A cell of a divided grid (no border of its own) rather than a standalone card. */
-  cell?: boolean;
+  /** `change` is a difference of percentages, shown in points rather than as a growth rate. */
+  points?: boolean;
 }) {
   const hasChange = change !== undefined && change !== null;
 
   return (
-    <div
-      className={`flex min-w-0 flex-col p-4 ${cell ? "border-r border-b border-[var(--reader-border)] shell:p-5" : "rounded-sm border border-[var(--reader-border)]"}`}
-    >
+    <div className="flex min-w-0 flex-col border-r border-b border-[var(--reader-border)] p-4 shell:p-5">
       <div className="flex items-start justify-between gap-2">
         <span className="text-[13px] font-semibold text-[var(--reader-text-muted)]">{label}</span>
         <InfoTip label={label}>{info}</InfoTip>
@@ -241,31 +280,13 @@ function Tile({
               <ArrowDownRight size={13} className="text-[var(--reader-accent)]" aria-hidden />
             )}
             {change >= 0 ? "+" : ""}
-            {Math.round(change * 100)}%<span className="sr-only"> vs last week</span>
+            {Math.round(change * 100)}
+            {points ? " pts" : "%"}
+            <span className="sr-only"> vs last week</span>
           </span>
         )}
       </div>
-      <span className={`mt-1 text-[12px] font-medium leading-snug text-[var(--reader-text-muted)] ${goal ? "mb-3" : ""}`}>{detail}</span>
-      {goal && (
-        <div className="mt-auto flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px] font-medium text-[var(--reader-text-muted)]">
-          <span>Goal: {goal.text}</span>
-          <span className="inline-flex items-center gap-1">
-            {goal.met === null ? (
-              <>
-                <CircleDashed size={12} aria-hidden /> Not enough data
-              </>
-            ) : goal.met ? (
-              <>
-                <CircleCheck size={12} className="text-emerald-500" aria-hidden /> On target
-              </>
-            ) : (
-              <>
-                <CircleAlert size={12} className="text-[var(--reader-accent)]" aria-hidden /> Below target
-              </>
-            )}
-          </span>
-        </div>
-      )}
+      <span className="mt-1 text-[12px] font-medium leading-snug text-[var(--reader-text-muted)]">{detail}</span>
     </div>
   );
 }

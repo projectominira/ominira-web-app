@@ -88,6 +88,10 @@ describe("sections", () => {
     expect(ids(selectListening(roster))).toEqual(["tunde"]);
   });
 
+  test("speaking: a heard voice counts before its presence says mic on, newest", () => {
+    expect(ids(selectSpeaking(roster, ["tunde"]))).toEqual(["tunde", "sekou", "ada"]);
+  });
+
   test("nobody speaking", () => {
     expect(selectSpeaking([member("tunde", 1)])).toEqual([]);
   });

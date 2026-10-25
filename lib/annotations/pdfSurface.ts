@@ -183,7 +183,7 @@ export function createPdfSurface(root: HTMLElement, engine: PdfEngine, doc: PdfD
  * A word hyphenated across a line is rejoined (keeping the hyphen — it may be
  * a real one, "neo-colonialist"); every other line break becomes a space. The
  * offsets are untouched: this is only the quote. */
-function readableQuote(text: string) {
+export function readableQuote(text: string) {
   return text
     .replace(/-\r?\n\s*/g, "-")
     .replace(/\s*\r?\n\s*/g, " ")

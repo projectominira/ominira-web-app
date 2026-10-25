@@ -7,7 +7,13 @@
 // The context is created and resumed in the join tap (room-store), and a
 // refused play() or a suspended context shows "Tap to resume audio".
 
-const FFT_SIZE = 512;
+/** Each level reads back this far, a little past speaking.ts's 150 ms tick,
+ * so every sample is measured: a short snapshot mostly lands in the gaps
+ * between syllables and misses speech. */
+const WINDOW_S = 0.16;
+/** A level is the loudest stretch this long in the window: a syllable's
+ * length, so pauses around it don't dilute it. */
+const CHUNK_S = 0.02;
 
 type Tap = { source: MediaStreamAudioSourceNode; analyser: AnalyserNode; sink: HTMLAudioElement | null };
 
@@ -17,7 +23,8 @@ export type Playback = {
   remove(sessionId: string): void;
   /** The local mic, measured only (never played back). */
   setLocal(sessionId: string, track: MediaStreamTrack | null): void;
-  /** RMS level (0–1) per session, local included, for speaking.ts. */
+  /** Per session, local included, for speaking.ts: the loudest 20 ms RMS
+   * (0–1) since the last read. */
   levels(): Map<string, number>;
   /** In a tap: resume the context and retry refused sinks. */
   resume(): Promise<void>;
@@ -29,7 +36,10 @@ export function createPlayback(options: { context: AudioContext; onSuspended: (s
   const { context } = options;
   const taps = new Map<string, Tap>();
   const refused = new Set<HTMLAudioElement>();
-  const buffer = new Float32Array(FFT_SIZE);
+  // The smallest power of two covering the window (the analyser's limit is 32768).
+  const fftSize = Math.min(32768, 2 ** Math.ceil(Math.log2(context.sampleRate * WINDOW_S)));
+  const chunk = Math.round(context.sampleRate * CHUNK_S);
+  const buffer = new Float32Array(fftSize);
   // Analysers have to reach the destination to be pulled in every browser; silently.
   const silent = context.createGain();
   silent.gain.value = 0;
@@ -61,7 +71,7 @@ export function createPlayback(options: { context: AudioContext; onSuspended: (s
     remove(sessionId);
     const source = context.createMediaStreamSource(stream);
     const analyser = context.createAnalyser();
-    analyser.fftSize = FFT_SIZE;
+    analyser.fftSize = fftSize;
     source.connect(analyser);
     analyser.connect(silent);
     taps.set(sessionId, { source, analyser, sink });
@@ -104,9 +114,13 @@ export function createPlayback(options: { context: AudioContext; onSuspended: (s
       const levels = new Map<string, number>();
       for (const [sessionId, { analyser }] of taps) {
         analyser.getFloatTimeDomainData(buffer);
-        let sum = 0;
-        for (const sample of buffer) sum += sample * sample;
-        levels.set(sessionId, Math.sqrt(sum / buffer.length));
+        let loudest = 0;
+        for (let start = 0; start + chunk <= buffer.length; start += chunk) {
+          let sum = 0;
+          for (let i = start; i < start + chunk; i++) sum += buffer[i] * buffer[i];
+          loudest = Math.max(loudest, sum / chunk);
+        }
+        levels.set(sessionId, Math.sqrt(loudest));
       }
       return levels;
     },

@@ -13,13 +13,15 @@ import ReaderHeader from "./ReaderHeader";
 import NotesFeedFab from "./NotesFeedFab";
 import ChaptersDrawer from "./ChaptersDrawer";
 import ChapterNavFooter from "./ChapterNavFooter";
-import SelectionActions, { useShareQuote } from "./SelectionActions";
+import SelectionActions from "./SelectionActions";
+import { useShareQuote } from "./ShareQuoteModal";
 import BackToCurrentButton from "./BackToCurrentButton";
 import Loader from "../Loader";
 import type { BookDocument, Passage, Section } from "@/lib/book/schema";
 import { useReaderStore, useTypographyStyle } from "@/stores/reader-store";
 import { useReadingPositionStore } from "@/stores/reading-position-store";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useFeedStore, type FeedTab } from "@/stores/feed-store";
 import { useAudioStore } from "@/stores/audio-store";
 import { activeRoom, useRoomStore } from "@/stores/room-store";
 import { useDockedHeight, useNarrationBarHeight } from "@/app/components/useBottomDock";
@@ -30,7 +32,9 @@ import { buildSectionsById, resolveSpineTarget } from "@/lib/reader/sections";
 import { useSectionCarousel } from "@/lib/reader/useSectionCarousel";
 import { useResumeScroll } from "@/lib/reader/useResumeScroll";
 import { useReadingProgress } from "@/lib/reader/useReadingProgress";
-import { useTextAnnotations } from "@/lib/reader/useTextAnnotations";
+import { FLASH_ANNOTATION_ID, useTextAnnotations } from "@/lib/reader/useTextAnnotations";
+import { sameRanges } from "@/stores/library-store";
+import type { AnnotationRange } from "@/lib/api/types";
 import { createDomSurface } from "@/lib/annotations/surface";
 import { useTextSelection } from "@/lib/annotations/useTextSelection";
 import { useFeed } from "@/lib/reader/useFeed";
@@ -116,6 +120,9 @@ export default function Reader({
   // notesPanel should be exempted from the usual "notes panel open ⇒ hide
   // header" rule (chromeVisible, further down).
   const [notesPanelKeepsHeader, setNotesPanelKeepsHeader] = useState(false);
+  // The thread opened from over the feed, and the feed's tab then: its
+  // panel's back arrow returns there.
+  const [feedReturn, setFeedReturn] = useState<{ annotationId: string; tab: FeedTab } | null>(null);
 
   const {
     getForPassage: getAnnotations,
@@ -131,6 +138,7 @@ export default function Reader({
     deleteSelection,
     onNoteMarkerClick,
     closeNotesPanel,
+    flash,
   } = useTextAnnotations(materialId);
 
   const theme = useReaderStore((s) => s.theme);
@@ -718,6 +726,30 @@ export default function Reader({
     });
     setJustJumpedAnnotationId(entry.annotation.id);
   };
+  // A quote in the room panel: its chapter, then its passage. Someone
+  // else's lights up for a moment: their note's own mark, or (a highlight,
+  // never in your text) a stand-in mark over its words.
+  const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const jumpToPassage = (sectionId: string, ranges: AnnotationRange[], mine: boolean) => {
+    goToSection(sectionId, { animate: false });
+    const passageId = ranges[0]?.passageId;
+    if (!passageId) return;
+    if (!mine) {
+      const marked = getAnnotations(passageId).find((a) => a.id !== FLASH_ANNOTATION_ID && sameRanges(a.ranges, ranges));
+      flash(marked ? null : ranges);
+      setJustJumpedAnnotationId(marked ? marked.id : FLASH_ANNOTATION_ID);
+      clearTimeout(flashTimer.current);
+      flashTimer.current = setTimeout(() => {
+        flash(null);
+        setJustJumpedAnnotationId(null);
+      }, 5000);
+    }
+    requestAnimationFrame(() => {
+      getSlideEl(sectionId)
+        ?.querySelector(`[data-passage-id="${passageId}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  };
 
   // Opens a specific annotation's thread exactly the way clicking its
   // inline marker already does (closing the book feed first, so the two
@@ -740,6 +772,7 @@ export default function Reader({
     annotationId: string,
     opts?: { keepHeaderVisible?: boolean; targetThreadId?: string }
   ) => {
+    setFeedReturn(noteFeed.open ? { annotationId, tab: noteFeed.filter } : null);
     noteFeed.close();
     onNoteMarkerClick(passageId, annotationId, { targetThreadId: opts?.targetThreadId });
     setNotesPanelKeepsHeader(Boolean(opts?.keepHeaderVisible));
@@ -1047,7 +1080,7 @@ export default function Reader({
               onShare={shareQuote.share}
               onSharedToRoom={() => {
                 if (notesPanel) closeNotesPanel();
-                noteFeed.openRoom();
+                noteFeed.openRoom("chat");
               }}
             />
 
@@ -1104,7 +1137,9 @@ export default function Reader({
                 onFilterChange={noteFeed.setFilter}
                 activeSectionId={activeSectionId}
                 onJump={jumpToFeedEntry}
+                onPassage={jumpToPassage}
                 getPassageText={getPassageText}
+                locate={locateFeedEntry}
                 panelType={isMobile ? "sheet" : "side"}
                 onClose={noteFeed.close}
                 targetNoteId={targetGeneralNoteId}
@@ -1125,13 +1160,18 @@ export default function Reader({
                 materialId={materialId}
                 passageId={notesPanel.passageId}
                 getPassageText={getPassageText}
+                locationLabel={(passageId) => locateFeedEntry(passageId)?.label ?? ""}
                 annotationId={notesPanel.annotationId}
                 pendingRanges={notesPanel.ranges}
                 editingNoteId={notesPanel.editingNoteId}
                 targetThreadId={notesPanel.targetThreadId}
                 panelType={isMobile ? "sheet" : "side"}
                 onClose={closeNotesPanel}
-                onShare={shareQuote.share}
+                onBack={
+                  feedReturn && feedReturn.annotationId === notesPanel.annotationId
+                    ? () => useFeedStore.getState().open(materialId, feedReturn.tab)
+                    : undefined
+                }
               />
             )}
           </div>

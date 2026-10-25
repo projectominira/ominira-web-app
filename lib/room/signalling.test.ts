@@ -89,6 +89,17 @@ describe("createSignalling", () => {
     expect(got).toEqual(["a:offer:second"]);
   });
 
+  test("an offer before the peer exists tells the mesh its sender sends", () => {
+    const fake = fakeChannel();
+    const offered: string[] = [];
+    const signalling = createSignalling({ channel: fake.channel, sessionId: "me", onOffer: (from) => offered.push(from) });
+    signalling.setRoster(roster("me", "a"));
+    signalling.attach("b", () => {});
+    fake.deliver(signal("a", "me", "answer"));
+    fake.deliver(signal("a", "me", "offer"));
+    expect(offered).toEqual(["a"]);
+  });
+
   test("an answer with no peer is dropped", () => {
     const { deliver, got, attach } = setup();
     deliver(signal("a", "me", "answer"));

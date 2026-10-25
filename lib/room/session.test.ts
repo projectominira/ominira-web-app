@@ -110,6 +110,7 @@ function fakeDeps(hub: ReturnType<typeof createHub>, peers: FakePeer[]): Session
       startedBy: "r0",
       startedAt: new Date().toISOString(),
       maxMembers: 25,
+      group: null,
     },
     isModerator: readerId === "r0",
     me: { name: readerId, avatar: { color: null, url: null } },

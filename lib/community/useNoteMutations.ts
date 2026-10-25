@@ -24,14 +24,22 @@ import type { AnnotationRange, Note, NoteContent, NoteVisibility } from "@/lib/a
  * own note list (materialKeys.notes) is always patched directly regardless
  * — see each mutation below. */
 function invalidateFanoutQueries(queryClient: QueryClient, materialId: string | null) {
-  if (materialId) queryClient.invalidateQueries({ queryKey: materialKeys.notesFeedPrefix(materialId) });
+  if (materialId) {
+    queryClient.invalidateQueries({ queryKey: materialKeys.notesFeedPrefix(materialId) });
+    // The book's room (rooms-spec §5.1): a note written in the reader shows there.
+    queryClient.invalidateQueries({ queryKey: materialKeys.streamPrefix(materialId) });
+  }
   queryClient.invalidateQueries({ queryKey: communityKeys.feedPrefix });
+  // A thread open beside a room (rooms/Thread) re-reads its note.
+  queryClient.invalidateQueries({ queryKey: ["community", "notes", "thread"] });
 }
 
 type ReactableFeedItem = { note: Note; replies: Note[] };
 type ReactableFeedPage = { items: ReactableFeedItem[]; nextCursor: string | null };
+/** A paged feed (the group's Notes tab) holds its pages in one cache entry. */
+type FeedCache = ReactableFeedPage | { pages: ReactableFeedPage[]; pageParams: unknown[] };
 
-function flipReaction(note: Note): Note {
+export function flipReaction(note: Note): Note {
   return { ...note, reactedByMe: !note.reactedByMe, reactionCount: note.reactionCount + (note.reactedByMe ? -1 : 1) };
 }
 
@@ -53,8 +61,10 @@ function patchFeeds(
         return patched ? [patched] : [];
       }),
     };
-  queryClient.setQueriesData<ReactableFeedPage>({ queryKey: communityKeys.feedPrefix }, patchPage);
-  if (materialId) queryClient.setQueriesData<ReactableFeedPage>({ queryKey: materialKeys.notesFeedPrefix(materialId) }, patchPage);
+  const patchCache = (old: FeedCache | undefined): FeedCache | undefined =>
+    old && ("pages" in old ? { ...old, pages: old.pages.map((page) => patchPage(page)!) } : patchPage(old));
+  queryClient.setQueriesData<FeedCache>({ queryKey: communityKeys.feedPrefix }, patchCache);
+  if (materialId) queryClient.setQueriesData<FeedCache>({ queryKey: materialKeys.notesFeedPrefix(materialId) }, patchCache);
 }
 
 /** A reply landing on a thread that's already present in these feeds (home
@@ -77,22 +87,16 @@ function updateNoteInFeeds(queryClient: QueryClient, materialId: string | null, 
   patchFeeds(queryClient, materialId, (item) => ({ ...item, note: applyTo(item.note), replies: item.replies.map(applyTo) }));
 }
 
-/** Prepends a brand-new top-level post straight into every already-loaded
- * "recent"-sort feed page it actually belongs on — "top"/"trending" are
- * left to invalidateFanoutQueries (see that function's own doc comment for
- * why: an existing note's rank there is a server call, not a guess), but
- * "recent" for a just-created post is deterministic — it's newer than
- * everything else on the page, so it always sorts first. Matched against
- * each page's own `topicId` (communityKeys.feed's key shape) — the "All"
- * page (`topicId: null`) always gets it, a specific-topic page only if the
- * post was tagged under that topic. */
-function addNewNoteToFeeds(queryClient: QueryClient, topicIds: string[], item: ReactableFeedItem) {
-  for (const [key, data] of queryClient.getQueriesData<ReactableFeedPage>({ queryKey: communityKeys.feedPrefix })) {
-    if (!data) continue;
-    const [, , , sort, topicId] = key as [string, string, string, string, string | null];
-    if (sort !== "recent") continue;
-    if (topicId && !topicIds.includes(topicId)) continue;
-    if (data.items.some((existing) => existing.note.id === item.note.id)) continue;
+/** Prepends a brand-new top-level post straight into the already-loaded
+ * "recent" home feed — "top"/"trending" and the group feeds are left to
+ * invalidateFanoutQueries (see that function's own doc comment for why: an
+ * existing note's rank there is a server call, not a guess), but "recent"
+ * for a just-created post is deterministic — it's newer than everything
+ * else on the page, so it always sorts first. */
+function addNewNoteToFeeds(queryClient: QueryClient, item: ReactableFeedItem) {
+  const key = communityKeys.feed("recent");
+  const data = queryClient.getQueryData<ReactableFeedPage>(key);
+  if (data && !data.items.some((existing) => existing.note.id === item.note.id)) {
     queryClient.setQueryData<ReactableFeedPage>(key, { ...data, items: [item, ...data.items] });
   }
 }
@@ -126,12 +130,17 @@ export type CreateNoteInput = {
   content: NoteContent;
   parentId?: string;
   visibility?: NoteVisibility;
-  /** A thread root's chosen topics — required for a discussion post
-   * (ignored, like `threadType`, once `parentId` is set). */
-  topicIds?: string[];
   /** "discussion" — HomeComposer's book-less (or book_share-attached)
    * top-level posts; see POST /api/community/notes' own doc comment. */
   threadType?: "discussion";
+  /** A discussion post's attached book (an upload from the composer's file
+   * icon), sent in place of the hook's own `materialId`. */
+  attachMaterialId?: string;
+  /** Thread roots only, like `threadType`: the group it's posted to, who it
+   * tags, and Whole circle (POST /api/community/notes). */
+  groupSlug?: string;
+  mentionReaderIds?: string[];
+  wholeCircle?: boolean;
 };
 
 /** Reads/writes this material's own note list (materialKeys.notes) — a
@@ -172,7 +181,8 @@ export function useCreateNote(materialId: string | null) {
   const { data: profile } = useProfile();
   const cache = localNotesCache(queryClient, materialId);
   return useMutation({
-    mutationFn: (input: CreateNoteInput) => apiFetch<Note>("/community/notes", { json: { materialId, ...input } }),
+    mutationFn: ({ attachMaterialId, ...input }: CreateNoteInput) =>
+      apiFetch<Note>("/community/notes", { json: { materialId: attachMaterialId ?? materialId, ...input } }),
     onMutate: async (input) => {
       await cache.cancel();
       const previous = cache.get();
@@ -197,10 +207,8 @@ export function useCreateNote(materialId: string | null) {
         reactionCount: 0,
         reactedByMe: false,
         bookmarkedByMe: false,
-        topicName: target?.topicName ?? null,
-        topicSlug: target?.topicSlug ?? null,
-        topicNames: target?.topicNames ?? [],
-        topics: target?.topics ?? [],
+        group: null,
+        mentions: [],
         createdAt: now,
         updatedAt: now,
       };
@@ -218,7 +226,7 @@ export function useCreateNote(materialId: string | null) {
         // this is safe to guess, unlike an existing note's rank on "top"/
         // "trending". onSuccess still swaps this temp item for the real
         // one below, same as every other optimistic write here.
-        addNewNoteToFeeds(queryClient, input.topicIds ?? [], { note: optimistic, replies: [] });
+        addNewNoteToFeeds(queryClient, { note: optimistic, replies: [] });
       }
       return { previous, tempId };
     },

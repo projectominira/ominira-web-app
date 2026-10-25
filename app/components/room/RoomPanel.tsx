@@ -1,127 +1,157 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ROOM_CHAT_ID } from "./RoomActions";
+import { ChevronRight, Mic, MicOff } from "lucide-react";
 import RoomAvatar from "./RoomAvatar";
-import { RoomChatList } from "./RoomChat";
-import UnreadBadge from "./UnreadBadge";
 import { comradeName } from "@/lib/reader/authorDisplay";
-import { formatShortTimeAgo } from "@/lib/reader/timeAgo";
+import { formatShortTimeAgo } from "@/lib/time/relative";
 import { positionLabel } from "@/lib/room/follow";
 import { narratorName } from "@/lib/room/presence";
 import { useFollowing, useHands, useListening, usePlace, useReaderView, useRoom, useSpeaking, useVoice } from "@/lib/room/hooks";
 import type { RoomPresence } from "@/lib/room/events";
-import { formatDuration } from "@/lib/time/duration";
 import { useNow } from "@/lib/time/useNow";
 import { useRoomStore } from "@/stores/room-store";
 
-// The feed panel's Room tab, the expanded mini-player (design M6 / C5): Live
-// with the count and the time, the room's title over its book, then
-// Speakers, Hands raised, Listening and Chat on one page, each under its
-// heading. The controls stay in the mini-player, which shows alongside;
-// the chat's composer is the panel's footer (RoomChatComposer). Each
-// member's row has a Read along button (spec §1.6). Loaded by FeedPanel only while you're in the
-// room on this book.
+// The room panel's bodies (RoomMiniPlayer): the stage, everyone by face in
+// a grid (hosts, then speakers, hands raised and listeners), each with
+// their role under their name, as a Space shows it; and the guest list
+// it opens, the same people under Host, Speakers, Hands raised and
+// Listeners, each row with where they are and Read along (spec §1.6).
 
-/** Who's here and the chat, the Room tab's body. */
-export function RoomStage() {
-  const session = useRoomStore((s) => s.session);
-  const followingId = useFollowing()?.member.readerId;
-  const room = useRoom((s) => s.room);
-  const me = useRoom((s) => s.readerId);
-  const count = useRoom((s) => s.roster.length) ?? 0;
-  const unread = useRoom((s) => s.chat.unread) ?? 0;
+/** Faces on the stage before "N other listeners". */
+const STAGE_FACES = 16;
+
+/** Everyone, in the stage's order: hosts first, then speakers, hands
+ * raised and listeners. */
+function useEveryone() {
   const speaking = useSpeaking() ?? [];
   const hands = useHands() ?? [];
   const listening = useListening() ?? [];
-  const now = useNow();
+  const all = [...speaking, ...hands, ...listening];
+  return { all: [...all.filter((p) => p.isModerator), ...all.filter((p) => !p.isModerator)], speaking, hands, listening };
+}
 
-  if (!room || !session) return null;
-  const follow = (p: RoomPresence) => (p.readerId === me ? undefined : () => session.follow(p.readerId));
-  const row = (p: RoomPresence) => ({
-    member: p,
+/** A tap on someone (never yourself) reads along with them. */
+function useFollowTarget() {
+  const session = useRoomStore((s) => s.session);
+  const me = useRoom((s) => s.readerId);
+  const followingId = useFollowing()?.member.readerId;
+  return (p: RoomPresence) => ({
     pressed: p.readerId === followingId,
-    onClick: follow(p),
+    onClick: p.readerId === me || !session ? undefined : () => session.follow(p.readerId),
   });
+}
 
+/** Who's here, by face, then the way to the rest. */
+export function RoomStage({ onGuests }: { onGuests: () => void }) {
+  const { all } = useEveryone();
+  const follow = useFollowTarget();
+  const shown = all.slice(0, STAGE_FACES);
+  const others = all.length - shown.length;
   return (
-    <div className="flex flex-col gap-5 pt-4">
-      <header className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex flex-none items-center gap-1.5 rounded-full bg-[color-mix(in_srgb,var(--reader-accent)_12%,var(--reader-surface))] px-2 py-[3px] text-[10px] leading-[1.3] font-bold tracking-[0.08em] text-[var(--reader-accent)] uppercase">
-            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-brand-500" />
-            Live
-          </span>
-          <span className="min-w-0 flex-1 truncate text-xs font-medium text-[var(--reader-text-muted)]">
-            {count} listening · {formatDuration(now - Date.parse(room.startedAt))}
-          </span>
-        </div>
-        <h2 className="m-0 font-serif text-lg leading-tight font-semibold">{room.title}</h2>
-        <p className="m-0 truncate text-[13px] font-medium text-[var(--reader-text-muted)]">
-          {room.bookTitle}
-          {room.bookAuthor && ` · ${room.bookAuthor}`}
-        </p>
-      </header>
-
-      {speaking.length > 0 && (
-        <Section title="Speakers" count={speaking.length}>
-          {speaking.map((p) => (
-            <Member key={p.readerId} {...row(p)} stage fallback="Mic on" />
-          ))}
-        </Section>
+    <div className="flex flex-col gap-4 pt-1 pb-4">
+      <ul className="m-0 grid list-none grid-cols-4 gap-x-2 gap-y-4 p-0">
+        {shown.map((p) => (
+          <li key={p.readerId}>
+            <Face member={p} {...follow(p)} />
+          </li>
+        ))}
+      </ul>
+      {others > 0 && (
+        <button
+          type="button"
+          onClick={onGuests}
+          className="flex cursor-pointer items-center justify-between rounded-sm border border-[var(--reader-border)] bg-transparent px-4 py-3 text-[13px] font-bold text-[var(--reader-text)] transition-colors hover:bg-[var(--reader-surface-hover)]"
+        >
+          {others} other {others === 1 ? "listener" : "listeners"}
+          <ChevronRight size={18} strokeWidth={2} />
+        </button>
       )}
-
-      {hands.length > 0 && (
-        <Section title="Hands raised" count={hands.length}>
-          {hands.map((p) => (
-            <Member
-              key={p.readerId}
-              {...row(p)}
-              fallback="Hand raised"
-              after={formatShortTimeAgo(p.handRaisedAt!, now)}
-            />
-          ))}
-        </Section>
-      )}
-
-      <Section title="Listening" count={listening.length}>
-        {listening.length === 0 ? (
-          <p className="m-0 text-[13px] text-[var(--reader-text-muted)]">Waiting for comrades</p>
-        ) : (
-          listening.map((p) => <Member key={p.readerId} {...row(p)} fallback="Listening" />)
-        )}
-      </Section>
-
-      <Section id={ROOM_CHAT_ID} title="Chat" badge={<UnreadBadge count={unread} />}>
-        <RoomChatList />
-      </Section>
     </div>
   );
 }
 
-/** A heading over its rows: the title, how many, and any badge. */
-function Section({
-  id,
-  title,
-  count,
-  badge,
-  children,
-}: {
-  id?: string;
-  title: string;
-  count?: number;
-  badge?: ReactNode;
-  children: ReactNode;
-}) {
+/** Their role, as the stage shows it under their name. */
+function role(p: RoomPresence) {
+  return p.isModerator ? "Host" : p.micOnAt !== null ? "Speaker" : "Listener";
+}
+
+/** Someone on the stage: their face (a tap reads along), their name, and
+ * their role, with their mic's state for a host or speaker. */
+function Face({ member, pressed, onClick }: { member: RoomPresence; pressed: boolean; onClick: (() => void) | undefined }) {
+  const { speaking } = useVoice(member.readerId);
+  const micOn = member.micOnAt !== null;
+  const r = role(member);
+  const MicIcon = micOn ? Mic : MicOff;
   return (
-    <section id={id} className="flex flex-col gap-2">
+    <div className="flex min-w-0 flex-col items-center gap-1.5 text-center">
+      <RoomAvatar member={member} size={52} pressed={pressed} onClick={onClick} />
+      <span className="flex min-w-0 max-w-full flex-col">
+        <span className={`truncate text-[13px] font-bold ${pressed ? "text-[var(--reader-accent)]" : "text-[var(--reader-text)]"}`}>
+          {comradeName(member.name)}
+        </span>
+        <span
+          className={`flex items-center justify-center gap-1 text-xs ${
+            speaking ? "font-bold text-[var(--reader-accent)]" : "font-medium text-[var(--reader-text-muted)]"
+          }`}
+        >
+          {r !== "Listener" && <MicIcon aria-hidden="true" size={12} strokeWidth={2.25} className={micOn ? "text-[var(--reader-accent)]" : undefined} />}
+          {r}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/** Everyone, under their role: the stage's "other listeners" and the
+ * footer's guests button open it. */
+export function RoomGuests() {
+  const { speaking, hands, listening } = useEveryone();
+  const follow = useFollowTarget();
+  const now = useNow();
+  const all = [...speaking, ...hands, ...listening];
+  const hosts = all.filter((p) => p.isModerator);
+  const row = (p: RoomPresence) => ({ member: p, ...follow(p) });
+  const groups = [
+    { title: "Speakers", people: speaking.filter((p) => !p.isModerator), fallback: "Mic on" },
+    { title: "Hands raised", people: hands.filter((p) => !p.isModerator), fallback: "Hand raised" },
+    { title: "Listeners", people: listening.filter((p) => !p.isModerator), fallback: "Listening" },
+  ];
+
+  return (
+    <div className="flex flex-col gap-5 pt-1 pb-4">
+      <Section title="Host" count={hosts.length}>
+        {hosts.map((p) => (
+          <Member key={p.readerId} {...row(p)} fallback={p.micOnAt !== null ? "Mic on" : "Listening"} />
+        ))}
+      </Section>
+      {groups.map(
+        (g) =>
+          g.people.length > 0 && (
+            <Section key={g.title} title={g.title} count={g.people.length}>
+              {g.people.map((p) => (
+                <Member
+                  key={p.readerId}
+                  {...row(p)}
+                  fallback={g.fallback}
+                  after={g.title === "Hands raised" && p.handRaisedAt ? formatShortTimeAgo(p.handRaisedAt, now) : undefined}
+                />
+              ))}
+            </Section>
+          )
+      )}
+    </div>
+  );
+}
+
+/** A heading over its rows: the title and how many. */
+function Section({ title, count, children }: { title: string; count: number; children: ReactNode }) {
+  if (count === 0) return null;
+  return (
+    <section className="flex flex-col gap-2">
       <div className="flex items-center gap-2 py-1">
-        <h3 className="m-0 font-sans text-[13px] font-bold text-[var(--reader-text-muted)]">{title}</h3>
-        {count !== undefined && (
-          <span className="text-xs font-medium tabular-nums text-[var(--reader-text-subtle)]">{count}</span>
-        )}
-        <span className="flex-1" />
-        {badge}
+        <h3 className="m-0 font-sans text-[15px] font-bold text-[var(--reader-text)]">{title}</h3>
+        <span className="text-xs font-medium tabular-nums text-[var(--reader-text-subtle)]">{count}</span>
       </div>
       {children}
     </section>
@@ -130,21 +160,18 @@ function Section({
 
 /** Someone in the room, the same row in every section: their face, their
  * name, and a line under it — "Speaking" while they talk, else where they
- * are ("p. 4", "Chapter 9"; spec §3.3) or `fallback`, after "Host" for a moderator and
- * before `after` (how long a hand's been up). Each is a bordered card;
- * speakers sit on the stage with a larger face. */
+ * are ("p. 4", "Chapter 9"; spec §3.3) or `fallback`, before `after` (how
+ * long a hand's been up) — then Read along. */
 function Member({
   member,
   pressed,
   onClick,
-  stage = false,
   fallback,
   after,
 }: {
   member: RoomPresence;
   pressed: boolean;
   onClick: (() => void) | undefined;
-  stage?: boolean;
   fallback: string;
   after?: string;
 }) {
@@ -157,10 +184,10 @@ function Member({
     : speaking
       ? "Speaking"
       : (positionLabel(member, place, view)?.text ?? fallback);
-  const line = [member.isModerator && "Host", status, after].filter(Boolean).join(" · ");
+  const line = [status, after].filter(Boolean).join(" · ");
   return (
     <div className="flex items-center gap-3 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] py-2.5 pr-2 pl-3">
-      <RoomAvatar member={member} size={stage ? 44 : 40} />
+      <RoomAvatar member={member} size={40} />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-[13px] text-[var(--reader-text)] font-semibold">{comradeName(member.name)}</span>
         <span

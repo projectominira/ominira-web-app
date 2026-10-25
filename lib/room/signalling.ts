@@ -30,20 +30,30 @@ export type Signalling = {
   close(): void;
 };
 
-export function createSignalling(options: { channel: Pick<RoomChannel, "send" | "on">; sessionId: string }): Signalling {
+export function createSignalling(options: {
+  channel: Pick<RoomChannel, "send" | "on">;
+  sessionId: string;
+  /** An offer came from a session with no peer yet: it sends, whatever
+   * presence says so far, so the mesh can create the peer now. */
+  onOffer?: (from: string) => void;
+}): Signalling {
   const { channel, sessionId } = options;
   let roster: readonly Pick<MeshMember, "sessionId">[] = [];
   const handlers = new Map<string, SignalHandler>();
-  // Presence reaches us 0.5–1.5 s late, so a new speaker's offer can beat
-  // the presence that makes us want the peer. Keep the latest offer per
-  // sender until the mesh creates it. An answer with no peer is meaningless.
+  // Presence reaches us late (0.5–1.5 s, longer when a push is retried), so
+  // a new speaker's offer can beat the presence that makes us want the peer.
+  // Keep the latest offer per sender and tell the mesh, which creates the
+  // peer at once. An answer with no peer is meaningless.
   const heldOffers = new Map<string, Signal>();
 
   const off = channel.on("signal", (signal) => {
     if (!acceptSignal(signal, sessionId, roster)) return;
     const handler = handlers.get(signal.from);
     if (handler) handler(signal);
-    else if (signal.sdp.type === "offer") heldOffers.set(signal.from, signal);
+    else if (signal.sdp.type === "offer") {
+      heldOffers.set(signal.from, signal);
+      options.onOffer?.(signal.from);
+    }
   });
 
   return {

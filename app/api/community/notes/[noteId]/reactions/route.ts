@@ -3,6 +3,8 @@ import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { getAuthenticatedReader } from "@/lib/auth/session";
 import { notFound, unauthorized } from "@/lib/api/errors";
 import { notifyReader } from "@/lib/notifications/notify";
+import { canReadPost } from "@/lib/community/visibility";
+import { loadPostViewer } from "@/lib/community/viewer";
 import { comradeName } from "@/lib/reader/authorDisplay";
 import { notificationSnippet } from "@/lib/notifications/snippet";
 
@@ -15,10 +17,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ not
 
   const { data: note } = await admin
     .from("posts")
-    .select("id, reaction_count, reader_id, material_id, content")
+    .select("id, reaction_count, reader_id, material_id, content, visibility, mentions_group_id")
     .eq("id", noteId)
     .maybeSingle();
-  if (!note) return notFound();
+  // Grants are only worth loading for a private note.
+  if (!note || (note.visibility !== "public" && !canReadPost(note, await loadPostViewer(reader.readerId)))) return notFound();
 
   const { data: existing } = await admin
     .from("reactions")

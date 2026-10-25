@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const nextConfig: NextConfig = {
+  // PDFium's Node build loads its pdfium.wasm from beside itself
+  // (lib/passage/text.ts), which a bundled copy can't.
+  serverExternalPackages: ["@embedpdf/pdfium"],
   turbopack: {
     root: path.resolve(__dirname),
     // pdf.js (used only by the upload parser, lib/book/pdfParser.ts — the
