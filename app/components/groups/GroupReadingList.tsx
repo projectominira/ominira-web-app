@@ -5,11 +5,10 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import BookCover from "@/app/components/shared/BookCover";
 import { resolveBookThumbnailSrc } from "@/lib/materials/image";
-import { ArrowDown, ArrowUp, BookOpen, Calendar, Check, Search, Trash2, Upload } from "lucide-react";
+import { Search, Upload } from "lucide-react";
 import Loader from "@/app/components/Loader";
-import BookListRow, { type BookRowAction } from "@/app/components/shell/BookListRow";
-import NoResults from "@/app/components/shared/NoResults";
 import { DateRangeSheet } from "@/app/components/shared/DatePicker";
+import type { OverflowMenuItem } from "@/app/components/reader/notes/OverflowMenu";
 import { useProfile } from "@/lib/auth/useProfile";
 import { bookDates, sessionCount } from "@/lib/groups/copy";
 import {
@@ -26,7 +25,9 @@ import type { GroupBook } from "@/lib/groups/types";
 import { confirmAction } from "@/stores/confirm-store";
 import { showToast } from "@/stores/toast-store";
 import { onFail } from "./onFail";
-import { secondaryButton } from "./buttons";
+import RowMenu from "./RowMenu";
+import CoverStatus from "./CoverStatus";
+import ListHeader from "./ListHeader";
 
 // Opened on demand only: the upload pipeline and the library search.
 const AddBookModal = dynamic(() => import("@/app/components/shell/AddBookModal"));
@@ -34,25 +35,14 @@ const LibraryPickerSheet = dynamic(() => import("./LibraryPickerSheet"));
 
 type Sheet = { kind: "library" } | { kind: "upload" } | { kind: "dates"; book: GroupBook } | null;
 
-const eyebrow = "text-[11px] font-bold uppercase tracking-[0.08em]";
-
 /**
- * The reading list (spec §3.2 M9, D1), one grid like the library: Reading now, Up next in the
- * moderators' order, then Done, every book a `BookListRow` with the list's
- * dates under it. On the group page it's the same read-only list for
- * everyone, moderators included; `manage` (Manage → Reading list) adds each
- * book's ⋯ (Read this now, Move up/down, Edit dates, Mark as done, Remove),
- * From library and Upload.
+ * Manage → Reading list (spec §3.2 M9): one list in reading order — the
+ * book read now, Up next in the moderators' order, then the finished ones —
+ * each book's status on its cover, its dates under the title, and its ⋯
+ * (Read this now, Move up/down, Edit dates, Mark as finished, Remove).
+ * From library and Upload add to it.
  */
-export default function GroupReadingList({
-  slug,
-  categories,
-  manage = false,
-}: {
-  slug: string;
-  categories: string[];
-  manage?: boolean;
-}) {
+export default function GroupReadingList({ slug, categories }: { slug: string; categories: string[] }) {
   const { data: page, isLoading } = useGroup(slug);
   const { data: books, isLoading: booksLoading } = useGroupBooks(slug);
   const { data: sessions } = useGroupSessions(slug);
@@ -72,10 +62,9 @@ export default function GroupReadingList({
   }
   if (!page) return null;
 
-  const isModerator = page.myRole === "moderator";
-  const list = books ?? [];
-  const current = list.find((b) => b.status === "current");
-  const next = list.filter((b) => b.status === "next");
+  const all = books ?? [];
+  const next = all.filter((b) => b.status === "next");
+  const list = [...all.filter((b) => b.status === "current"), ...next, ...all.filter((b) => b.status === "done")];
 
   const setStatus = (book: GroupBook, status: "current" | "done") =>
     update.mutate({ materialId: book.material.id, update: { status } }, { onError: onFail("Couldn't update the list.") });
@@ -85,7 +74,7 @@ export default function GroupReadingList({
   };
   // The first book on an empty list becomes current (lib/groups/books.ts).
   const addBook = (materialId: string) => {
-    const first = list.length === 0;
+    const first = all.length === 0;
     return add.mutateAsync(materialId).then(
       () => showToast(first ? "Added as Reading now" : "Added to Up next"),
       (err) => {
@@ -101,150 +90,76 @@ export default function GroupReadingList({
     [order[i], order[i + by]] = [order[i + by], order[i]];
     reorder.mutate(order, { onError: onFail("Couldn't move it.") });
   };
-  const moves = (book: GroupBook): BookRowAction[] => {
-    if (book.status !== "next") return [];
+
+  const items = (book: GroupBook): OverflowMenuItem[] => {
     const i = next.indexOf(book);
     return [
-      ...(i > 0 ? [{ label: "Move up", icon: ArrowUp, onSelect: () => move(book, -1) }] : []),
-      ...(i < next.length - 1 ? [{ label: "Move down", icon: ArrowDown, onSelect: () => move(book, 1) }] : []),
+      ...(book.status === "current" ? [] : [{ label: "Read this now", onClick: () => setStatus(book, "current") }]),
+      ...(i > 0 ? [{ label: "Move up", onClick: () => move(book, -1) }] : []),
+      ...(i >= 0 && i < next.length - 1 ? [{ label: "Move down", onClick: () => move(book, 1) }] : []),
+      { label: "Edit dates", onClick: () => setSheet({ kind: "dates", book }) },
+      ...(book.status === "done" ? [] : [{ label: "Mark as finished", onClick: () => setStatus(book, "done") }]),
+      { label: "Remove", onClick: () => void onRemove(book), danger: true },
     ];
   };
 
-  const actions = (book: GroupBook): BookRowAction[] | undefined =>
-    isModerator
-      ? [
-          ...(book.status === "current" ? [] : [{ label: "Read this now", icon: BookOpen, onSelect: () => setStatus(book, "current") }]),
-          ...moves(book),
-          { label: "Edit dates", icon: Calendar, onSelect: () => setSheet({ kind: "dates", book }) },
-          ...(book.status === "done" ? [] : [{ label: "Mark as done", icon: Check, onSelect: () => setStatus(book, "done") }]),
-          { label: "Remove", icon: Trash2, onSelect: () => void onRemove(book), danger: true },
-        ]
-      : undefined;
-
-  const dates = (book: GroupBook) => {
-    const label =
-      [bookDates(book), book.status === "done" && book.sessions > 0 ? sessionCount(book.sessions) : null].filter(Boolean).join(" · ") ||
-      null;
-    if (!label) return null;
-    return (
-      <span className="flex items-center gap-1.5 text-[12px] font-semibold text-[var(--reader-text-muted)]">
-        {book.status !== "done" && <Calendar size={14} />}
-        {label}
-      </span>
-    );
-  };
-
-  const datesOrSet = (book: GroupBook) =>
-    dates(book) ??
-    (isModerator && (
-      <button
-        type="button"
-        onClick={() => setSheet({ kind: "dates", book })}
-        className="cursor-pointer self-start border-none bg-transparent p-0 text-xs font-semibold text-brand-500"
-      >
-        Set dates
-      </button>
-    ));
-  const row = (book: GroupBook) => (
-    <BookListRow
-      key={book.material.id}
-      material={book.material}
-      detail={
-        datesOrSet(book)
-      }
-      actions={actions(book)}
-    />
-  );
-  const done = list.filter((b) => b.status === "done");
-  const heading = (label: string) => <h2 className={`m-0 ${eyebrow} text-[var(--reader-text-subtle)]`}>{label}</h2>;
-
-  const add_ = manage && isModerator && (
-    <div className="flex flex-none gap-2">
-      <button type="button" onClick={() => setSheet({ kind: "library" })} className={secondaryButton}>
-        <Search size={15} />
-        From library
-      </button>
-      {profile?.canUpload && (
-        <button type="button" onClick={() => setSheet({ kind: "upload" })} className={secondaryButton}>
-          <Upload size={15} />
-          Upload
-        </button>
-      )}
-    </div>
-  );
+  const detail = (book: GroupBook) =>
+    [bookDates(book), book.status === "done" && book.sessions > 0 ? sessionCount(book.sessions) : null].filter(Boolean).join(" · ") || null;
 
   return (
-    <div className="flex flex-col gap-8 pt-1">
-      {add_ && (
-        <div className="flex items-center justify-between gap-3">
-          {/* <p className="m-0 text-[13px] text-[var(--reader-text-muted)]">Books the group reads, in order.</p> */}
-          {add_}
-        </div>
-      )}
-      {list.length === 0 && <NoResults message="No books on the list yet." />}
+    <div className="flex flex-col gap-1 pt-1">
+      <ListHeader
+        count={all.length ? `${all.length} ${all.length === 1 ? "book" : "books"}` : "No books yet"}
+        label="Add book"
+        items={[
+          { label: "From library", icon: <Search size={14} />, onClick: () => setSheet({ kind: "library" }) },
+          ...(profile?.canUpload ? [{ label: "Upload", icon: <Upload size={14} />, onClick: () => setSheet({ kind: "upload" }) }] : []),
+        ]}
+      />
 
-      {current && (
-        <section aria-label="Reading now" className="flex flex-col gap-4 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-5">
-          <div className="flex gap-4">
-            <Link href={`/library/${current.material.slug}`} className="h-[120px] w-20 flex-none overflow-hidden rounded-xs">
-              <BookCover
-                materialType={current.material.materialType}
-                src={resolveBookThumbnailSrc(current.material)}
-                alt={current.material.title}
-                className="h-full w-full"
-              />
-            </Link>
-            <div className="flex min-w-0 flex-col justify-center gap-1.5">
-              <span className={`${eyebrow} text-brand-500`}>Reading now</span>
-              <Link href={`/library/${current.material.slug}`} className="line-clamp-2 font-serif text-[17px] leading-snug font-semibold text-[var(--reader-text)] no-underline">
-                {current.material.title}
-              </Link>
-              {current.material.author && <span className="truncate text-[13px] text-[var(--reader-text-muted)]">{current.material.author}</span>}
-              {datesOrSet(current)}
-            </div>
-          </div>
-          {isModerator && (
-            <div className="flex gap-2.5 border-t border-[var(--reader-border)] pt-4">
-              <button type="button" onClick={() => setSheet({ kind: "dates", book: current })} className={secondaryButton}>
-                <Calendar size={15} />
-                Edit dates
-              </button>
-              <button type="button" onClick={() => setStatus(current, "done")} className={secondaryButton}>
-                <Check size={15} />
-                Mark as done
-              </button>
-            </div>
-          )}
-        </section>
-      )}
-
-      {next.length > 0 && (
-        <section className="flex flex-col gap-1">
-          {heading("Up next")}
-          <div>{next.map(row)}</div>
-        </section>
-      )}
-
-      {done.length > 0 && (
-        <section className="flex flex-col gap-1">
-          {heading("Done")}
-          <div>{done.map(row)}</div>
-        </section>
+      {list.length > 0 && (
+        <ul className="m-0 list-none p-0">
+          {list.map((book) => {
+            const { material } = book;
+            const dates = detail(book);
+            return (
+              <li key={material.id} className="flex items-center gap-3.5 border-b border-[var(--reader-border)] py-3">
+                <Link href={`/library/${material.slug}`} className="relative h-[68px] w-12 flex-none overflow-hidden rounded-xs">
+                  <BookCover materialType={material.materialType} src={resolveBookThumbnailSrc(material)} alt={material.title} className="h-full w-full" iconSize={16} />
+                  <CoverStatus status={book.status} />
+                </Link>
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <Link href={`/library/${material.slug}`} className="truncate font-serif text-[14px] font-semibold text-[var(--reader-text)] no-underline hover:text-brand-500">
+                    {material.title}
+                  </Link>
+                  {material.author && <span className="truncate text-xs text-[var(--reader-text-muted)]">{material.author}</span>}
+                  {dates ? (
+                    <span className="text-xs font-semibold text-[var(--reader-text-muted)]">{dates}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setSheet({ kind: "dates", book })}
+                      className="cursor-pointer self-start border-none bg-transparent p-0 text-xs font-semibold text-brand-500"
+                    >
+                      Set dates
+                    </button>
+                  )}
+                </div>
+                <RowMenu label={`Manage ${material.title}`} items={items(book)} />
+              </li>
+            );
+          })}
+        </ul>
       )}
 
       {sheet?.kind === "library" && (
-        <LibraryPickerSheet
-          listed={new Set(list.map((b) => b.material.id))}
-          onClose={() => setSheet(null)}
-          onPick={addBook}
-        />
+        <LibraryPickerSheet listed={new Set(all.map((b) => b.material.id))} onClose={() => setSheet(null)} onPick={addBook} />
       )}
       {sheet?.kind === "upload" && (
         <AddBookModal publicOnly categories={categories} onClose={() => setSheet(null)} onUploaded={(book) => void addBook(book.materialId).catch(() => {})} />
       )}
       {sheet?.kind === "dates" && (
         <DateRangeSheet
-          title={`Dates for ${sheet.book.material.title}`}
           initial={{ start: sheet.book.startsOn, end: sheet.book.endsOn }}
           marks={sessions && sessionDays(sessions.upcoming, sessions.timezone)}
           onClose={() => setSheet(null)}

@@ -1,6 +1,6 @@
 import type { AnnotationRange, MaterialSummary, Note } from "@/lib/api/types";
 import type { FeedItem } from "@/lib/community/feed";
-import type { GroupMilestone, GroupSession, TargetView } from "@/lib/groups/types";
+import type { GroupBookStatus, GroupMilestone, GroupSession, TargetView } from "@/lib/groups/types";
 import type { StreakView } from "@/lib/streaks/types";
 
 export type RoomKind = "group" | "book";
@@ -123,12 +123,11 @@ export type BookRoomHeader = {
 
 /** A book on the group's reading list (sheet #c8): its words are the
  * route's ("Walter Rodney · group is mostly on Ch. 5"). */
-export type ReadingListRow = { id: string; title: string; cover: string | null; sub: string; pct: number | null };
+export type ReadingListRow = { id: string; status: GroupBookStatus; title: string; cover: string | null; sub: string; pct: number | null };
 
-export type ReadingList = { now: ReadingListRow | null; next: ReadingListRow[]; finished: ReadingListRow[] };
-
-/** A member in Group info: their chapter, and a role tag for the team. */
-export type MemberRow = { comrade: Comrade; role: string | null };
+/** A member in Group info: a role tag for the team, and how far through
+ * the current book they are; null if not started. */
+export type MemberRow = { comrade: Comrade; role: string | null; pct?: number | null };
 
 /** One status in Home's strip (home-spec §2 Home 1), in the strip's order:
  * a room live now (a group's too, once groups are in). */

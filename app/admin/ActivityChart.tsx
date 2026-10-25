@@ -2,6 +2,7 @@
 
 import { Area, AreaChart, CartesianGrid, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from "recharts";
 import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
+import { formatDuration } from "@/lib/time/duration";
 
 /** One day: its readers and minutes read, both null before the day has begun. */
 export type ActivityPoint = { day: string; readers: number | null; minutes: number | null };
@@ -68,7 +69,7 @@ export default function ActivityChart({ data, weekStart }: { data: ActivityPoint
             yAxisId="minutes"
             type="monotone"
             dataKey="minutes"
-            name="Minutes read"
+            name="Time read"
             stroke="var(--reader-text-muted)"
             strokeWidth={1.5}
             fill="none"
@@ -107,7 +108,7 @@ function ActivityTooltip({ active, payload }: TooltipContentProps<ValueType, Nam
       </p>
       <p className="m-0 mt-1 flex items-center gap-1.5 text-[13px] font-semibold text-[var(--reader-text)]">
         <span className="h-2 w-2 rounded-full bg-[var(--reader-text-muted)]" aria-hidden />
-        {(point.minutes ?? 0).toLocaleString("en")} minutes read
+        {point.minutes ? formatDuration(point.minutes * 60_000) : "0 min"} read
       </p>
     </div>
   );

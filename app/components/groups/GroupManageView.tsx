@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarPlus } from "lucide-react";
 import Loader from "@/app/components/Loader";
 import RoomScreen from "@/app/components/rooms/RoomScreen";
 import DetailHeader from "@/app/components/shared/DetailHeader";
@@ -14,16 +13,14 @@ import TextAreaField from "@/app/components/auth/TextAreaField";
 import AuthButton from "@/app/components/auth/AuthButton";
 import { errorMessage } from "@/lib/api/client";
 import { comradeCount, groupHref } from "@/lib/groups/copy";
-import { useGroup, useGroupSessions, useUpdateGroup } from "@/lib/groups/hooks";
+import { useGroup, useGroupBooks, useGroupMembers, useGroupSessions, useUpdateGroup } from "@/lib/groups/hooks";
 import { sessionDays } from "@/lib/groups/sessions";
 import { deviceTimeZone } from "@/lib/time/zone";
 import { useSessionStore } from "@/stores/session-store";
 import { GROUP_DESCRIPTION_MAX, GROUP_NAME_MAX, type GroupInfo, type GroupSession } from "@/lib/groups/types";
-import NoResults from "@/app/components/shared/NoResults";
 import GroupMembers from "./GroupMembers";
 import GroupReadingList from "./GroupReadingList";
-import { SessionRow, sessionList } from "./GroupSchedule";
-import { primaryButton } from "./buttons";
+import SessionList from "./GroupSchedule";
 import SessionSheet from "./SessionSheet";
 
 type Tab = "details" | "reading-list" | "sessions" | "members";
@@ -112,10 +109,10 @@ function DetailsForm({ group }: { group: GroupInfo }) {
 
 /** Manage (M6), laid out exactly like Account settings: back + title row,
  * the group itself with a way through to its page, then underline tabs —
- * Details (name and description), Reading list (the
- * list, rearranged and added to here; the group page's tab only shows it),
- * Sessions (schedule, edit, cancel) and Members (the M10 controls). */
-export default function GroupManageView(props: { slug: string; categories: string[] }) {
+ * Reading list (one list, rearranged and added to here), Details (name and
+ * description), Sessions (schedule, edit, cancel) and Members (the M10
+ * controls). Opens on Reading list, or the tab `?tab=` names. */
+export default function GroupManageView(props: { slug: string; categories: string[]; tab?: string }) {
   // A screen of its own, like the group page: no app sidebar on desktop.
   return (
     <RoomScreen sidebar={false} scroll>
@@ -126,13 +123,16 @@ export default function GroupManageView(props: { slug: string; categories: strin
   );
 }
 
-function ManageBody({ slug, categories }: { slug: string; categories: string[] }) {
+function ManageBody({ slug, categories, tab: initialTab }: { slug: string; categories: string[]; tab?: string }) {
   const router = useRouter();
   const viewerId = useSessionStore((s) => s.readerId);
   const { data, isLoading } = useGroup(slug);
   const isModerator = data?.myRole === "moderator";
   const { data: sessions } = useGroupSessions(slug);
-  const [tab, setTab] = useState<Tab>("details");
+  // Every tab's data loads with the page, not once its tab opens.
+  useGroupMembers(slug);
+  useGroupBooks(slug);
+  const [tab, setTab] = useState<Tab>(TABS.find((t) => t.value === initialTab)?.value ?? "reading-list");
   // M8: new (no session) or editing one.
   const [sessionSheet, setSessionSheet] = useState<{ session?: GroupSession } | null>(null);
 
@@ -170,38 +170,11 @@ function ManageBody({ slug, categories }: { slug: string; categories: string[] }
       {tab === "details" && <DetailsForm key={group.id} group={group} />}
 
       {tab === "reading-list" && (
-        <div className="flex flex-col">
-          <GroupReadingList slug={slug} categories={categories} manage />
-        </div>
+        <GroupReadingList slug={slug} categories={categories} />
       )}
 
       {tab === "sessions" && (
-        <div className="flex flex-col gap-6">
-          <section
-            aria-label="Schedule a session"
-            className="flex flex-col gap-2.5 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] p-4"
-          >
-            <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-brand-500">Sessions</span>
-            <span className="font-serif text-xl font-semibold leading-tight text-[var(--reader-text)]">Read together, live</span>
-            <span className="text-[13px] font-medium text-[var(--reader-text-muted)]">
-              Pick a day and a time. Everyone gets a reminder.
-            </span>
-            <button type="button" onClick={() => setSessionSheet({})} className={`${primaryButton} mt-1 h-10 self-start`}>
-              <CalendarPlus size={16} />
-              Schedule a session
-            </button>
-          </section>
-          {sessions && sessions.upcoming.length === 0 && sessions.past.length === 0 ? (
-            <NoResults message="No sessions yet." />
-          ) : (
-            <ul className={sessionList}>
-              {sessions?.upcoming.map((session) => (
-                <SessionRow key={session.id} slug={slug} session={session} onEdit={(s) => setSessionSheet({ session: s })} />
-              ))}
-              {sessions?.past.map((session) => <SessionRow key={session.id} slug={slug} session={session} past />)}
-            </ul>
-          )}
-        </div>
+        <SessionList slug={slug} sessions={sessions} onEdit={(s) => setSessionSheet({ session: s })} onSchedule={() => setSessionSheet({})} />
       )}
 
       {tab === "members" && <GroupMembers slug={slug} viewerId={viewerId} canManage />}

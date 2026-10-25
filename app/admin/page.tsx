@@ -5,7 +5,9 @@ import AdminPageHeader from "./AdminPageHeader";
 import InfoTip from "./InfoTip";
 import ActivityChart from "./ActivityChart";
 import AdminMenu from "./AdminMenu";
-import { currentWeekStart, getWeeklyMetrics, growthRate, type WeekDay } from "@/lib/metrics/dashboard";
+import { currentWeekStart, getWeeklyMetrics, getWeeklyReaders, growthRate, type WeekDay } from "@/lib/metrics/dashboard";
+import { pseudonymToSlug } from "@/lib/reader/profileSlug";
+import { formatDuration } from "@/lib/time/duration";
 import { addDays, weekdayOf } from "@/lib/time/zone";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +26,8 @@ const weekRange = (start: string) =>
 
 const formatCount = (n: number) => n.toLocaleString("en");
 const minutes = (seconds: number) => Math.round(seconds / 60);
+/** "30 h 40 min"; nothing read reads "0 min" rather than "<1 min". */
+const duration = (seconds: number) => (seconds ? formatDuration(seconds * 1000) : "0 min");
 
 const sum = (days: WeekDay[], key: "readers" | "seconds" | "newMembers") => days.reduce((n, d) => n + d[key], 0);
 
@@ -39,7 +43,7 @@ function weekFrom(param: string | undefined, current: string): string {
 export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ week?: string }> }) {
   const current = currentWeekStart();
   const week = weekFrom((await searchParams).week, current);
-  const m = await getWeeklyMetrics(week);
+  const [m, readers] = await Promise.all([getWeeklyMetrics(week), getWeeklyReaders(week)]);
 
   const lastWeek = m.days.slice(14, 21);
   const thisWeek = m.days.slice(21);
@@ -59,9 +63,9 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   const readingPrev = share(m.readersPrev, m.membersAtStart);
 
   const rows = [
-    { label: "Readers", value: (d: WeekDay) => d.readers, week: m.readers },
-    { label: "Minutes read", value: (d: WeekDay) => minutes(d.seconds), week: minutes(seconds) },
-    { label: "New members", value: (d: WeekDay) => d.newMembers, week: joined },
+    { label: "Readers", value: (d: WeekDay) => formatCount(d.readers), week: formatCount(m.readers) },
+    { label: "Time read", value: (d: WeekDay) => duration(d.seconds), week: duration(seconds) },
+    { label: "New members", value: (d: WeekDay) => formatCount(d.newMembers), week: formatCount(joined) },
   ];
 
   return (
@@ -107,10 +111,10 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
             points
           />
           <Tile
-            label="Minutes read"
+            label="Time read"
             info="Total time members spent reading or listening this week."
-            value={formatCount(minutes(seconds))}
-            detail={lastWeekDetail(formatCount(minutes(secondsPrev)))}
+            value={duration(seconds)}
+            detail={lastWeekDetail(duration(secondsPrev))}
             change={growthRate(seconds, secondsPrev)}
           />
         </div>
@@ -154,12 +158,62 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
           </table>
         </div>
       </section>
+
+      <section aria-labelledby="readers-heading" className="mt-3 rounded-sm border border-[var(--reader-border)] p-5">
+        <div className="flex items-start justify-between gap-2">
+          <h2 id="readers-heading" className="m-0 text-[14px] font-bold text-[var(--reader-text)]">
+            Readers this week
+            <span className="ml-2 font-semibold text-[var(--reader-text-muted)]">{formatCount(readers.length)}</span>
+          </h2>
+          <InfoTip label="Readers this week">Everyone who read this week and their time read each day, most time read first.</InfoTip>
+        </div>
+        {readers.length ? (
+          <div className="-mx-5 mt-4 overflow-x-auto border-t border-[var(--reader-border)] px-5">
+            <table className="w-full min-w-[560px] border-collapse text-[13px] tabular-nums">
+              <thead>
+                <tr className="text-[12px] font-semibold text-[var(--reader-text-muted)]">
+                  <th scope="col" className="py-3 text-left font-semibold">
+                    Reader
+                  </th>
+                  {WEEKDAYS.map((d) => (
+                    <th key={d} scope="col" className="py-3 text-right font-semibold">
+                      {d}
+                    </th>
+                  ))}
+                  <th scope="col" className="py-3 pl-4 text-right font-semibold">
+                    Week
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {readers.map((r) => (
+                  <tr key={r.pseudonym} className="border-t border-[var(--reader-border)] text-[var(--reader-text)]">
+                    <th scope="row" className="max-w-[200px] truncate py-2.5 text-left font-semibold">
+                      <Link href={`/@${pseudonymToSlug(r.pseudonym)}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                        {r.pseudonym}
+                      </Link>
+                    </th>
+                    {r.seconds.map((s, i) => (
+                      <td key={WEEKDAYS[i]} className="py-2.5 text-right">
+                        {i >= m.elapsed || !s ? <span className="text-[var(--reader-text-subtle)]">–</span> : duration(s)}
+                      </td>
+                    ))}
+                    <td className="py-2.5 pl-4 text-right font-bold">{duration(r.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="m-0 mt-3 text-[13px] text-[var(--reader-text-muted)]">No one has read this week yet.</p>
+        )}
+      </section>
     </div>
   );
 }
 
 /** A figure for each day of the week, then its week total; days yet to come show a dash. */
-function Row({ label, value, week, days, elapsed }: { label: string; value: (d: WeekDay) => number; week: number; days: WeekDay[]; elapsed: number }) {
+function Row({ label, value, week, days, elapsed }: { label: string; value: (d: WeekDay) => string; week: string; days: WeekDay[]; elapsed: number }) {
   return (
     <tr className="border-t border-[var(--reader-border)] text-[var(--reader-text)]">
       <th scope="row" className="py-2.5 text-left font-semibold">
@@ -167,10 +221,10 @@ function Row({ label, value, week, days, elapsed }: { label: string; value: (d: 
       </th>
       {days.map((d, i) => (
         <td key={d.day} className="py-2.5 text-right">
-          {i < elapsed ? formatCount(value(d)) : <span className="text-[var(--reader-text-subtle)]">–</span>}
+          {i < elapsed ? value(d) : <span className="text-[var(--reader-text-subtle)]">–</span>}
         </td>
       ))}
-      <td className="py-2.5 pl-4 text-right font-bold">{formatCount(week)}</td>
+      <td className="py-2.5 pl-4 text-right font-bold">{week}</td>
     </tr>
   );
 }

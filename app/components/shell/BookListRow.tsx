@@ -68,7 +68,7 @@ import { confirmAction } from "@/stores/confirm-store";
  * a threshold on `pct` — it's the reader's own explicit mark (see
  * DocumentEndPanel).
  */
-function ProgressLine({ pct, isFinished, wasListening }: { pct: number; isFinished: boolean; wasListening: boolean }) {
+export function ProgressLine({ pct, isFinished, wasListening }: { pct: number; isFinished: boolean; wasListening: boolean }) {
   if (isFinished) {
     return (
       <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[var(--color-forest-500)]">

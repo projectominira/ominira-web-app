@@ -55,7 +55,7 @@ export default function Community({
       {live}
       <ChatTabs groups={joined} rooms={rooms} value={filter} onChange={setFilter} />
       {(joined.length > 0 || rooms.length > 0) && (
-        <div className="flex flex-col divide-y divide-[var(--reader-border)]">
+        <div className="flex flex-col divide-y divide-[var(--color-app-border)]">
           {byLatest(shown(joined, "groups", filter)).map((g) => (
             <GroupRow key={`g:${g.slug}`} group={g} />
           ))}

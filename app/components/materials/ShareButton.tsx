@@ -3,6 +3,22 @@
 import { useState } from "react";
 import { Check, Share } from "lucide-react";
 
+/** Shares this page's link: the native share sheet, else copied. True when
+ * copied, for the caller to say so. */
+export async function shareLink(title: string, text?: string): Promise<boolean> {
+  const url = window.location.href;
+  if (typeof navigator.share === "function") {
+    try {
+      await navigator.share({ title, text, url });
+    } catch {
+      // Reader dismissed the native share sheet — not an error.
+    }
+    return false;
+  }
+  await navigator.clipboard.writeText(url);
+  return true;
+}
+
 /**
  * Real, zero-backend sharing: the native share sheet where available
  * (navigator.share needs no server support, just a title/text/url), a
@@ -35,16 +51,7 @@ export default function ShareButton({
 }) {
   const [copied, setCopied] = useState(false);
   const onClick = async () => {
-    const url = window.location.href;
-    if (typeof navigator.share === "function") {
-      try {
-        await navigator.share({ title, text, url });
-      } catch {
-        // Reader dismissed the native share sheet — not an error.
-      }
-      return;
-    }
-    await navigator.clipboard.writeText(url);
+    if (!(await shareLink(title, text))) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 1200);
   };

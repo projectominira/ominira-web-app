@@ -9,10 +9,9 @@ type Params = { params: Promise<{ slug: string }> };
 
 /** `GET /api/groups/{slug}`: the page header. Public; `myRole` needs a session. */
 export async function GET(request: Request, { params }: Params) {
-  const { slug } = await params;
-  const reader = await getAuthenticatedReader(request);
-  const page = await getGroupPage(slug, reader?.readerId ?? null);
-  return page ? NextResponse.json(page) : groupResponse("not_found");
+  const [group, reader] = await Promise.all([findGroup((await params).slug), getAuthenticatedReader(request)]);
+  if (!group) return groupResponse("not_found");
+  return NextResponse.json(await getGroupPage(group, reader?.readerId ?? null));
 }
 
 const GroupUpdate = z

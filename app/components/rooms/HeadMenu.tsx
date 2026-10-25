@@ -15,7 +15,7 @@ export default function HeadMenu({ items }: { items: OverflowMenuItem[] }) {
         aria-label="More"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="flex size-9 cursor-pointer items-center justify-center rounded-sm text-[var(--reader-text)] hover:bg-[var(--reader-surface-hover)]"
+        className="flex h-9 cursor-pointer items-center text-[var(--reader-text)]"
       >
         <EllipsisVertical size={18} />
       </button>

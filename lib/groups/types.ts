@@ -28,7 +28,15 @@ export type GroupPage = {
   /** Comrades who read in the last 15 minutes, never the viewer (the room's
    * header, rooms-spec 4a). */
   readingNow: number;
+  /** What the moderators pinned to the room's strip: a note, this week's
+   * target, a session (its series id for a weekly one, else its id). */
+  pins: GroupPins;
 };
+
+export type GroupPins = { note: GroupPin | null; target: boolean; session: string | null };
+
+/** A pinned note, as the strip shows it: its text and who wrote it. */
+export type GroupPin = { id: string; text: string; author: string };
 
 /** `GET /api/groups`: one entry per group, with the viewer's membership. */
 export type GroupSummary = GroupInfo & { joined: boolean };

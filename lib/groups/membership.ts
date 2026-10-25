@@ -4,8 +4,9 @@ import { conflict, forbidden, notFound, validationError } from "@/lib/api/errors
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { groupHref } from "@/lib/groups/copy";
 import { toAvatar } from "@/lib/avatar/avatar";
-import type { GroupMember, GroupPage, GroupRole, GroupSummary } from "@/lib/groups/types";
+import type { GroupMember, GroupPage, GroupPin, GroupRole, GroupSummary } from "@/lib/groups/types";
 import { READING_NOW_MS } from "@/lib/rooms/home";
+import { notificationSnippet } from "@/lib/notifications/snippet";
 
 // Membership for the thin app/api/groups/* routes (spec §0, §4.1). Who's a
 // member or moderator is is_group_member / is_group_moderator; the
@@ -20,6 +21,8 @@ export type Group = {
   description: string;
   timezone: string;
   pinned_post_id: string | null;
+  pin_target: boolean;
+  pinned_session_id: string | null;
   is_private: boolean;
 };
 
@@ -50,7 +53,7 @@ export type GroupOutcome =
   // Joining.
   | "invite_only";
 
-export const GROUP_COLUMNS = "id, slug, name, description, timezone, pinned_post_id, is_private";
+export const GROUP_COLUMNS = "id, slug, name, description, timezone, pinned_post_id, pin_target, pinned_session_id, is_private";
 
 export async function findGroup(slug: string): Promise<Group | null> {
   const { data, error } = await getSupabaseAdminClient().from("groups").select(GROUP_COLUMNS).eq("slug", slug).maybeSingle();
@@ -106,18 +109,30 @@ export async function listGroups(readerId: string | null): Promise<GroupSummary[
   return groups.map(({ is_private: _, ...g }, i) => ({ ...g, memberCount: counts[i], joined: mine.has(g.id) }));
 }
 
-export async function getGroupPage(slug: string, readerId: string | null): Promise<GroupPage | null> {
-  const group = await findGroup(slug);
-  if (!group) return null;
-  const admin = getSupabaseAdminClient();
-  const [count, mine, readingNow] = await Promise.all([
-    memberCount(group.id),
-    readerId ? admin.from("group_members").select("role, muted").eq("group_id", group.id).eq("reader_id", readerId).maybeSingle() : null,
-    readingNowIn(group.id, readerId),
+/** The page header, from one read of the members: the count, the viewer's
+ * own row and who's reading now. */
+export async function getGroupPage(group: Group, readerId: string | null): Promise<GroupPage> {
+  const { data: members, error } = await getSupabaseAdminClient().from("group_members").select("reader_id, role, muted").eq("group_id", group.id);
+  if (error) throw error;
+  const mine = members.find((m) => m.reader_id === readerId);
+  const [readingNow, note] = await Promise.all([
+    readingNowAmong(members.flatMap((m) => (m.reader_id === readerId ? [] : [m.reader_id]))),
+    pinnedNote(group),
   ]);
-  if (mine?.error) throw mine.error;
-  const { id, name, description, is_private } = group;
-  return { group: { id, slug, name, description, memberCount: count, private: is_private }, myRole: mine?.data?.role ?? null, muted: mine?.data?.muted ?? false, readingNow };
+  const { id, slug, name, description, is_private } = group;
+  return { group: { id, slug, name, description, memberCount: members.length, private: is_private }, myRole: mine?.role ?? null, muted: mine?.muted ?? false, readingNow, pins: { note, target: group.pin_target, session: group.pinned_session_id } };
+}
+
+/** The note pinned to the room's strip; null when none, or it's gone. */
+async function pinnedNote(group: Group): Promise<GroupPin | null> {
+  if (!group.pinned_post_id) return null;
+  const admin = getSupabaseAdminClient();
+  const { data: post, error } = await admin.from("posts").select("id, reader_id, content, visibility").eq("id", group.pinned_post_id).maybeSingle();
+  if (error) throw error;
+  if (!post || post.visibility !== "public") return null;
+  const { data: author, error: authorError } = await admin.from("readers").select("pseudonym").eq("id", post.reader_id).maybeSingle();
+  if (authorError) throw authorError;
+  return { id: post.id, text: notificationSnippet((post.content as { text?: string }).text) ?? "A note", author: author?.pseudonym ?? "" };
 }
 
 /** Mute or unmute the group for one member (studygroup-spec §7): its kinds
@@ -133,21 +148,18 @@ export async function setMuted(groupId: string, readerId: string, muted: boolean
   return data.length ? "ok" : "not_member";
 }
 
-/** Members who saved a reading position in the last 15 minutes on a book
- * they haven't finished (Home's rule, READING_NOW_MS), never the viewer. */
-async function readingNowIn(groupId: string, viewerId: string | null): Promise<number> {
-  const admin = getSupabaseAdminClient();
-  const { data: members, error } = await admin.from("group_members").select("reader_id").eq("group_id", groupId);
-  if (error) throw error;
-  const ids = members.map((m) => m.reader_id).filter((id) => id !== viewerId);
+/** Of these readers (the members but the viewer), those who saved a reading
+ * position in the last 15 minutes on a book they haven't finished (Home's
+ * rule, READING_NOW_MS). */
+async function readingNowAmong(ids: string[]): Promise<number> {
   if (ids.length === 0) return 0;
-  const { data, error: readingError } = await admin
+  const { data, error } = await getSupabaseAdminClient()
     .from("reader_activities")
     .select("reader_id")
     .in("reader_id", ids)
     .is("finished_at", null)
     .gt("updated_at", new Date(Date.now() - READING_NOW_MS).toISOString());
-  if (readingError) throw readingError;
+  if (error) throw error;
   return new Set(data.map((r) => r.reader_id)).size;
 }
 

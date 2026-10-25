@@ -36,7 +36,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <SearchableAppPage>
+    <SearchableAppPage className="pb-2 shell:pb-10">
       <HomeInstallBanner />
       <HomePushPrompt />
       <Home

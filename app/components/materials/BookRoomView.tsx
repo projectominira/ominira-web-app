@@ -2,14 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bookmark, Mic } from "lucide-react";
+import { Bookmark, Mic, Share } from "lucide-react";
 import type { OverflowMenuItem } from "@/app/components/reader/notes/OverflowMenu";
-import { ReadingBar } from "@/app/components/rooms/RoomHeader";
+import { shareLink } from "./ShareButton";
+import { showToast } from "@/stores/toast-store";
 import { useEnterRoom } from "@/lib/room/useEnterRoom";
 import { useOpenRoom } from "@/lib/room/useOpenRoom";
 import BookRoom from "@/app/components/rooms/BookRoom";
 import RoomScreen, { replaceTabParam } from "@/app/components/rooms/RoomScreen";
-import { useServerPositionReady } from "@/lib/reader/useServerPositionReady";
+import Loader from "@/app/components/Loader";
+import { useResume } from "@/lib/reader/useResume";
 import BookDetails from "./BookDetails";
 import { readerHref } from "@/app/components/ReaderLink";
 import { useBookmarkedMaterialIds, useToggleMaterialBookmark } from "@/lib/bookmarks/useBookmarks";
@@ -17,8 +19,8 @@ import { quoteReaderHref } from "@/app/components/rooms/PassageQuote";
 import { chapterEnds } from "@/lib/groups/progress";
 import type { MaterialDetail } from "@/lib/materials/detail";
 import { resolveBookThumbnailSrc } from "@/lib/materials/image";
-import { buildResumeHref, positionPercent } from "@/lib/reader/locator";
-import { bookHeader, type BookProgress } from "@/lib/rooms/book";
+import { positionPercent } from "@/lib/reader/locator";
+import { bookHeader } from "@/lib/rooms/book";
 import { roomItems } from "@/lib/rooms/timeline";
 import type { RoomItem, RoomNote } from "@/lib/rooms/types";
 import RoomInput from "@/app/components/rooms/RoomInput";
@@ -41,8 +43,6 @@ export default function BookRoomView({ material, initialInfo }: { material: Mate
     setInfoOpen(open);
     replaceTabParam(open ? "info" : "room");
   };
-  // Gates progress and the resume button on the server's position (see the hook).
-  const positionReady = useServerPositionReady();
   // A quote opens the reader over the room (the `@modal` overlay).
   const openPassage = (n: RoomNote) => {
     const href = quoteReaderHref(n);
@@ -66,9 +66,6 @@ export default function BookRoomView({ material, initialInfo }: { material: Mate
   const { enter, pending: starting } = useEnterRoom();
 
   const ends = useMemo(() => chapterEnds(material.sections, material.spine), [material.sections, material.spine]);
-  // positionPercent: a full bar means the reader marked it finished
-  // (lib/reader/locator.ts).
-  const progress: BookProgress = position ? { pct: positionPercent(position), finished: !!position.finishedAt, listening: position.mode === "listen" } : null;
   const header = useMemo(
     () =>
       bookHeader(
@@ -104,20 +101,26 @@ export default function BookRoomView({ material, initialInfo }: { material: Mate
   }, [stream.data, card, send.items, tz, viewerId]);
 
   // One resume action in the mode last used; Listen switches mode.
-  const resume = (mode: "read" | "listen") =>
-    router.push(readerHref(position ? buildResumeHref(material.slug, { ...position, mode }) : `/read/${material.slug}${mode === "listen" ? "?listen=1" : ""}`));
+  const { ready: positionReady, onContinue, onSwitch } = useResume(material);
   const isOwnUpload = !!material.contributor && material.contributor.readerId === viewerId;
-  const onSwitch = () => resume(progress?.listening ? "read" : "listen");
-  const onContinue = () => resume(progress?.listening ? "listen" : "read");
 
   const menu: OverflowMenuItem[] = [
     ...(canStart && !liveRoom && !inRoom
       ? [{ label: "Start room", icon: <Mic size={14} />, disabled: starting, onClick: () => void enter({ materialId: material.id, start: { bookTitle: material.title } }) }]
       : []),
+    { label: "Share", icon: <Share size={14} />, onClick: () => void shareLink(material.title, `${material.title} by ${material.author}`).then((copied) => copied && showToast("Link copied")) },
     ...(isOwnUpload
       ? []
       : [{ label: isSaved ? "Saved" : "Save for later", icon: <Bookmark size={14} />, onClick: () => toggleSave.mutate(material.id) }]),
   ];
+
+  // Only the loader until the stream is in.
+  if (stream.isLoading)
+    return (
+      <RoomScreen sidebar={false}>
+        <Loader confined />
+      </RoomScreen>
+    );
 
   return (
     <RoomScreen sidebar={false}>
@@ -125,7 +128,7 @@ export default function BookRoomView({ material, initialInfo }: { material: Mate
         header={header}
         onBack={() => (window.history.length > 1 ? router.back() : router.push("/library"))}
         menu={menu}
-        resume={(onClose) => <ReadingBar header={header} audiobook={material.narratorCount > 0} ready={positionReady} onContinue={onContinue} onSwitch={onSwitch} onClose={onClose} />}
+        save={isOwnUpload ? null : { saved: isSaved, onToggle: () => toggleSave.mutate(material.id) }}
         infoOpen={infoOpen}
         onInfo={() => showInfo(true)}
         onCloseInfo={() => showInfo(false)}
@@ -142,7 +145,6 @@ export default function BookRoomView({ material, initialInfo }: { material: Mate
         items={items}
         viewerId={viewerId}
         today={today}
-        loading={stream.isLoading}
         states={send.states}
         hasOlder={stream.hasNextPage}
         onLoadOlder={() => !stream.isFetchingNextPage && void stream.fetchNextPage()}
@@ -167,7 +169,7 @@ export default function BookRoomView({ material, initialInfo }: { material: Mate
         }}
         input={
           viewerId ? (
-            <RoomInput placeholder={`Note on ${material.title}`} canLock onSend={send.send} />
+            <RoomInput placeholder={`Note on ${material.title}`} canLock docked onSend={send.send} />
           ) : (
             <button type="button" onClick={() => router.push("/auth/login")} className="mx-auto flex min-h-12 cursor-pointer items-center justify-center px-4 text-ui-sm font-extrabold text-[var(--color-app-brand)] hover:text-brand-600 disabled:opacity-60">
               Join the conversation

@@ -25,7 +25,7 @@ export type RoomRowProps = {
 /**
  * A room as a chat row (home-spec §2 Room row, U1): the cover or the
  * group's letter, the title, the time, the preview "{name}: {body}", and
- * the signal line. Unread: a count, a bold title, the preview in primary
+ * the signal line, the title bold throughout. Unread: a count, the preview in primary
  * and the time in brand. Live: a brand ring and "Live now · 23 listening".
  */
 export default function RoomRow({ href, name, mark, last, empty, unread, live, signal }: RoomRowProps) {
@@ -41,7 +41,7 @@ export default function RoomRow({ href, name, mark, last, empty, unread, live, s
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex min-w-0 items-baseline gap-2">
-          <span className={`min-w-0 flex-1 truncate text-[13px] ${unread ? "font-bold" : "font-semibold"}`}>{name}</span>
+          <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{name}</span>
           {last && <span className={`flex-none text-ui-caption ${unread ? "text-[var(--color-app-brand)]" : "text-[var(--reader-text-muted)]"}`}>{chatTime(last.at, now)}</span>}
         </span>
         <span className="flex min-w-0 items-center gap-1.5">

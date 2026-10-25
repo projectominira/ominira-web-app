@@ -34,7 +34,7 @@ export default function StartGroupSheet({ onClose }: { onClose: () => void }) {
         }}
       >
         <p className="m-0 text-[13px]/[1.5] text-[var(--reader-text-muted)]">
-          Read a book together, at your own pace. You’ll moderate it: choose the book, plan sessions and invite comrades.
+          Read a book together, at your own pace. Choose the book, plan sessions and invite comrades.
         </p>
         <TextField
           autoFocus

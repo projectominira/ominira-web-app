@@ -161,11 +161,13 @@ export function useRoomReply(key: QueryKey, patcher: NotePatcher = inStream(key)
   };
 }
 
-type Pending = { note: RoomNote; input: CreateNoteInput; state: "sending" | "failed" };
+type Pending = { note: RoomNote; input: CreateNoteInput; state: "sending" | "sent" | "failed" };
 
 /**
- * Your notes on their way into a room (sheet #c1): shown at once as
- * sending, failed with Retry, and gone once the room has them. `to` is
+ * Your notes on their way into a room (sheet #c1): shown at once, as sent,
+ * while they go in the background; failed with Retry. Once saved, a note
+ * takes its server id, so the room drops this copy (roomItems) the moment
+ * its refetch has it — no gap, no double. `to` is
  * where they go: the group (a discussion post in it), or a book (a note on
  * it, routed by spec §5.3).
  */
@@ -175,18 +177,24 @@ export function useRoomSend(key: QueryKey, to: { groupSlug: string } | { materia
   const post: Partial<CreateNoteInput> = "groupSlug" in to ? { threadType: "discussion", groupSlug: to.groupSlug } : {};
   const author = useAuthor();
   const [pending, setPending] = useState<Pending[]>([]);
-  const mark = (id: string, state: Pending["state"] | null) =>
-    setPending((all) => (state ? all.map((p) => (p.note.note.id === id ? { ...p, state } : p)) : all.filter((p) => p.note.note.id !== id)));
+  const mark = (id: string, state: Pending["state"] | null, savedId = id) =>
+    setPending((all) =>
+      state
+        ? all.map((p) => (p.note.note.id === id ? { ...p, state, note: { ...p.note, note: { ...p.note.note, id: savedId } } } : p))
+        : all.filter((p) => p.note.note.id !== id),
+    );
 
   const run = async (id: string, input: CreateNoteInput) => {
     mark(id, "sending");
+    let saved: string;
     try {
-      await create.mutateAsync(input);
+      saved = (await create.mutateAsync(input)).id;
     } catch {
       return mark(id, "failed");
     }
+    mark(id, "sent", saved);
     await queryClient.invalidateQueries({ queryKey: key });
-    mark(id, null);
+    mark(saved, null);
   };
 
   const items = useMemo(() => pending.map((p): RoomItem => ({ t: "note", note: p.note })), [pending]);

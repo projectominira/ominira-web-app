@@ -35,6 +35,17 @@ export async function getWeeklyMetrics(weekStart: LocalDay): Promise<WeeklyMetri
   return data as unknown as WeeklyMetrics;
 }
 
+/** A reader of one week: seconds read on each day, Monday first, and in all. */
+export type WeekReader = { pseudonym: string; seconds: number[]; total: number };
+
+/** Everyone who read in the week, most time read first — public.admin_weekly_readers()
+ * (migrations/20261121_admin_weekly_readers.sql). */
+export async function getWeeklyReaders(weekStart: LocalDay): Promise<WeekReader[]> {
+  const { data, error } = await getSupabaseAdminClient().rpc("admin_weekly_readers", { week_start: weekStart });
+  if (error || !data) throw new Error(`Could not load weekly readers: ${error?.message ?? "no data"}`);
+  return data as unknown as WeekReader[];
+}
+
 /** Relative change from `previous` to `current`, or null when there's no
  * baseline to compare against (a 0 → N week isn't a percentage). */
 export function growthRate(current: number, previous: number): number | null {

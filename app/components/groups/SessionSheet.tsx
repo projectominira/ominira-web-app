@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import TextField from "@/app/components/auth/TextField";
 import BottomSheet from "@/app/components/shared/BottomSheet";
 import { DateField } from "@/app/components/shared/DatePicker";
 import { errorMessage } from "@/lib/api/client";
@@ -14,10 +15,6 @@ import { showToast } from "@/stores/toast-store";
 import SheetActions from "./SheetActions";
 
 const REPEATS: SessionRepeat[] = ["once", "weekly"];
-
-const fieldClass =
-  "w-full box-border rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] px-3 py-2.5 text-sm text-[var(--reader-text)] outline-none focus:border-[var(--reader-accent)]";
-const labelClass = "flex flex-col gap-1.5 text-xs font-semibold text-[var(--reader-text-muted)]";
 
 /**
  * Schedule a session (M8): topic, day, time and Repeat. The day and time
@@ -79,29 +76,26 @@ export default function SessionSheet({
       }
     >
       <div className="flex flex-col gap-5">
-        <label className={labelClass}>
-          Topic
-          <input
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            maxLength={SESSION_TOPIC_MAX}
-            placeholder="The pitfalls of national consciousness"
-            className={fieldClass}
-          />
-        </label>
+        <TextField
+          label="Topic"
+          name="topic"
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          maxLength={SESSION_TOPIC_MAX}
+          placeholder="The pitfalls of national consciousness"
+        />
 
         <div className="flex gap-3">
           <div className="min-w-0 flex-[3]">
             <DateField label="Day" value={day} onChange={setDay} marks={marks} />
           </div>
-          <label className={`${labelClass} min-w-0 flex-[2]`}>
-            Time
-            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} required className={fieldClass} />
-          </label>
+          <div className="min-w-0 flex-[2]">
+            <TextField label="Time" name="time" type="time" value={time} onChange={(e) => setTime(e.target.value)} required />
+          </div>
         </div>
 
         <fieldset className="m-0 flex flex-col border-none p-0">
-          <legend className="mb-1.5 p-0 text-xs font-semibold text-[var(--reader-text-muted)]">Repeat</legend>
+          <legend className="mb-2 p-0 text-[13px] font-bold text-[var(--reader-text)]">Repeat</legend>
           <div className="flex gap-1.5">
             {REPEATS.map((value) => {
               const on = value === repeat;

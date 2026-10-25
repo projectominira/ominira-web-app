@@ -12,7 +12,7 @@ export function comradeCount(n: number): string {
 
 export const groupHref = (slug: string) => `/groups/${slug}`;
 
-export const readingListHref = (slug: string) => `${groupHref(slug)}?tab=reading-list`;
+export const readingListHref = (slug: string) => `${groupHref(slug)}/manage?tab=reading-list`;
 
 /** A reading-list row's dates (M9): "10 Sep – 29 Oct", "From 5 Nov", or
  * null when there are none. A done book runs to the day it was finished. */

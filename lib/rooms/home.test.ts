@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { StreakView } from "@/lib/streaks/types";
 import { chapterEnds } from "@/lib/groups/progress";
-import { buildStrip, chapterLine, dailyGoal, GOAL, goalLabel, goalStep, goalShare, ringTime, isGoal, statusLook, streakCopy, toMinutes, weekChain, type StripCandidate } from "./home";
+import { buildStrip, chapterLine, dailyGoal, GOAL, goalLabel, goalShort, goalStep, goalShare, ringTime, isGoal, statusLook, streakCopy, toMinutes, weekChain, type StripCandidate } from "./home";
 
 const streak = (state: StreakView["state"], days: string[], milestone: number | null): StreakView => ({ today: "2026-10-13", state, best: 30, days, milestone });
 const COLLECTIVE = 10100;
@@ -60,22 +60,27 @@ describe("reading time", () => {
     expect(dailyGoal(null)).toBe(GOAL.fallback);
     expect(dailyGoal(20)).toBe(20);
   });
-  test("Adjust sets goals in range, on a step", () => {
-    expect([30, 45, 90, 480].every(isGoal)).toBe(true);
-    expect([0, 15, 40, 495, 60.5].some(isGoal)).toBe(false);
+  test("Adjust sets goals on the slider's stops", () => {
+    expect([1, 7, 10, 25, 60, 75, 90, 480].every(isGoal)).toBe(true);
+    expect([0, 11, 65, 70, 495, 60.5].some(isGoal)).toBe(false);
   });
   test("labels, and the stepper held to the range", () => {
     expect(goalLabel(45)).toBe("45 minutes");
     expect(goalLabel(60)).toBe("1 hour");
     expect(goalLabel(150)).toBe("2 hours 30 minutes");
     expect(goalLabel(61)).toBe("1 hour 1 minute");
+    expect(goalShort(45)).toBe("45 min");
+    expect(goalShort(60)).toBe("1 hr");
+    expect(goalShort(165)).toBe("2 hr 45 min");
     expect(ringTime(45)).toEqual({ value: "45", unit: "minutes" });
     expect(ringTime(60)).toEqual({ value: "1", unit: "hour" });
     expect(ringTime(125)).toEqual({ value: "2:05", unit: "hours" });
     expect(goalStep(GOAL.min, -1)).toBe(GOAL.min);
     expect(goalStep(GOAL.max, 1)).toBe(GOAL.max);
     expect(goalStep(60, 1)).toBe(75);
-    expect(goalStep(20)).toBe(GOAL.min);
+    expect(goalStep(9, 1)).toBe(10);
+    expect(goalStep(70)).toBe(60);
+    expect(goalStep(0)).toBe(GOAL.min);
   });
 });
 

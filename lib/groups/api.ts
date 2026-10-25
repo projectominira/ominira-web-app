@@ -59,8 +59,9 @@ export const removeGroupBook = (slug: string, materialId: string) =>
   apiFetch<void>(`/groups/${slug}/books/${materialId}`, { method: "DELETE" });
 
 
-export const pinPost = (slug: string, postId: string | null) =>
-  apiFetch<void>(`/groups/${slug}/pin`, { method: "PUT", json: { postId } });
+/** Pins to the room's strip, or unpins (null / false); absent keys stay. */
+export const pin = (slug: string, input: { postId?: string | null; target?: boolean; sessionId?: string | null }) =>
+  apiFetch<void>(`/groups/${slug}/pin`, { method: "PUT", json: input });
 
 /** Everyone who shares a group with you: the reader rail's "My group". */
 export const getGroupComrades = () => apiFetch<{ readerIds: string[] }>("/auth/me/comrades").then((r) => r.readerIds);

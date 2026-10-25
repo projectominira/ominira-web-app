@@ -11,11 +11,11 @@ import type { Comrade } from "@/lib/rooms/types";
 import { COMPOSER_TOOL } from "@/app/components/reader/notes/ComposerBox";
 import RoomAvatar from "./RoomAvatar";
 
-// A room's input (home-spec §2 Composer, Room.dc.html), a chat bar
-// (rounded-sm) with @ on the left, text that grows as you write and a
-// square send on the right that turns brand when there's
-// text. Typing @ (or the @ button) floats the picker above the bar:
-// comrades, then chapters.
+// A room's input (home-spec §2 Composer, Room.dc.html), a chat bar as in
+// a messaging app: a pill (white, a lifted grey in dark) with @ on the
+// left, text that grows as you write, and a round send at its right end
+// that turns brand when there's text. Typing @ (or the @ button) floats
+// the picker above the bar: comrades, then chapters.
 
 /** The text's box, shared by the field and its mirror so both lay the text
  * out identically — the same thin scrollbar's gutter kept in both, so the
@@ -46,6 +46,7 @@ export function RoomField({
   canSend = !!value.trim(),
   tools,
   below,
+  docked = false,
 }: {
   value: string;
   maxLength?: number;
@@ -66,6 +67,9 @@ export function RoomField({
   /** A row inside the box, under the text (the share switch), shown
    * while writing. */
   below?: ReactNode;
+  /** In a room's footer: on a phone the bar is the footer itself, edge to
+   * edge, with no box of its own. */
+  docked?: boolean;
 }) {
   const mirror = useRef<HTMLDivElement>(null);
   const own = useRef<HTMLTextAreaElement>(null);
@@ -76,17 +80,21 @@ export function RoomField({
   useLayoutEffect(sync, [value, input]);
 
   return (
-    <div className="group/box flex flex-col rounded-sm border border-[var(--color-app-border)] bg-[var(--color-app-surface)] p-1 text-[var(--color-app-text)] shadow-sm transition-colors duration-150 ease-out focus-within:border-sand-300">
-      <div className={`flex items-end ${onAt ? "" : "pl-2.5"}`}>
+    <div
+      className={`group/box flex flex-col rounded-sm border border-[var(--color-app-border)] bg-[var(--color-app-composer)] p-1 text-[var(--color-app-text)] shadow-sm transition-colors duration-150 ease-out focus-within:border-sand-300 ${
+        docked ? "max-md:rounded-none max-md:border-0 max-md:bg-transparent max-md:shadow-none" : ""
+      }`}
+    >
+      <div className={`flex items-end ${onAt ? "" : "pl-3"}`}>
         {onAt && (
           <button
             type="button"
             aria-label="Tag a comrade or chapter"
             aria-expanded={atOpen}
             onClick={onAt}
-            className={`${COMPOSER_TOOL} my-0.5 !w-7 !min-w-7 !px-0 ${atOpen ? "!bg-brand-50 !text-[var(--color-app-brand)]" : ""}`}
+            className={`${COMPOSER_TOOL} m-0.5 !size-8 !min-w-8 !rounded-full !px-0 ${atOpen ? "!bg-brand-50 !text-[var(--color-app-brand)]" : ""}`}
           >
-            <AtSign size={16} strokeWidth={2} aria-hidden />
+            <AtSign size={17} strokeWidth={2} aria-hidden />
           </button>
         )}
         <div className="relative min-w-0 flex-1">
@@ -116,15 +124,19 @@ export function RoomField({
           />
         </div>
         {tools && <div className="mb-0.5 flex flex-none items-center gap-0.5">{tools}</div>}
+        {/* Pressing send keeps the focus in the field, so a phone's keyboard
+            stays up for the next message. */}
         <button
           type="button"
           aria-label="Send"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={onSend}
-          className={`flex size-9 flex-none cursor-pointer items-center justify-center rounded-sm border-none bg-transparent transition-colors duration-150 ease-out ${
-            canSend ? "text-[var(--reader-text)]" : "text-[var(--color-app-text-muted)]"
+          disabled={!canSend}
+          className={`ml-1 flex size-9 flex-none items-center justify-center rounded-full border-none transition-colors duration-150 ease-out ${
+            canSend ? "cursor-pointer bg-brand-500 text-white hover:bg-brand-600" : "cursor-default bg-transparent text-[var(--color-app-text-muted)]"
           }`}
         >
-          <SendHorizontal size={18} strokeWidth={2} aria-hidden />
+          <SendHorizontal size={18} strokeWidth={2.25} aria-hidden />
         </button>
       </div>
       {below && (
@@ -132,7 +144,7 @@ export function RoomField({
         // keeps the focus in the field, so it doesn't vanish mid-tap.
         <div
           onMouseDown={(e) => e.preventDefault()}
-          className={`${value ? "flex" : "hidden group-focus-within/box:flex"} mx-1.5 mt-1 border-t border-[var(--color-app-border)] px-1 pt-2 pb-1.5`}
+          className={`${value ? "flex" : "hidden group-focus-within/box:flex"} mx-3 mt-1 border-t border-[var(--color-app-border)] pt-2 pb-1.5`}
         >
           {below}
         </div>
@@ -166,7 +178,7 @@ export function MentionPicker({
           type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onPick?.(comrade)}
-          className={`flex min-h-11 cursor-pointer items-center gap-2.5 rounded-sm px-2 text-left hover:bg-sand-100 ${i === active ? "bg-sand-100" : ""}`}
+          className={`flex min-h-11 cursor-pointer items-center gap-2.5 rounded-sm px-2 text-left hover:bg-[var(--color-app-chip)] ${i === active ? "bg-[var(--color-app-chip)]" : ""}`}
         >
           <RoomAvatar comrade={comrade} size={28} />
           <span className="text-[12px] font-bold">{personName(comrade.pseudonym)}</span>
@@ -270,7 +282,7 @@ export function useRoomMentions({
 }
 
 /** The input with its picker, for a room. Sending hands over the text and
- * who's tagged; the stream shows the note as sending (NoteBubble). With
+ * who's tagged; the stream shows the note at once, as sent (useRoomSend). With
  * `canLock` (a book's room, in the reader or on its page), a "Make private" switch inside the box
  * keeps the note private, and a private note tags no one (routeNote). */
 export default function RoomInput({
@@ -280,6 +292,7 @@ export default function RoomInput({
   subFor = teamSub,
   autoFocus = false,
   canLock = false,
+  docked = false,
   onSend,
 }: {
   placeholder: string;
@@ -288,6 +301,8 @@ export default function RoomInput({
   chapters?: string[];
   subFor?: (c: MentionCandidate) => string | null;
   canLock?: boolean;
+  /** The room's own input, in its footer (RoomField). */
+  docked?: boolean;
   onSend: (note: { text: string; mentions: string[]; locked?: boolean }) => void;
 }) {
   const [text, setText] = useState("");
@@ -323,6 +338,7 @@ export default function RoomInput({
       atOpen={m.picking}
       inputRef={inputRef}
       autoFocus={autoFocus}
+      docked={docked}
       onAt={locked ? undefined : m.togglePicker}
       onSend={send}
       below={

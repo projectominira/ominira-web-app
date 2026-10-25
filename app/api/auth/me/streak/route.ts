@@ -33,7 +33,7 @@ export async function PATCH(request: Request) {
   const reader = await getAuthenticatedReader(request);
   if (!reader) return unauthorized();
   const parsed = Goal.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return validationError("Pick a goal between 5 minutes and 3 hours.", "goal");
+  if (!parsed.success) return validationError("Pick a goal between 1 minute and 8 hours.", "goal");
   await setDailyGoal(reader.readerId, parsed.data.goal);
   return new Response(null, { status: 204 });
 }

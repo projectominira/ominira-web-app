@@ -69,8 +69,8 @@ export default function BottomSheet({
           style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
           <span aria-hidden="true" className="mx-auto mt-2.5 h-1 w-9 flex-none rounded-full bg-[var(--reader-border)] sm:hidden" />
-          <h2 className="m-0 flex-none px-5 pt-4 pb-3 font-serif text-lg font-semibold text-[var(--reader-text)]">{title}</h2>
-          <div className="om-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pb-5">{children}</div>
+          {title && <h2 className="m-0 flex-none px-5 pt-4 pb-3 font-serif text-lg font-semibold text-[var(--reader-text)]">{title}</h2>}
+          <div className={`om-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pb-5 ${title ? "" : "pt-4"}`}>{children}</div>
           {footer && <div className="flex-none border-t border-[var(--reader-border)] px-5 py-3">{footer}</div>}
         </div>
       )}

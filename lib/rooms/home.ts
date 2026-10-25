@@ -47,15 +47,22 @@ export function streakCopy(view: StreakView, today: StreakToday): StreakCopy {
   return { title: fresh ? "Start a streak" : `${state.days}-day streak`, sub: goal };
 }
 
-/** The daily goal's range and step (what the server accepts): 30 min to
- * 8 hr in quarter hours. */
-export const GOAL = { min: 30, max: 480, step: 15, fallback: 60 } as const;
+/** The daily goal's range (what the server accepts): 1 min to 8 hr, on
+ * the slider's stops — by the minute to 10, by five to the hour, then
+ * quarter hours. */
+export const GOAL = { min: 1, max: 480, fallback: 60 } as const;
+
+export const GOAL_STOPS: readonly number[] = [
+  ...Array.from({ length: 9 }, (_, i) => i + 1),
+  ...Array.from({ length: 11 }, (_, i) => 10 + i * 5),
+  ...Array.from({ length: 28 }, (_, i) => 75 + i * 15),
+];
 
 /** A reader who never set one has the fallback. */
 export const dailyGoal = (stored: number | null) => stored ?? GOAL.fallback;
 
-/** A goal Adjust can set: in range, on a step. */
-export const isGoal = (m: number) => Number.isInteger(m) && m >= GOAL.min && m <= GOAL.max && m % GOAL.step === 0;
+/** A goal Adjust can set: one of the stops. */
+export const isGoal = (m: number) => GOAL_STOPS.includes(m);
 
 const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"}`;
 
@@ -66,6 +73,13 @@ export function goalLabel(m: number): string {
   return `${plural(Math.floor(m / 60), "hour")}${rest ? ` ${plural(rest, "minute")}` : ""}`;
 }
 
+/** The same, short enough for one line: "45 min", "1 hr", "2 hr 45 min". */
+export function goalShort(m: number): string {
+  if (m < 60) return `${m} min`;
+  const rest = m % 60;
+  return `${Math.floor(m / 60)} hr${rest ? ` ${rest} min` : ""}`;
+}
+
 /** Today's reading inside the ring: "45" minutes, or "1:15" hours. */
 export function ringTime(m: number): { value: string; unit: string } {
   if (m < 60) return { value: `${m}`, unit: m === 1 ? "minute" : "minutes" };
@@ -74,11 +88,12 @@ export function ringTime(m: number): { value: string; unit: string } {
   return { value: rest ? `${h}:${`${rest}`.padStart(2, "0")}` : `${h}`, unit: m === 60 ? "hour" : "hours" };
 }
 
-/** Adjust daily goal's quick picks, in minutes. */
-export const GOAL_PRESETS = [30, 60, 120, 240] as const;
 
-/** `m` into the goal's range, `steps` quarter hours on. */
-export const goalStep = (m: number, steps = 0) => Math.min(GOAL.max, Math.max(GOAL.min, m + steps * GOAL.step));
+/** The stop at or nearest below `m` (the first, under it). */
+export const goalIndex = (m: number) => Math.max(0, GOAL_STOPS.findLastIndex((s) => s <= m));
+
+/** `m` onto a stop, `steps` stops on, held to the range. */
+export const goalStep = (m: number, steps = 0) => GOAL_STOPS[Math.min(GOAL_STOPS.length - 1, Math.max(0, goalIndex(m) + steps))];
 
 /** Whole minutes in a day's seconds. */
 export const toMinutes = (seconds: number) => Math.floor(seconds / 60);

@@ -13,7 +13,7 @@ import { groupHref } from "@/lib/groups/copy";
 import { reminderKey } from "@/lib/groups/sessions";
 import type { TocSection } from "@/lib/api/types";
 import { setPendingJoin } from "@/lib/groups/pendingJoin";
-import type { GroupBook, GroupRole, GroupSession, SessionsView } from "@/lib/groups/types";
+import type { GroupBook, GroupPage, GroupPin, GroupRole, GroupSession, SessionsView } from "@/lib/groups/types";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useSessionStore } from "@/stores/session-store";
 
@@ -207,8 +207,39 @@ export function useReorderGroupBooks(slug: string) {
 
 export const useRemoveGroupBook = (slug: string) => useGroupMutation((materialId: string) => api.removeGroupBook(slug, materialId));
 
-/** Pin to top, or unpin with null (one per group). */
-export const usePinPost = (slug: string) => useGroupMutation((postId: string | null) => api.pinPost(slug, postId));
+/** What a pin changes (absent keys stay), with what the strip shows at
+ * once: the note's preview, and a session's pin key (its series, else its id). */
+export type PinChange = Parameters<typeof api.pin>[1] & { note?: GroupPin; sessionKey?: string };
+
+/** Pins to the room's strip, or unpins: the strip changes at once, and
+ * goes back if the save fails. */
+export function usePin(slug: string) {
+  const queryClient = useQueryClient();
+  const { readerId } = useViewer();
+  const key = groupKeys.page(slug, readerId);
+  return useMutation({
+    // Undefined keys drop out of the body: only what changes is sent.
+    mutationFn: ({ postId, target, sessionId }: PinChange) => api.pin(slug, { postId, target, sessionId }),
+    onMutate: async ({ postId, target, sessionId, note, sessionKey }) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const before = queryClient.getQueryData<GroupPage>(key);
+      if (before) {
+        const pins = before.pins;
+        queryClient.setQueryData<GroupPage>(key, {
+          ...before,
+          pins: {
+            note: postId === undefined ? pins.note : postId ? (note ?? null) : null,
+            target: target ?? pins.target,
+            session: sessionId === undefined ? pins.session : sessionId ? (sessionKey ?? sessionId) : null,
+          },
+        });
+      }
+      return { before };
+    },
+    onError: (_err, _change, ctx) => ctx?.before && queryClient.setQueryData(key, ctx.before),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
+  });
+}
 
 export const useSetTarget = (slug: string) => useGroupMutation((input: api.TargetInput) => api.setTarget(slug, input));
 

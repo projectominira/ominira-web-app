@@ -44,21 +44,20 @@ export async function enrichFeedItems(rows: NoteRow[], viewer: PostViewer): Prom
   // material_id is nullable — a book-less discussion post has none — so
   // this only ever collects the ones that do.
   const materialIds = Array.from(new Set(rows.map((r) => r.material_id).filter((id): id is string => id !== null)));
-  const { data: materials } = await admin.from("materials").select(`${MATERIAL_SUMMARY_COLUMNS}, json_storage_path`).in("id", materialIds);
+  // The books and the replies don't depend on each other; read them together.
+  const [{ data: materials }, { data: replyRows }] = await Promise.all([
+    admin.from("materials").select(`${MATERIAL_SUMMARY_COLUMNS}, json_storage_path`).in("id", materialIds),
+    admin
+      .from("posts")
+      .select("*")
+      .in(
+        "parent_id",
+        rows.map((r) => r.id)
+      )
+      .order("created_at", { ascending: true }),
+  ]);
   const materialsById = new Map((materials ?? []).map((m) => [m.id, m]));
 
-  const labelsByMaterialId = await loadSectionLabels(materials ?? []);
-
-  const { data: replyRows } = rows.length
-    ? await admin
-        .from("posts")
-        .select("*")
-        .in(
-          "parent_id",
-          rows.map((r) => r.id)
-        )
-        .order("created_at", { ascending: true })
-    : { data: [] };
   // Same visibility rule as everywhere else (lib/community/visibility.ts),
   // applied in app code since this is an `.in(parent_id)` already.
   const visibleReplyRows = ((replyRows ?? []) as NoteRow[]).filter((r) => canReadPost(r, viewer));
@@ -72,10 +71,12 @@ export async function enrichFeedItems(rows: NoteRow[], viewer: PostViewer): Prom
 
   // One pseudonym/reaction batch across top-level notes AND their replies —
   // hydrateNotes already dedupes reader ids internally, so this stays a
-  // single extra query each, not one per note.
-  const hydratedById = new Map(
-    (await hydrateNotes([...rows, ...visibleReplyRows], callerId)).map((n) => [n.id, n])
-  );
+  // single extra query each, not one per note. Section labels alongside.
+  const [labelsByMaterialId, hydrated] = await Promise.all([
+    loadSectionLabels(materials ?? []),
+    hydrateNotes([...rows, ...visibleReplyRows], callerId),
+  ]);
+  const hydratedById = new Map(hydrated.map((n) => [n.id, n]));
 
   const items: FeedItem[] = [];
   for (const row of rows) {

@@ -2,11 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, Mic, Settings, Trash2 } from "lucide-react";
+import { LogOut, Mic, Settings, Trash2, UserPlus } from "lucide-react";
 import GroupRoom from "@/app/components/rooms/GroupRoom";
+import { ResumeButtons } from "@/app/components/rooms/RoomHeader";
+import ReadingProgress from "@/app/components/shared/ReadingProgress";
+import { useResume } from "@/lib/reader/useResume";
 import type { RoomOverlay } from "@/app/components/rooms/RoomPanel";
 import RoomInput from "@/app/components/rooms/RoomInput";
 import RoomScreen from "@/app/components/rooms/RoomScreen";
+import { shareLink } from "@/app/components/materials/ShareButton";
+import { GroupInviteSheet } from "./InviteMenu";
+import { memberLine } from "@/lib/rooms/names";
+import Loader from "@/app/components/Loader";
 import StatusPage from "@/app/components/shared/StatusPage";
 import { errorMessage } from "@/lib/api/client";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
@@ -16,6 +23,9 @@ import {
   useChapterEnds,
   useDeleteGroup,
   useGroup,
+  usePin,
+  type PinChange,
+  useGroupMembers,
   useGroupBooks,
   useGroupSessions,
   useGroupTarget,
@@ -39,6 +49,7 @@ import { deviceTimeZone, localDay } from "@/lib/time/zone";
 import { confirmAction } from "@/stores/confirm-store";
 import { useSessionStore } from "@/stores/session-store";
 import { showToast } from "@/stores/toast-store";
+import { notificationSnippet } from "@/lib/notifications/snippet";
 import GroupInfoPanel from "./GroupInfoPanel";
 import SessionSheet from "./SessionSheet";
 import { TargetPanel } from "./TargetSheet";
@@ -73,6 +84,7 @@ export default function GroupView({ slug, initialAbout }: { slug: string; initia
   };
   const viewerId = useSessionStore((s) => s.readerId);
   const { data, isLoading, isError } = useGroup(slug);
+  const { data: members } = useGroupMembers(slug);
   useFinishPendingJoin(slug, data ? data.myRole !== null : undefined);
   const { data: target } = useGroupTarget(slug);
   const { data: books } = useGroupBooks(slug);
@@ -87,6 +99,12 @@ export default function GroupView({ slug, initialAbout }: { slug: string; initia
   const heart = useRoomHeart(streamKey);
   const reply = useRoomReply(streamKey);
   const del = useRoomDelete(streamKey);
+  const pin = usePin(slug);
+  // Pins and unpins at once (usePin), with a word either way.
+  const setPin = (change: PinChange, on: boolean) => {
+    showToast(on ? "Pinned to the chat" : "Unpinned");
+    pin.mutate(change, { onError: () => showToast(on ? "Couldn’t pin it." : "Couldn’t unpin it.") });
+  };
   // What the room has open on demand: the team's ＋ menu and target sheet (5a / 5b).
   const [open, setOpen] = useState<"target" | null>(null);
   const markRead = useMarkRoomRead("group", viewerId ? (data?.group.id ?? null) : null);
@@ -97,7 +115,9 @@ export default function GroupView({ slug, initialAbout }: { slug: string; initia
   const room = useGroupRoom(slug);
   // M8: a new session, or editing one.
   const [sessionSheet, setSessionSheet] = useState<{ session?: GroupSession } | null>(null);
+  const [inviting, setInviting] = useState(false);
 
+  const resume = useResume(current ?? null);
   const tz = deviceTimeZone();
   const roomTarget = useMemo(() => target && toRoomTarget(target, current?.title ?? "", ends), [target, current?.title, ends]);
   const now = useNow();
@@ -114,11 +134,18 @@ export default function GroupView({ slug, initialAbout }: { slug: string; initia
   const frame = (body: React.ReactNode) => <RoomScreen sidebar={false}>{body}</RoomScreen>;
 
   if (isError || (!isLoading && !data)) return frame(<StatusPage title="Group not found" className="min-h-[60vh]" />);
+  // Only the loader until the group and its stream are in.
+  if (isLoading || stream.isLoading) return frame(<Loader confined />);
 
   const group = data?.group;
   const myRole = data?.myRole ?? null;
   const isModerator = myRole === "moderator";
   const upcoming = sessions?.upcoming[0] ?? null;
+  const pins = data?.pins;
+  // The strip's session: a live room always, a scheduled one when pinned
+  // (by its series, so a weekly one stays pinned).
+  const card = roomSession?.card ?? null;
+  const stripSession = card && (card.state === "live" || (card.session.seriesId ?? card.session.id) === pins?.session) ? card : null;
 
   // M11: on the current book, for the session that's due (an hour either
   // side of its start), picking up its topic. Every other member gets `room_live`.
@@ -167,22 +194,33 @@ export default function GroupView({ slug, initialAbout }: { slug: string; initia
           }
         : null;
 
-  // Invite is the head's Share.
+  const name = group?.name ?? "";
+  // Group info leads the head's ⋮, then Invite: tag and send for the
+  // team, the link for everyone else.
+  const invite = {
+    label: "Invite Members",
+    icon: <UserPlus size={13} />,
+    onClick: isModerator
+      ? () => setInviting(true)
+      : () => void shareLink(name, `Read with ${name} on Ominira`).then((copied) => copied && showToast("Link copied")),
+  };
   const menu = isModerator
     ? [
+        invite,
         { label: "Start a room", icon: <Mic size={13} />, onClick: () => void onStartRoom() },
-        { label: "Manage", icon: <Settings size={13} />, onClick: () => router.push(`${groupHref(slug)}/manage`) },
+        { label: "Manage group", icon: <Settings size={13} />, onClick: () => router.push(`${groupHref(slug)}/manage`) },
         { label: "Delete group", icon: <Trash2 size={13} />, danger: true, onClick: () => void onDelete() },
       ]
     : myRole
-      ? [{ label: "Leave group", icon: <LogOut size={13} />, onClick: () => void onLeave() }]
-      : [];
+      ? [invite, { label: "Leave group", icon: <LogOut size={13} />, onClick: () => void onLeave() }]
+      : [invite];
 
   return frame(
     <>
       <GroupRoom
         name={group?.name ?? ""}
         memberCount={group?.memberCount ?? 0}
+        members={members ? memberLine(members, viewerId) : ""}
         aboutOpen={aboutOpen}
         onAbout={() => {
           setOpen(null);
@@ -213,13 +251,17 @@ export default function GroupView({ slug, initialAbout }: { slug: string; initia
         viewerId={viewerId}
         today={localDay(now, tz)}
         team={isModerator}
-        loading={isLoading || stream.isLoading}
         states={send.states}
         hasOlder={stream.hasNextPage}
         onLoadOlder={() => !stream.isFetchingNextPage && void stream.fetchNextPage()}
         onReadToBottom={markRead}
-        target={roomTarget ?? null}
-        session={roomSession?.card ?? null}
+        session={stripSession}
+        onUnpinSession={isModerator ? () => setPin({ sessionId: null }, false) : undefined}
+        target={pins?.target ? (roomTarget ?? null) : null}
+        onUnpinTarget={isModerator ? () => setPin({ target: false }, false) : undefined}
+        pin={pins?.note ?? null}
+        onOpenPin={(id) => router.push(`/post/${id}`)}
+        onUnpin={isModerator ? () => setPin({ postId: null }, false) : undefined}
         menu={menu}
         onBack={() => (window.history.length > 1 ? router.back() : router.push("/home"))}
         onJoinLive={sessions?.live && myRole ? () => void room.join(sessions.live!) : undefined}
@@ -229,23 +271,41 @@ export default function GroupView({ slug, initialAbout }: { slug: string; initia
           onReply: viewerId ? (n, r, to) => void reply(n.note.id, r, to, n.note.ranges) : undefined,
           onDelete: viewerId ? (n, replyId) => del.mutate({ noteId: replyId ?? n.note.id, rootId: n.note.id }) : undefined,
           onRetry: (n) => send.retry(n.note.id),
+          onPin: isModerator
+            ? (n, on) =>
+                setPin(
+                  {
+                    postId: on ? n.note.id : null,
+                    note: { id: n.note.id, text: (n.note.content.kind === "text" && notificationSnippet(n.note.content.text)) || "A note", author: n.note.author.pseudonym },
+                  },
+                  on,
+                )
+            : undefined,
+          onPinTarget: isModerator ? (on) => setPin({ target: on }, on) : undefined,
+          onPinSession: isModerator ? (s, on) => setPin({ sessionId: on ? s.id : null, sessionKey: s.seriesId ?? s.id }, on) : undefined,
+          pins: pins && { note: pins.note?.id ?? null, target: pins.target, session: pins.session },
           onPassage: openPassage,
-          onContinue: current ? () => router.push(`/reader/${current.slug}`) : undefined,
+          resume: current && (
+            <>
+              {resume.ready && resume.pct !== null && <ReadingProgress chapter={null} pct={resume.pct} />}
+              <ResumeButtons header={resume} audiobook={false} ready={resume.ready} onContinue={resume.onContinue} onSwitch={resume.onSwitch} compact />
+            </>
+          ),
           onRemind,
           onStart: () => void onStartRoom(),
-          onEditTarget: () => setOpen("target"),
           onEditSession: () => upcoming && setSessionSheet({ session: upcoming }),
         }}
         input={
           myRole ? (
-            <RoomInput placeholder="Message the group" groupSlug={slug} onSend={send.send} />
+            <RoomInput placeholder="Message the group" groupSlug={slug} docked onSend={send.send} />
           ) : (
-            <button type="button" onClick={join} disabled={joining || isLoading} className="mx-auto flex min-h-12 cursor-pointer items-center justify-center px-4 text-ui-sm font-extrabold text-[var(--color-app-brand)] hover:text-brand-600 disabled:opacity-60">
+            <button type="button" onClick={join} disabled={joining} className="mx-auto flex min-h-12 cursor-pointer items-center justify-center px-4 text-ui-sm font-extrabold text-[var(--color-app-brand)] hover:text-brand-600 disabled:opacity-60">
               Join the group
             </button>
           )
         }
       />
+      {inviting && <GroupInviteSheet slug={slug} name={name} onClose={() => setInviting(false)} />}
       {sessionSheet && (
         <SessionSheet slug={slug} session={sessionSheet.session} marks={sessionDays(sessions?.upcoming ?? [], tz)} onClose={() => setSessionSheet(null)} />
       )}

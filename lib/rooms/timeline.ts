@@ -20,6 +20,8 @@ export const REPLYING_NOW_MS = 10 * 60_000;
 const FOOTER_REPLIERS = 3;
 export const TEAM_TAG = "Moderator";
 export const PASSAGE_PIN = "Passage of the day";
+/** The label on the note a group's moderators pinned. */
+export const NOTE_PIN = "Pinned";
 
 /** A row from any source, with the keyset it sorts on. `at` is the row's
  * own created_at string, so the cursor matches the database exactly. */
@@ -234,7 +236,7 @@ export function toRoomNote(item: FeedItem, ctx: NoteContext): RoomNote {
     ...item,
     authorTag: ctx.officialIds.has(author) ? OFFICIAL_TAG : ctx.teamIds.has(author) ? TEAM_TAG : null,
     fromReader: item.excerpt !== null && question === null,
-    pinned: passage?.today ? PASSAGE_PIN : note.id === ctx.pinnedId ? "Pinned" : null,
+    pinned: passage?.today ? PASSAGE_PIN : note.id === ctx.pinnedId ? NOTE_PIN : null,
     question,
     replyCount: replies.length,
     repliers: latestFirst.slice(0, FOOTER_REPLIERS),
@@ -263,7 +265,10 @@ export function roomItems(
   const items = [...pages].reverse().flatMap((p) => p.items);
   const older = pages.length > 0 && pages[pages.length - 1].nextCursor !== null;
   const placed = mergeByTime(placeCards(collapseJoins(items, o.tz), o.cards ?? []), o.mine ?? [], older);
-  const days = withDays([...placed, ...(o.pending ?? [])], o.tz);
+  // A sent note the room already has is shown there, not twice.
+  const loaded = new Set(items.flatMap((it) => (it.t === "note" ? [it.note.note.id] : [])));
+  const pending = (o.pending ?? []).filter((it) => it.t !== "note" || !loaded.has(it.note.note.id));
+  const days = withDays([...placed, ...pending], o.tz);
   return withUnread(days, pages[0]?.lastReadAt ?? null, o.viewerId);
 }
 

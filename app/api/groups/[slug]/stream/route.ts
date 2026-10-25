@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedReader } from "@/lib/auth/session";
 import { decodeCursor, type Keyset } from "@/lib/api/cursor";
-import { loadPostViewer } from "@/lib/community/viewer";
 import { findGroup, groupResponse } from "@/lib/groups/membership";
 import { groupStreamPage, pageLimit } from "@/lib/rooms/stream";
 
@@ -12,7 +11,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   const url = new URL(request.url);
   const [group, reader] = await Promise.all([findGroup((await params).slug), getAuthenticatedReader(request)]);
   if (!group) return groupResponse("not_found");
-  const page = await groupStreamPage(group, await loadPostViewer(reader?.readerId), {
+  const page = await groupStreamPage(group, reader?.readerId ?? null, {
     cursor: decodeCursor<Keyset>(url.searchParams.get("cursor")),
     limit: pageLimit(url),
   });

@@ -23,6 +23,13 @@ export function listNames(names: string[], total: number): string {
   return `${names.slice(0, 2).join(", ")} and ${others} other${others === 1 ? "" : "s"}`;
 }
 
+/** A group's head, as WhatsApp's: "Comrades Kemi, Tunde, You". */
+export function memberLine(members: { readerId: string; pseudonym: string }[], viewerId: string | null): string {
+  const others = members.filter((m) => m.readerId !== viewerId).map((m) => firstName(m.pseudonym.replace(/^comrade\s+/i, "")));
+  const lead = others.length ? `${others.length === 1 ? "Comrade" : "Comrades"} ${others.join(", ")}` : "";
+  return [lead, members.some((m) => m.readerId === viewerId) && "You"].filter(Boolean).join(", ");
+}
+
 /** Short names in a list: "Comrade Kemi". */
 export const shortName = (pseudonym: string) => comradeName(firstName(pseudonym.replace(/^comrade\s+/i, "")));
 

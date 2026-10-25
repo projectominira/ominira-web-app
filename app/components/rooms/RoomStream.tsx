@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { dayLabel } from "@/lib/rooms/days";
 import type { NoteVisibility } from "@/lib/api/types";
-import type { RoomItem, RoomNote } from "@/lib/rooms/types";
+import type { RoomItem, RoomNote, RoomSession } from "@/lib/rooms/types";
 import { useNow } from "@/lib/time/useNow";
 import type { LocalDay } from "@/lib/time/zone";
+import { NOTE_PIN, PASSAGE_PIN } from "@/lib/rooms/timeline";
 import { MilestoneCard, SessionCard, TargetCard } from "./ActionCards";
 import { HighlightCard } from "./Highlights";
 import NoteBubble, { type BubbleState } from "./NoteBubble";
@@ -26,7 +27,8 @@ const FLASH_MS = 1600;
 
 export type RoomStreamHandle = {
   /** Scrolls to a card ("target", a session or note id) and rings it. */
-  jumpTo: (anchor: string, last?: boolean) => void;
+  /** False when the anchor isn't loaded. */
+  jumpTo: (anchor: string, last?: boolean) => boolean;
   toBottom: () => void;
 };
 
@@ -39,12 +41,19 @@ export type StreamHandlers = {
   /** Deletes a note or one of its replies (yours, or any as a moderator). */
   onDelete?: (n: RoomNote, replyId?: string) => void;
   onRetry?: (n: RoomNote) => void;
+  /** Pins a note to the room's strip, or unpins it (a group's moderators). */
+  onPin?: (n: RoomNote, pin: boolean) => void;
+  /** The same for this week's target and a scheduled session; `pins` says
+   * what's pinned (a session by its series id, else its id). */
+  onPinTarget?: (pin: boolean) => void;
+  onPinSession?: (session: RoomSession["session"], pin: boolean) => void;
+  pins?: { note: string | null; target: boolean; session: string | null };
   onRemind?: () => void;
   onStart?: () => void;
-  onEditTarget?: () => void;
   onEditSession?: () => void;
   onJoin?: () => void;
-  onContinue?: () => void;
+  /** The target card's foot: your progress and the book's resume buttons. */
+  resume?: ReactNode;
   /** Your highlight made public or private. */
   onHighlightVisibility?: (id: string, visibility: NoteVisibility) => void;
   /** Your highlight deleted (after asking). */
@@ -121,6 +130,14 @@ export default function RoomStream({
   const before = useRef<{ first: string | null; height: number; top: number }>({ first: null, height: 0, top: 0 });
   const opened = useRef(false);
   const first = items.length ? itemKey(items[0], 0) : null;
+  const lastAt = items.length - 1;
+  const last = items.length ? itemKey(items[lastAt], lastAt) : null;
+  // A new message at the bottom: yours always brings the stream down to it,
+  // anyone's does while you're at the bottom (as a chat does).
+  const atBottom = useRef(true);
+  const lastSeen = useRef(last);
+  const lastItem = items[lastAt];
+  const lastMine = lastItem?.t === "note" && lastItem.note.note.author.readerId === viewerId;
 
   const toBottom = useCallback((smooth = true) => {
     const el = scroller.current;
@@ -135,11 +152,12 @@ export default function RoomStream({
         const el = scroller.current;
         const all = el?.querySelectorAll<HTMLElement>(`[data-anchor="${CSS.escape(anchor)}"]`);
         const target = all && (last ? all[all.length - 1] : all[0]);
-        if (!el || !target) return;
+        if (!el || !target) return false;
         el.scrollTo({ top: Math.max(0, target.offsetTop - 16), behavior: "smooth" });
         clearTimeout(flashTimer.current);
         setFlash(anchor);
         flashTimer.current = setTimeout(() => setFlash(null), FLASH_MS);
+        return true;
       },
     }),
     [toBottom],
@@ -157,14 +175,18 @@ export default function RoomStream({
       el.scrollTop = divider ? divider.offsetTop - 8 : el.scrollHeight;
     } else if (before.current.first !== first && before.current.height) {
       el.scrollTop = before.current.top + (el.scrollHeight - before.current.height);
+    } else if (last !== lastSeen.current && (lastMine || atBottom.current)) {
+      toBottom();
     }
+    lastSeen.current = last;
     before.current = { first, height: el.scrollHeight, top: el.scrollTop };
-  }, [first, loading, items.length]);
+  }, [first, last, lastMine, loading, items.length, toBottom]);
 
   const onScroll = () => {
     const el = scroller.current!;
     before.current = { first, height: el.scrollHeight, top: el.scrollTop };
     const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < AT_BOTTOM;
+    atBottom.current = bottom;
     if (bottom) onReadToBottom?.();
     if (hasOlder && el.scrollTop < NEAR_TOP) onLoadOlder?.();
   };
@@ -189,7 +211,12 @@ export default function RoomStream({
         return (
           <div key="target" data-anchor="target" className="flex justify-center">
             <div className="w-full max-w-95">
-              <TargetCard target={it.target} team={team} flash={flash === "target"} onContinue={h.onContinue} onEdit={h.onEditTarget} />
+              <TargetCard
+                target={it.target}
+                flash={flash === "target"}
+                resume={h.resume}
+                pin={h.onPinTarget && { pinned: !!h.pins?.target, onToggle: h.onPinTarget }}
+              />
             </div>
           </div>
         );
@@ -207,13 +234,22 @@ export default function RoomStream({
                 onStart={h.onStart}
                 onEdit={h.onEditSession}
                 onJoin={h.onJoin}
+                pin={
+                  h.onPinSession && {
+                    pinned: h.pins?.session === (it.card.session.seriesId ?? id),
+                    onToggle: (pin) => h.onPinSession!(it.card.session, pin),
+                  }
+                }
               />
             </div>
           </div>
         );
       }
       case "note": {
-        const n = it.note;
+        // The note's "Pinned" follows the pins (they change at once); the
+        // passage of the day keeps its own label.
+        const pinned = h.pins && it.note.pinned !== PASSAGE_PIN ? (h.pins.note === it.note.note.id ? NOTE_PIN : null) : it.note.pinned;
+        const n = pinned === it.note.pinned ? it.note : { ...it.note, pinned };
         return (
           <div key={n.note.id} data-anchor={n.note.id} className="mx-auto w-full shell:max-w-[560px]">
             <NoteBubble
@@ -227,6 +263,7 @@ export default function RoomStream({
                 onReact: (replyId) => h.onReact?.(n, replyId),
                 onReply: h.onReply && ((reply, to) => h.onReply!(n, reply, to)),
                 onDelete: h.onDelete && ((replyId) => h.onDelete!(n, replyId)),
+                onPin: h.onPin && ((pin) => h.onPin!(n, pin)),
               }}
               onPassage={() => h.onPassage?.(n)}
               onRetry={() => h.onRetry?.(n)}
@@ -265,7 +302,7 @@ export default function RoomStream({
       {header && <div className="flex max-h-[72%] flex-none flex-col border-b border-[var(--color-app-border)] bg-[var(--reader-bg)]">{header}</div>}
       {pinned}
       <div className="relative min-h-0 flex-1 overflow-hidden">
-        <div ref={scroller} onScroll={onScroll} className="relative h-full overflow-y-auto bg-sand-50">
+        <div ref={scroller} onScroll={onScroll} className="relative h-full overflow-y-auto bg-[var(--color-app-canvas)]">
           <div style={cap} className={`mx-auto flex min-h-full flex-col justify-end ${bodyClassName}`}>
             {!loading && items.map(render)}
             {!loading && children}
@@ -275,7 +312,7 @@ export default function RoomStream({
         {loading && <Loader confined />}
       </div>
       {input && (
-        <div className="flex-none border-t border-[var(--color-app-border)] bg-[var(--reader-bg)] px-3 py-2.5">
+        <div className="flex-none border-t border-[var(--color-app-border)] bg-[var(--reader-bg)] px-3 py-2.5 max-md:px-1 max-md:py-1">
           <div style={cap} className="mx-auto">
             {input}
           </div>

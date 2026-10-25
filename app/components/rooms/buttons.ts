@@ -3,10 +3,10 @@
 
 const VARIANTS = {
   primary: "border-transparent bg-brand-500 text-sand-25 hover:bg-brand-600 active:bg-brand-700",
-  secondary: "border-sand-300 bg-transparent text-[var(--color-app-text)] hover:bg-sand-75 active:bg-sand-100",
+  secondary: "border-sand-300 bg-transparent text-[var(--color-app-text)] hover:bg-[var(--color-app-surface-muted)] active:bg-[var(--color-app-chip)]",
   outlineBrand: "border-brand-500 bg-transparent text-[var(--color-app-brand)] hover:bg-brand-50 active:bg-brand-100",
-  ghost: "border-transparent bg-transparent text-[var(--color-app-text)] hover:bg-sand-75 active:bg-sand-100",
-  inverse: "border-transparent bg-[var(--reader-bg)] text-sand-900 hover:bg-sand-100 active:bg-sand-200",
+  ghost: "border-transparent bg-transparent text-[var(--color-app-text)] hover:bg-[var(--color-app-surface-muted)] active:bg-[var(--color-app-chip)]",
+  inverse: "border-transparent bg-white text-sand-900 hover:bg-sand-100 active:bg-sand-200",
 } as const;
 
 const SIZES = { md: "rounded-md px-5 py-2 text-ui-md", sm: "rounded-sm px-4 py-1.5 text-ui-sm" } as const;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CircleAlert, Clock, Ellipsis, RotateCcw } from "lucide-react";
+import { CircleAlert, Ellipsis, RotateCcw } from "lucide-react";
 import NoteContent from "@/app/components/reader/notes/NoteContent";
 import OverflowMenu, { type OverflowMenuItem } from "@/app/components/reader/notes/OverflowMenu";
 import PulseDot from "@/app/components/shared/PulseDot";
@@ -10,6 +10,7 @@ import { isTempId } from "@/lib/api/optimisticId";
 import { noteMentionNames } from "@/lib/community/mentionNames";
 import { chapterLabel } from "@/lib/groups/copy";
 import { chatTime } from "@/lib/rooms/home";
+import { NOTE_PIN } from "@/lib/rooms/timeline";
 import { OFFICIAL_TAG, personName } from "@/lib/rooms/names";
 import type { RoomNote } from "@/lib/rooms/types";
 import FistReaction, { ReplyPill } from "./FistReaction";
@@ -20,8 +21,8 @@ import { CardAuthor, RoomCard } from "./RoomCard";
 import RoomInput from "./RoomInput";
 import ThreadReplies from "@/app/components/reader/notes/ThreadReplies";
 
-/** Where a note is on its way to the server: faded while sending, Retry
- * once it failed. */
+/** Where a note is on its way to the server: shown as sent while it goes
+ * (in the background, as a chat does), "Not sent" with Retry if it fails. */
 export type BubbleState = "sent" | "sending" | "failed";
 
 const ICON = { strokeWidth: 1.75, "aria-hidden": true } as const;
@@ -39,7 +40,7 @@ export function Menu({ items, small = false }: { items: OverflowMenuItem[]; smal
         aria-label="More"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className={`flex cursor-pointer items-center justify-center rounded-sm text-[var(--color-app-text-muted)] hover:bg-sand-75 ${small ? "size-9" : "size-11"}`}
+        className={`flex cursor-pointer items-center justify-center rounded-sm text-[var(--color-app-text-muted)] hover:bg-[var(--color-app-surface-muted)] ${small ? "size-9" : "size-11"}`}
       >
         <Ellipsis size={small ? 16 : 18} {...ICON} />
       </button>
@@ -67,6 +68,8 @@ export type NoteHandlers = {
   onReply?: (reply: { text: string; mentions: string[] }, to?: string) => void;
   /** Deleting the note, or one of its replies (after asking). */
   onDelete?: (replyId?: string) => void;
+  /** Pinning the note to the room's strip, or unpinning it. */
+  onPin?: (pin: boolean) => void;
 };
 
 /**
@@ -77,7 +80,7 @@ export type NoteHandlers = {
  * under it.
  * ⋯ is Delete on your own (Remove for a group's moderators). Kept: a
  * private note is dashed, "Only you", and can't be reacted to; the pin's
- * label, the author tag, sending, failed and Retry, "replying now" and
+ * label, the author tag, failed and Retry, "replying now" and
  * "Also in". `showBook` (outside its room) adds "in {book}".
  */
 export default function NoteBubble({
@@ -111,15 +114,17 @@ export default function NoteBubble({
   onRetry?: () => void;
 }) {
   const { note } = n;
-  const { onReact, onReply, onDelete } = handlers;
+  const { onReact, onReply, onDelete, onPin } = handlers;
   const [all, setAll] = useState(false);
   // Replying: to the note (its id) or to one reply; null while closed.
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const mine = note.author.readerId === viewerId;
   const official = n.authorTag === OFFICIAL_TAG;
   const priv = note.visibility === "private";
+  // On its way: it looks sent, but there's nothing on the server yet to
+  // react to, reply to or delete.
   const pending = state !== "sent";
-  const actions = !priv && !pending;
+  const actions = !priv && state !== "failed";
   const text = note.content.kind === "voice" || note.content.text.trim() !== "";
   const book = showBook && n.material;
   const replies = n.replies;
@@ -139,12 +144,12 @@ export default function NoteBubble({
     );
 
   return (
-    <div className={`flex w-full flex-col gap-1 ${state === "sending" ? "opacity-60" : ""}`}>
+    <div className="flex w-full flex-col gap-1">
       <RoomCard priv={priv} flash={flash}>
         <CardAuthor
           author={note.author}
           viewerId={viewerId}
-          at={pending ? null : note.createdAt}
+          at={note.createdAt}
           now={now}
           priv={priv}
           official={official}
@@ -160,7 +165,14 @@ export default function NoteBubble({
               </button>
             )
           }
-          menu={!pending && onDelete && <Menu items={noteMenu(note, viewerId, moderator, replies.length, () => onDelete())} />}
+          menu={
+            !pending &&
+            onDelete && (
+              <Menu
+                items={noteMenu(note, viewerId, moderator, replies.length, () => onDelete(), moderator && onPin && !priv ? { pinned: n.pinned === NOTE_PIN, onToggle: onPin } : undefined)}
+              />
+            )
+          }
         />
 
         {n.pinned && (
@@ -176,8 +188,8 @@ export default function NoteBubble({
 
         {actions && (
           <div className="flex items-center gap-3.5">
-            <FistReaction count={note.reactionCount} on={note.reactedByMe} onToggle={() => onReact?.()} />
-            {onReply && <ReplyPill count={0} onClick={() => setReplyTo(replyTo === note.id ? null : note.id)} />}
+            <FistReaction count={note.reactionCount} on={note.reactedByMe} onToggle={() => !pending && onReact?.()} />
+            {onReply && <ReplyPill count={0} onClick={() => !pending && setReplyTo(replyTo === note.id ? null : note.id)} />}
           </div>
         )}
         {actions && replyTo === note.id && composer(undefined, mine ? "your note" : personName(note.author.pseudonym, official))}
@@ -200,7 +212,7 @@ export default function NoteBubble({
               const sending = isTempId(r.id);
               return (
                 <>
-                  <div className={`flex gap-2.5 ${sending ? "opacity-60" : ""}`}>
+                  <div className="flex gap-2.5">
                     <RoomAvatar comrade={r.author} size={26} />
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <div className="flex min-w-0 items-baseline gap-1.5">
@@ -236,12 +248,6 @@ export default function NoteBubble({
         )}
       </RoomCard>
 
-      {state === "sending" && (
-        <div className="flex items-center gap-1.5 text-ui-caption text-[var(--color-app-text-muted)]">
-          <Clock size={13} {...ICON} />
-          Sending…
-        </div>
-      )}
       {state === "failed" && (
         <div className="flex items-center gap-2 font-sans text-[12px]/[1.3] font-bold text-brand-700">
           <CircleAlert size={15} {...ICON} />

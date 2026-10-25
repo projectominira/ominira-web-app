@@ -2,18 +2,18 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { BookOpen, Check, ChevronRight, Headphones, Minus, Play, Plus, Target } from "lucide-react";
+import { Check, ChevronRight, Headphones, Minus, Plus, Target } from "lucide-react";
 import ReaderLink from "@/app/components/ReaderLink";
 import Tooltip from "@/app/components/reader/Tooltip";
 import BookCover from "@/app/components/shared/BookCover";
 import ReadingProgress from "@/app/components/shared/ReadingProgress";
 import type { MaterialSummary } from "@/lib/api/types";
 import { resolveBookCoverSrc } from "@/lib/materials/image";
-import { GOAL, GOAL_PRESETS, goalLabel, goalShare, goalStep, ringTime, streakCopy, weekChain } from "@/lib/rooms/home";
+import { GOAL, GOAL_STOPS, goalIndex, goalLabel, goalShare, goalShort, goalStep, ringTime, streakCopy, weekChain } from "@/lib/rooms/home";
 import { dayLabel } from "@/lib/streaks/history";
 import type { CurrentBook, StreakToday } from "@/lib/rooms/types";
 import type { StreakView } from "@/lib/streaks/types";
-import { button } from "@/app/components/rooms/buttons";
+import { ModeIcon, RESUME, SWITCH } from "@/app/components/rooms/RoomHeader";
 
 const EYEBROW = "text-ui-xs tracking-eyebrow uppercase";
 const R = 43;
@@ -92,13 +92,13 @@ function BookHalf({ book, current, desktop }: { book: MaterialSummary; current: 
         </div>
       </div>
       <div className="flex flex-none items-center gap-2">
-        <ReaderLink href={listening ? listenHref : readHref} className={`${button("primary")} flex-1`}>
-          {listening && <Play size={16} aria-hidden />}
+        <ReaderLink href={listening ? listenHref : readHref} className={`${RESUME} flex-1 px-6 py-2.5`}>
+          <ModeIcon listening={listening} size={16} />
           {cta}
         </ReaderLink>
         <Tooltip label={other}>
-          <ReaderLink href={listening ? readHref : listenHref} aria-label={other} className="flex size-10 flex-none items-center justify-center rounded-sm border border-sand-300 text-[var(--color-app-text)] transition-colors hover:bg-sand-75">
-            {listening ? <BookOpen size={17} aria-hidden /> : <Headphones size={17} aria-hidden />}
+          <ReaderLink href={listening ? readHref : listenHref} aria-label={other} className={`${SWITCH} p-2.5`}>
+            <ModeIcon listening={!listening} size={18} />
           </ReaderLink>
         </Tooltip>
       </div>
@@ -134,9 +134,9 @@ function Ring({ minutes, goal }: { minutes: number; goal: number }) {
 }
 
 /** The card's footer: two actions split by a hairline. */
-const FOOT = "flex h-11 min-w-0 cursor-pointer items-center justify-center gap-1.5 px-3 text-ui-sm transition-colors hover:bg-sand-75";
+export const FOOT = "flex h-11 min-w-0 cursor-pointer items-center justify-center gap-1.5 px-3 text-ui-sm transition-colors hover:bg-sand-75";
 
-function Footer({ children }: { children: ReactNode }) {
+export function Footer({ children }: { children: ReactNode }) {
   return <div className="mt-auto grid grid-cols-2 divide-x divide-[var(--color-app-border)] border-t border-[var(--color-app-border)]">{children}</div>;
 }
 
@@ -165,7 +165,7 @@ function Week({ streak }: { streak: StreakView }) {
   );
 }
 
-function StepButton({ label, disabled, onClick, children }: { label: string; disabled: boolean; onClick: () => void; children: ReactNode }) {
+export function StepButton({ label, disabled, onClick, children }: { label: string; disabled: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
@@ -180,8 +180,8 @@ function StepButton({ label, disabled, onClick, children }: { label: string; dis
 }
 
 /** Today's reading: the ring and the streak, the week, then Goal and
- * History. Goal turns the card into a stepper (a quarter hour a tap, or a
- * quick pick), with Cancel and Save. */
+ * History. Goal turns the card into a stepper (a stop a tap), a slider
+ * (1 min to 8 hr), with Cancel and Save. */
 function ReadingHalf({
   streak,
   today,
@@ -203,36 +203,30 @@ function ReadingHalf({
         <div className={`flex flex-col gap-4 ${pad}`}>
           <div className="flex items-baseline justify-between gap-3">
             <div className={`${EYEBROW} text-[var(--color-app-text-muted)]`}>Daily goal</div>
-            <div className="text-ui-caption text-[var(--color-app-text-secondary)]">{draft === today.goal ? `Today: ${goalLabel(today.minutes)}` : "Not saved yet"}</div>
+            <div className="text-ui-caption text-[var(--color-app-text-secondary)]">{draft === today.goal ? `Today: ${goalShort(today.minutes)}` : "Not saved yet"}</div>
           </div>
           <div className="flex items-center justify-between gap-3">
-            <StepButton label="A quarter hour less" disabled={draft <= GOAL.min} onClick={() => setDraft(goalStep(draft, -1))}>
+            <StepButton label="Shorter goal" disabled={draft <= GOAL.min} onClick={() => setDraft(goalStep(draft, -1))}>
               <Minus size={18} strokeWidth={2} aria-hidden />
             </StepButton>
             <div className="flex min-w-0 flex-col items-center gap-1.5 text-center" aria-live="polite">
-              <span className="font-serif text-[26px]/[1.15] font-semibold text-balance tabular-nums">{goalLabel(draft)}</span>
+              <span aria-label={goalLabel(draft)} className="font-serif text-[26px]/[1.15] font-semibold whitespace-nowrap tabular-nums">{goalShort(draft)}</span>
               <span className="text-ui-caption text-[var(--color-app-text-secondary)]">a day</span>
             </div>
-            <StepButton label="A quarter hour more" disabled={draft >= GOAL.max} onClick={() => setDraft(goalStep(draft, 1))}>
+            <StepButton label="Longer goal" disabled={draft >= GOAL.max} onClick={() => setDraft(goalStep(draft, 1))}>
               <Plus size={18} strokeWidth={2} aria-hidden />
             </StepButton>
           </div>
-          <div className="grid grid-cols-4 gap-2">
-            {GOAL_PRESETS.map((m) => (
-              <button
-                key={m}
-                type="button"
-                aria-pressed={draft === m}
-                aria-label={goalLabel(m)}
-                onClick={() => setDraft(m)}
-                className={`cursor-pointer rounded-sm border py-1.5 text-ui-sm whitespace-nowrap transition-colors ${
-                  draft === m ? "border-brand-500 bg-brand-50 font-bold text-[var(--color-app-brand)]" : "border-sand-300 hover:bg-sand-75"
-                }`}
-              >
-                {m < 60 ? `${m} min` : `${m / 60}h`}
-              </button>
-            ))}
-          </div>
+          <input
+            type="range"
+            aria-label="Daily goal"
+            aria-valuetext={goalLabel(draft)}
+            min={0}
+            max={GOAL_STOPS.length - 1}
+            value={goalIndex(draft)}
+            onChange={(e) => setDraft(GOAL_STOPS[Number(e.target.value)])}
+            className="h-6 w-full cursor-pointer accent-brand-500"
+          />
         </div>
         <Footer>
           <button type="button" onClick={() => setDraft(null)} className={FOOT}>

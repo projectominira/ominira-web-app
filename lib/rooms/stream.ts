@@ -5,6 +5,7 @@ import { encodeCursor, keysetBeforeFilter, type Keyset } from "@/lib/api/cursor"
 import { resolveExcerpt } from "@/lib/community/excerpt";
 import { enrichFeedItems } from "@/lib/community/feed";
 import type { NoteRow } from "@/lib/community/notes";
+import { loadPostViewer } from "@/lib/community/viewer";
 import { visiblePostsFilter, type PostViewer } from "@/lib/community/visibility";
 import { toMilestone } from "@/lib/groups/milestones";
 import { loadSectionLabels } from "@/lib/materials/sectionLabels";
@@ -67,16 +68,18 @@ export function groupPostScope(groupId: string, memberIds: string[], materialIds
 }
 
 /** The group's room: notes posted in the group or by a member on a book from
- * its list (the Notes tab's lens, unchanged), group events and milestones. */
-export async function groupStreamPage(group: Group, viewer: PostViewer, { cursor, limit }: Page): Promise<RoomStreamPage> {
+ * its list (the Notes tab's lens, unchanged), group events and milestones.
+ * The viewer's grants load alongside the group's own reads. */
+export async function groupStreamPage(group: Group, readerId: string | null, { cursor, limit }: Page): Promise<RoomStreamPage> {
   const admin = getSupabaseAdminClient();
   const before = <Q extends { or: (f: string) => Q }>(q: Q) => (cursor ? q.or(keysetBeforeFilter(cursor)) : q);
-  const [members, books, events, milestones, lastRead, officialIds] = await Promise.all([
+  const [viewer, members, books, events, milestones, lastRead, officialIds] = await Promise.all([
+    loadPostViewer(readerId),
     admin.from("group_members").select("reader_id, role").eq("group_id", group.id),
     admin.from("group_books").select("material_id").eq("group_id", group.id),
     newestFirst(before(admin.from("group_events").select("*").eq("group_id", group.id))).limit(limit + 1),
     newestFirst(before(admin.from("group_milestones").select("*").eq("group_id", group.id))).limit(limit + 1),
-    cursor ? null : lastReadAt(viewer?.readerId, "group", group.id),
+    cursor ? null : lastReadAt(readerId, "group", group.id),
     officialReaderIds(),
   ]);
   if (members.error) throw members.error;

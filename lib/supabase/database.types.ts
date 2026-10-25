@@ -587,6 +587,10 @@ export type Database = {
           /** IANA zone; weekly sessions recur in it. */
           timezone: string;
           pinned_post_id: string | null;
+          /** This week's target is pinned to the room's strip. */
+          pin_target: boolean;
+          /** A session pinned to the strip: its series_id, else its id. */
+          pinned_session_id: string | null;
           /** Invite only: unlisted, joined by a moderator's invite. */
           is_private: boolean;
           created_by: string | null;
@@ -599,6 +603,8 @@ export type Database = {
           description?: string;
           timezone: string;
           pinned_post_id?: string | null;
+          pin_target?: boolean;
+          pinned_session_id?: string | null;
           is_private?: boolean;
           created_by?: string | null;
           created_at?: string;
@@ -899,6 +905,7 @@ export type Database = {
       admin_dashboard_metrics: { Args: Record<string, never>; Returns: Json };
       /** migrations/20261118_admin_weekly_dashboard.sql — shape in lib/metrics/dashboard.ts. */
       admin_weekly_metrics: { Args: { week_start: string }; Returns: Json };
+      admin_weekly_readers: { Args: { week_start: string }; Returns: Json };
       /** Reading Room (migrations/20261012…20261015). Null when the book can't host a room. */
       /** A group room needs `grp` (moderators only) and may carry its `session`. */
       start_room: {

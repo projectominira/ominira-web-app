@@ -267,6 +267,13 @@ body {
      Only defined where the ported note-card pieces actually use them. */
   --color-app-surface: var(--reader-surface);
   --color-app-surface-muted: var(--color-sand-75);
+  /* A room's stream behind its cards (the page's own white), a quoted
+     passage inside one, and the chips and pills on both. */
+  --color-app-canvas: var(--reader-bg);
+  --color-app-inset: var(--color-sand-50);
+  --color-app-chip: var(--color-sand-100);
+  /* A room's chat box: white here, a step up from the black page in dark. */
+  --color-app-composer: #ffffff;
   --color-app-border: var(--color-sand-200);
   --color-app-text: var(--color-sand-950);
   --color-app-text-secondary: var(--color-sand-600);
@@ -324,6 +331,10 @@ body {
      rather than a separate literal palette. */
   --color-app-surface: var(--reader-surface);
   --color-app-surface-muted: var(--reader-surface-hover);
+  --color-app-canvas: var(--reader-bg);
+  --color-app-inset: var(--reader-surface-hover);
+  --color-app-chip: var(--reader-surface-hover);
+  --color-app-composer: var(--reader-surface-hover);
   --color-app-border: var(--reader-border);
   --color-app-text: var(--reader-text);
   --color-app-text-secondary: var(--reader-text-muted);

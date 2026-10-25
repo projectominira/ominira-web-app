@@ -112,7 +112,7 @@ export default function BookRoomPane({
       }}
       input={
         viewerId ? (
-          <RoomInput placeholder="Share a note" canLock onSend={send.send} />
+          <RoomInput placeholder="Share a note" canLock docked onSend={send.send} />
         ) : (
           <button
             type="button"

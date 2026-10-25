@@ -31,7 +31,7 @@ export default function InfoPanel({ title, onClose, actions, children }: { title
       <div className="flex min-h-14 flex-none items-center gap-1 pr-2 pl-5">
         <span className="flex-1 text-ui-md">{title}</span>
         {actions}
-        <button type="button" aria-label="Close" onClick={onClose} className="flex size-11 cursor-pointer items-center justify-center rounded-md hover:bg-sand-75">
+        <button type="button" aria-label="Close" onClick={onClose} className="flex size-11 cursor-pointer items-center justify-center rounded-md hover:bg-[var(--color-app-surface-muted)]">
           <X size={20} strokeWidth={1.75} aria-hidden />
         </button>
       </div>

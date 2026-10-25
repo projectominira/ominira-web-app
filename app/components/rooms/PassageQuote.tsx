@@ -43,7 +43,7 @@ export default function PassageQuote({
             />
           )}
         </span>
-        <span className="block font-serif text-[16px]/[1.65] text-pretty text-sand-900">
+        <span className="block font-serif text-[16px]/[1.65] text-pretty text-[var(--color-app-text)]">
           {expanded ? excerpt : shown}
           {isTruncated && !expanded && (
             <>
@@ -70,11 +70,11 @@ export default function PassageQuote({
             </>
           )}
         </span>
-        {cite && <span className="mt-1.5 block text-[12px] font-medium text-sand-500">{cite}</span>}
+        {cite && <span className="mt-1.5 block text-[12px] font-medium text-[var(--color-app-text-muted)]">{cite}</span>}
       </span>
     </>
   );
-  const cls = "group flex w-full items-start rounded-sm bg-sand-50 px-3.5 py-3 text-left";
+  const cls = "group flex w-full items-start rounded-sm bg-[var(--color-app-inset)] px-3.5 py-3 text-left";
   if (href) return <Link href={href} className={cls}>{body}</Link>;
   if (onClick)
     return (

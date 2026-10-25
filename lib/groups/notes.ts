@@ -8,7 +8,8 @@ import { comradeName } from "@/lib/reader/authorDisplay";
 import { isModerator, roleOf, type Group, type GroupOutcome } from "@/lib/groups/membership";
 
 // Notes in the group (studygroup-spec.md §4.5): who may post to it, and the
-// pin, for the thin note and /pin routes. The room's stream is
+// strip's pins (a note, the target, a session), for the thin note and /pin
+// routes. The room's stream is
 // lib/rooms/stream.ts.
 
 /** Posting to the group: members only, and Whole circle is for moderators. */
@@ -19,21 +20,40 @@ export async function groupPostAccess(groupId: string, readerId: string, wholeCi
   return "ok";
 }
 
-/** Pin to top, or unpin with null. One pin per group, so a new pin replaces
- * the old one. Moderators only; members hear about it (`group_post`). */
-export async function pinGroupPost(group: Group, actorId: string, postId: string | null): Promise<GroupOutcome> {
+/** What a pin request sets; absent keys stay as they are. */
+export type PinInput = { postId?: string | null; target?: boolean; sessionId?: string | null };
+
+/** Pins to the room's strip, or unpins with null / false. Moderators only.
+ * A note: one per group (a new pin replaces the old), a public note posted
+ * in the group, not a reply; members hear about it (`group_post`). The
+ * target: whichever is running. A session: one, by its series for a weekly
+ * one, so the pin follows it. */
+export async function pinInGroup(group: Group, actorId: string, input: PinInput): Promise<GroupOutcome> {
   if (!(await isModerator(group.id, actorId))) return "forbidden";
   const admin = getSupabaseAdminClient();
+  const { postId, target, sessionId } = input;
 
   let text: string | null = null;
   if (postId) {
-    const { data: post, error } = await admin.from("posts").select("parent_id, content").eq("id", postId).maybeSingle();
+    const { data: post, error } = await admin.from("posts").select("parent_id, content, group_id, visibility").eq("id", postId).maybeSingle();
     if (error) throw error;
-    if (!post || post.parent_id) return "post_not_found";
+    if (!post || post.parent_id || post.group_id !== group.id || post.visibility !== "public") return "post_not_found";
     text = (post.content as { text?: string }).text ?? null;
   }
+  let session: string | null | undefined = sessionId;
+  if (sessionId) {
+    const { data: row, error } = await admin.from("group_sessions").select("id, series_id").eq("id", sessionId).eq("group_id", group.id).maybeSingle();
+    if (error) throw error;
+    if (!row) return "not_found";
+    session = row.series_id ?? row.id;
+  }
 
-  const { error } = await admin.from("groups").update({ pinned_post_id: postId }).eq("id", group.id);
+  const update = {
+    ...(postId !== undefined && { pinned_post_id: postId }),
+    ...(target !== undefined && { pin_target: target }),
+    ...(session !== undefined && { pinned_session_id: session }),
+  };
+  const { error } = await admin.from("groups").update(update).eq("id", group.id);
   if (error) throw error;
   if (postId && postId !== group.pinned_post_id) notifyPinned(group, actorId, postId, text);
   return "ok";

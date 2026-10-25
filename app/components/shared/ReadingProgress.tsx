@@ -1,5 +1,5 @@
 /** Where you are in a book, the same wherever it shows (Home's Today card,
- * a book's Info and the strip over its room): the chapter over the bar and
+ * a book's Info, a group's target card, reading list and members): the chapter over the bar and
  * how much is done. */
 export default function ReadingProgress({ chapter, pct, className = "" }: { chapter: string | null; pct: number; className?: string }) {
   return (

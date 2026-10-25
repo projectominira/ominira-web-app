@@ -16,7 +16,7 @@ import RoomAvatar from "./RoomAvatar";
 export function RoomCard({ priv, flash = false, children }: { priv: boolean; flash?: boolean; children: ReactNode }) {
   return (
     <article
-      className={`flex w-full flex-col gap-3 rounded-sm border bg-white px-4 pt-3 pb-3.5 transition-shadow duration-250 ease-out ${flash ? "ring-3 ring-brand-300" : ""} ${
+      className={`flex w-full flex-col gap-3 rounded-sm border bg-[var(--color-app-surface)] px-4 pt-3 pb-3.5 transition-shadow duration-250 ease-out ${flash ? "ring-3 ring-brand-300" : ""} ${
         priv ? "border-dotted border-sand-300" : "border-[var(--color-app-border)]"
       }`}
     >
@@ -78,7 +78,7 @@ export function CardAuthor({
             </Link>
           )}
           {tag && (
-            <span className="flex-none self-center rounded-xs bg-sand-100 px-1.5 py-px font-sans text-[10px]/[1.4] font-bold whitespace-nowrap text-[var(--color-app-text-secondary)]">
+            <span className="flex-none self-center rounded-xs bg-[var(--color-app-chip)] px-1.5 py-px font-sans text-[10px]/[1.4] font-bold whitespace-nowrap text-[var(--color-app-text-secondary)]">
               {tag}
             </span>
           )}
@@ -91,7 +91,7 @@ export function CardAuthor({
               type="button"
               onClick={() => onVisibility(priv ? "public" : "private")}
               aria-label={priv ? "Only you can see this. Make it public" : "Comrades can see this. Make it private"}
-              className={`${chipCls} -my-1 cursor-pointer rounded-full px-1.5 py-0.5 hover:bg-sand-75`}
+              className={`${chipCls} -my-1 cursor-pointer rounded-full px-1.5 py-0.5 hover:bg-[var(--color-app-surface-muted)]`}
             >
               {chip}
             </button>

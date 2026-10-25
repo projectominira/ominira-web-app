@@ -1,6 +1,7 @@
 "use client";
 
-import { Headphones, Target } from "lucide-react";
+import type { ReactNode } from "react";
+import { Headphones, Pin, PinOff, Target } from "lucide-react";
 import { activeRoom, useRoomStore } from "@/stores/room-store";
 import PulseDot from "@/app/components/shared/PulseDot";
 import { sessionMeta, sessionPeople, targetRange } from "@/lib/rooms/cards";
@@ -19,8 +20,29 @@ const CARD = "flex flex-col gap-2.5 rounded-lg border px-4 pt-3.5 pb-4 transitio
 const FLASH = "ring-3 ring-brand-300";
 const EYEBROW = "flex items-center font-sans text-[11px]/[1.3] font-extrabold tracking-eyebrow uppercase";
 
-export function TargetCard({ target, team, flash = false, onContinue, onEdit }: { target: RoomTarget; team: boolean; flash?: boolean; onContinue?: () => void; onEdit?: () => void }) {
-  const { view, bookTitle, setBy, myLabel } = target;
+/** The team's pin on a card: pins it to the room's strip, or unpins it. */
+export type CardPin = { pinned: boolean; onToggle: (pin: boolean) => void };
+
+function PinToggle({ pin, className = "" }: { pin: CardPin; className?: string }) {
+  const label = pin.pinned ? "Unpin from chat" : "Pin to chat";
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      aria-pressed={pin.pinned}
+      onClick={() => pin.onToggle(!pin.pinned)}
+      className={`-my-2 -mr-2 flex size-8 flex-none cursor-pointer items-center justify-center rounded-sm hover:bg-[var(--color-app-surface-muted)] ${className}`}
+    >
+      {pin.pinned ? <PinOff size={14} {...ICON} /> : <Pin size={14} {...ICON} />}
+    </button>
+  );
+}
+
+/** This week's target: how far to read, then your progress and the book's
+ * resume buttons (`resume`). The team edits it from the room's ⋮. */
+export function TargetCard({ target, flash = false, resume, pin }: { target: RoomTarget; flash?: boolean; resume?: ReactNode; pin?: CardPin }) {
+  const { view, bookTitle, setBy } = target;
   const t = view.target!;
   return (
     <div className={`${CARD} ${flash ? FLASH : ""} border-[var(--color-app-border)] bg-[var(--color-app-surface)]`}>
@@ -29,6 +51,7 @@ export function TargetCard({ target, team, flash = false, onContinue, onEdit }: 
         <span>This week’s target</span>
         <span className="flex-1" />
         <span className="font-bold tracking-normal text-[var(--color-app-text-muted)] normal-case">Ends {formatDay(t.dueOn, "day")}</span>
+        {pin && <PinToggle pin={pin} className="ml-1 text-[var(--color-app-text-muted)]" />}
       </div>
       <div className="flex flex-col gap-0.5">
         <span className="font-serif text-[22px]/[1.2] font-semibold">{targetRange(target)}</span>
@@ -36,26 +59,7 @@ export function TargetCard({ target, team, flash = false, onContinue, onEdit }: 
           {bookTitle} · set by {personName(setBy)}
         </span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-sand-100">
-        <div style={{ width: `${view.groupPct ?? 0}%` }} className="h-full bg-brand-500" />
-      </div>
-      <div className="flex items-center gap-2 text-ui-caption">
-        <span className="font-bold">
-          {view.onTrack} of {view.memberCount} on track
-        </span>
-        <span className="flex-1" />
-        {myLabel && <span className="text-[var(--color-app-text-secondary)]">You · {myLabel}</span>}
-      </div>
-      <div className="flex gap-2">
-        <button type="button" onClick={onContinue} className={`flex-1 ${button("secondary", { full: true })}`}>
-          {myLabel ? `Continue ${myLabel}` : "Start reading"}
-        </button>
-        {team && (
-          <button type="button" onClick={onEdit} className={button("ghost")}>
-            Edit
-          </button>
-        )}
-      </div>
+      {resume}
     </div>
   );
 }
@@ -73,6 +77,7 @@ export function SessionCard({
   onStart,
   onEdit,
   onJoin,
+  pin,
 }: {
   card: RoomSession;
   team: boolean;
@@ -82,6 +87,8 @@ export function SessionCard({
   onStart?: () => void;
   onEdit?: () => void;
   onJoin?: () => void;
+  /** The team's pin, on a scheduled session. */
+  pin?: CardPin;
 }) {
   const { state, session, people, reading, summary } = card;
   const live = state === "live";
@@ -94,6 +101,12 @@ export function SessionCard({
       <div className={`${EYEBROW} gap-1.75 ${live ? "text-brand-200" : ended ? "text-[var(--color-app-text-muted)]" : "text-[var(--color-app-brand)]"}`}>
         {live ? <PulseDot tone="live" /> : <Headphones size={14} {...ICON} />}
         <span>{live ? "Live now · Reading room" : ended ? "Reading room · Ended" : "Reading room · Scheduled"}</span>
+        {pin && state === "upcoming" && (
+          <>
+            <span className="flex-1" />
+            <PinToggle pin={pin} className="text-[var(--color-app-text-muted)]" />
+          </>
+        )}
       </div>
       <div className="flex flex-col gap-0.75">
         <span className="font-serif text-[19px]/[1.25] font-semibold text-pretty">{session.topic}</span>
@@ -160,10 +173,10 @@ export function MilestoneCard({ item }: { item: Extract<RoomItem, { t: "mileston
     <div className="flex flex-col items-center gap-2 border-y border-[var(--color-app-border)] px-4 py-4.5 text-center">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/images/ominira-mark.png" alt="" className="size-11 object-contain" />
-      <span className="font-serif text-[20px]/[1.3] font-semibold text-balance">
+      <span className="font-serif text-[18px] font-semibold">
         {milestone.kind === "book_finished" && book ? (
           <>
-            The group finished <i>{book}</i>
+            The group finished {book}
           </>
         ) : (
           milestone.title.replace(/\.$/, "")

@@ -67,7 +67,7 @@ export default function RoomPanel({
           {sub && <span className="truncate text-ui-caption text-[var(--color-app-text-muted)]">{sub}</span>}
         </div>
         {actions}
-        <button type="button" aria-label="Close" onClick={onClose} className="flex size-11 flex-none cursor-pointer items-center justify-center rounded-md hover:bg-sand-75">
+        <button type="button" aria-label="Close" onClick={onClose} className="flex size-11 flex-none cursor-pointer items-center justify-center rounded-md hover:bg-[var(--color-app-surface-muted)]">
           <X size={20} strokeWidth={1.75} aria-hidden />
         </button>
       </div>

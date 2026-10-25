@@ -62,7 +62,7 @@ export default function Home({
   const live = <LiveRooms strip={view.strip} myRoom={myRoom} desktop={desktop} entering={entering} onPick={onPickRoom} onOpen={onOpenRoom} />;
   const hasLive = view.strip.length > 0 || myRoom !== null;
   return (
-    <div className="flex flex-col gap-7 pb-4 shell:gap-10">
+    <div className="flex flex-col gap-7 shell:gap-10 shell:pb-4">
       {!desktop && live}
       {view.featured.length > 0 && <FeaturedBooks rows={view.featured} />}
       <div className="grid grid-cols-1 gap-7 shell:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] shell:gap-x-12">

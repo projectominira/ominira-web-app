@@ -7,7 +7,7 @@ import type { RoomItem } from "@/lib/rooms/types";
 import RoomAvatar from "./RoomAvatar";
 
 const ICON = { strokeWidth: 1.75, "aria-hidden": true } as const;
-const PILL = "bg-sand-100 text-ui-caption text-[var(--color-app-text-secondary)]";
+const PILL = "bg-[var(--color-app-chip)] text-ui-caption text-[var(--color-app-text-secondary)]";
 const WHO = "font-bold text-[var(--color-app-text)]";
 
 type Line = Extract<RoomItem, { t: "system" } | { t: "joins" }>;
@@ -62,7 +62,7 @@ function Joins({ item, defaultOpen }: { item: Extract<RoomItem, { t: "joins" }>;
           {!open && (
             <span className="flex flex-none">
               {comrades.slice(0, 3).map((c) => (
-                <RoomAvatar key={c.readerId} comrade={c} size={20} className="-mr-1.5 border-2 border-sand-100 last:mr-0" />
+                <RoomAvatar key={c.readerId} comrade={c} size={20} className="-mr-1.5 border-2 border-[var(--color-app-chip)] last:mr-0" />
               ))}
             </span>
           )}

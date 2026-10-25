@@ -57,7 +57,7 @@ export default function GroupMembers({
   if (!members || members.length === 0) return <NoResults className="mt-4" message="No members yet." />;
 
   return (
-    <ul className="m-0 grid list-none grid-cols-1 p-0 shell:grid-cols-2 shell:gap-x-10">
+    <ul className="m-0 list-none p-0">
       {members.map((member) => {
         const isSelf = member.readerId === viewerId;
         return (
