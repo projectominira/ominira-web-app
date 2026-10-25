@@ -23,7 +23,7 @@ if (isServer) {
   const pdfjsDir = path.dirname(require.resolve("pdfjs-dist/package.json"));
   pdfjsLib.GlobalWorkerOptions.workerSrc = path.join(pdfjsDir, "legacy/build/pdf.worker.mjs");
 } else {
-  // Polyfills + the shared worker port the reader uses too.
+  // Polyfills + pdf.js worker code, run on the main thread.
   await import("@/lib/pdf/setup");
 }
 

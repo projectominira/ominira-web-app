@@ -18,7 +18,9 @@ const DOCUMENT_CACHE_NAME = "ominira-documents-v1";
 // book text cached before then names Supabase Storage (bandwidth-spec.md step 4).
 const CONTENT_CACHE_NAME = "ominira-content-v3";
 const PAGE_CACHE_NAME = "ominira-pages-v1";
-const STATIC_CACHE_NAME = "ominira-static-v1";
+// static v2: drops build files cached before pdf.js moved to the main thread,
+// including any stale pdf.js worker (the API/worker version mismatch).
+const STATIC_CACHE_NAME = "ominira-static-v2";
 const MEDIA_CACHE_NAME = "ominira-media-v3";
 const KEPT_CACHES = [CACHE_NAME, DOCUMENT_CACHE_NAME, CONTENT_CACHE_NAME, PAGE_CACHE_NAME, STATIC_CACHE_NAME, MEDIA_CACHE_NAME];
 // Entry caps. Pages and media are trimmed least recently used first (a hit

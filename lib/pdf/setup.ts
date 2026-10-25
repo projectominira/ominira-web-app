@@ -1,16 +1,15 @@
 import "./polyfills";
-import { GlobalWorkerOptions } from "pdfjs-dist";
+import "pdfjs-dist/legacy/build/pdf.worker.min.mjs";
 
 /**
  * Browser-side pdf.js setup for the upload parser (lib/book/pdfParser.ts), which
  * resolves to the legacy pdf.js module (next.config.ts). The reader doesn't use
  * pdf.js at all — it renders with PDFium (lib/pdf/pdfiumEngine.ts).
  *
- * `workerPort` rather than `workerSrc`: pdf.js's worker file can't be
- * polyfilled from outside, so lib/pdf/pdf.worker.ts wraps it and the bundler
- * builds that as a real worker entry. A shared port is also reused across
- * documents instead of pdf.js spawning (and parsing ~2MB of worker) per open.
+ * pdf.js runs on the main thread: importing its worker module here sets
+ * `globalThis.pdfjsWorker`, which pdf.js uses in place of a Web Worker. The
+ * parser only reads metadata and rasterizes one page, so a worker buys little,
+ * and a separate worker file let readers end up with an API and worker from
+ * different pdf.js versions ("The API version … does not match the Worker
+ * version …"). Both now come from the same bundle, so they always match.
  */
-if (typeof window !== "undefined" && !GlobalWorkerOptions.workerPort) {
-  GlobalWorkerOptions.workerPort = new Worker(new URL("./pdf.worker.ts", import.meta.url), { type: "module" });
-}
