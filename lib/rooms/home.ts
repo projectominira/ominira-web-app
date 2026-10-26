@@ -13,7 +13,7 @@ export type ChainDay = { day: LocalDay; letter: string; state: "done" | "today" 
 
 const LETTERS = ["M", "T", "W", "T", "F", "S", "S"];
 
-/** This week, Monday to Sunday: read days done, today ringed until read. */
+/** This week, Monday to Sunday: days the goal was met done, today ringed until it is. */
 export function weekChain(view: Pick<StreakView, "today" | "days">): ChainDay[] {
   const monday = addDays(view.today, -weekdayOf(view.today));
   const read = new Set(view.days);
@@ -35,15 +35,16 @@ export function streakCopy(view: StreakView, today: StreakToday): StreakCopy {
   // TodayCard.dc.html's words; it has no milestone state.
   const left = Math.max(0, today.goal - today.minutes);
   const fresh = state.kind === "none" || state.kind === "ended";
-  // Any reading counts the day; the goal is apart from the streak.
+  // Meeting the goal keeps the day (a goal raised after can leave some left).
+  const more = `${goalLabel(left)}${today.minutes ? " more" : ""}`;
   const goal =
     left === 0
       ? "Goal met for today."
       : state.kind === "kept"
         ? `${goalLabel(left)} left of today's goal.`
         : fresh
-          ? "Read today to start one."
-          : `Start today's reading to make it day ${state.days + 1}.`;
+          ? `Read ${more} today to start one.`
+          : `Read ${more} to make it day ${state.days + 1}.`;
   return { title: fresh ? "Start a streak" : `${state.days}-day streak`, sub: goal };
 }
 

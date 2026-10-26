@@ -73,7 +73,7 @@ async function reachMark(readerId: string, mark: number, day: LocalDay): Promise
 }
 
 /** Counts `day` once: the day row is the claim, so only the first write of
- * the day advances the streak. */
+ * the day advances the streak. Called once the day's goal is met. */
 async function recordDay(readerId: string, day: LocalDay): Promise<void> {
   const admin = getSupabaseAdminClient();
   const { data, error } = await admin
@@ -95,19 +95,20 @@ async function recordDay(readerId: string, day: LocalDay): Promise<void> {
 }
 
 // Like recordActiveDay's Set (lib/metrics/activeDays.ts), but keyed on the
-// reader's local day: each instance writes the day once per reader per
-// local day, and the time at most every TIME_EVERY_MS. The day maps start
-// over each UTC day, which also picks up a changed zone.
+// reader's local day: each instance sends the time at most every
+// TIME_EVERY_MS, and claims the day once per reader per local day, when a
+// save finds its goal met. The day maps start over each UTC day, which also
+// picks up a changed zone.
 let utcDay = "";
 const zones = new Map<string, string>();
 const recorded = new Map<string, LocalDay>();
 const timeSent = new Map<string, number>();
 
 /**
- * Counts today, the reader's local day, toward their streak, and credits the
- * time since their last save to today's minutes and the saved book. Called only by
- * recordReadingDay, when a reading position is saved (listening saves them
- * too). Runs after the response.
+ * Credits the time since the reader's last save to today's minutes (their
+ * local day) and the saved book, and counts today toward their streak once
+ * its goal is met. Called only by recordReadingDay, when a reading position
+ * is saved (listening saves them too). Runs after the response.
  */
 export function recordReadingActivity(readerId: string, materialId: string): void {
   const now = Date.now();
@@ -117,11 +118,9 @@ export function recordReadingActivity(readerId: string, materialId: string): voi
     zones.clear();
     recorded.clear();
   }
+  if (now - (timeSent.get(readerId) ?? 0) < TIME_EVERY_MS) return;
+  timeSent.set(readerId, now);
   const zone = zones.get(readerId);
-  const dayDone = !!zone && recorded.get(readerId) === localDay(now, zone);
-  const timeDue = now - (timeSent.get(readerId) ?? 0) >= TIME_EVERY_MS;
-  if (dayDone && !timeDue) return;
-  if (timeDue) timeSent.set(readerId, now);
 
   after(async () => {
     let today: LocalDay | null = null;
@@ -129,22 +128,20 @@ export function recordReadingActivity(readerId: string, materialId: string): voi
       const tz = zone ?? (await readerZone(readerId));
       zones.set(readerId, tz);
       today = localDay(now, tz);
-      if (timeDue) {
-        const { error } = await getSupabaseAdminClient().rpc("record_reading_time", {
-          reader: readerId,
-          material: materialId,
-          today,
-          at: new Date(now).toISOString(),
-          idle_seconds: IDLE_SECONDS,
-        });
-        if (error) console.error("Failed to record reading time", error);
-      }
-      if (recorded.get(readerId) === today) return;
+      const { data, error } = await getSupabaseAdminClient().rpc("record_reading_time", {
+        reader: readerId,
+        material: materialId,
+        today,
+        at: new Date(now).toISOString(),
+        idle_seconds: IDLE_SECONDS,
+      });
+      if (error) throw error;
+      if (recorded.get(readerId) === today || data.day_seconds < data.day_goal * 60) return;
       recorded.set(readerId, today);
       await recordDay(readerId, today);
     } catch (err) {
       if (today && recorded.get(readerId) === today) recorded.delete(readerId);
-      console.error("Failed to record a streak day", err);
+      console.error("Failed to record reading time or a streak day", err);
     }
   });
 }
@@ -168,12 +165,24 @@ export async function getStreakToday(readerId: string, today: LocalDay): Promise
   };
 }
 
-/** Adjust: the reader's daily goal (validated by the route, isGoal). */
+/** Adjust: the reader's daily goal (validated by the route, isGoal), today's
+ * goal too. A goal lowered to what's been read today keeps the day. */
 export async function setDailyGoal(readerId: string, minutes: number): Promise<void> {
-  const { error } = await getSupabaseAdminClient()
-    .from("reader_streaks")
-    .upsert({ reader_id: readerId, daily_goal_minutes: minutes, updated_at: new Date().toISOString() });
+  const admin = getSupabaseAdminClient();
+  const [streak, today] = await Promise.all([
+    admin.from("reader_streaks").upsert({ reader_id: readerId, daily_goal_minutes: minutes, updated_at: new Date().toISOString() }),
+    readerZone(readerId).then((tz) => localDay(Date.now(), tz)),
+  ]);
+  if (streak.error) throw streak.error;
+  const { data, error } = await admin
+    .from("reader_reading_time")
+    .update({ goal_minutes: minutes })
+    .eq("reader_id", readerId)
+    .eq("day", today)
+    .select("seconds")
+    .maybeSingle();
   if (error) throw error;
+  if (data && data.seconds >= minutes * 60) await recordDay(readerId, today);
 }
 
 /** The reader's streak today (C1), the days read this past week (the home
@@ -197,29 +206,36 @@ export async function getStreakView(readerId: string): Promise<StreakView> {
   };
 }
 
-/** `year` of the reader's reading, in their local days (/history). A
- * restored day wasn't read, so it's left out. */
+/** `year` of the reader's reading, in their local days (/history): each
+ * day's time and goal, and whether the streak kept it. */
 export async function getReadingHistory(readerId: string, year: number): Promise<ReadingHistory> {
   const today = localDay(Date.now(), await readerZone(readerId));
   const from = `${year}-01-01`;
   const to = `${year}-12-31`;
   const admin = getSupabaseAdminClient();
-  const [read, time, first] = await Promise.all([
-    admin.from("reader_reading_days").select("day").eq("reader_id", readerId).eq("restored", false).gte("day", from).lte("day", to),
-    admin.from("reader_reading_time").select("day, seconds").eq("reader_id", readerId).gte("day", from).lte("day", to),
+  const [kept, time, firstKept, firstTime, goal] = await Promise.all([
+    admin.from("reader_reading_days").select("day, restored").eq("reader_id", readerId).gte("day", from).lte("day", to),
+    admin.from("reader_reading_time").select("day, seconds, goal_minutes").eq("reader_id", readerId).gte("day", from).lte("day", to),
+    // Days read before time was kept are only streak days.
     admin.from("reader_reading_days").select("day").eq("reader_id", readerId).eq("restored", false).order("day").limit(1).maybeSingle(),
+    admin.from("reader_reading_time").select("day").eq("reader_id", readerId).gt("seconds", 0).order("day").limit(1).maybeSingle(),
+    admin.from("reader_streaks").select("daily_goal_minutes").eq("reader_id", readerId).maybeSingle(),
   ]);
-  for (const r of [read, time, first]) if (r.error) throw r.error;
+  for (const r of [kept, time, firstKept, firstTime, goal]) if (r.error) throw r.error;
 
-  const seconds = new Map<string, number>();
-  for (const d of read.data ?? []) seconds.set(d.day, 0);
-  for (const t of time.data ?? []) if (t.seconds > 0) seconds.set(t.day, t.seconds);
+  const days = new Map<string, ReadingHistory["days"][number]>();
+  for (const t of time.data ?? []) days.set(t.day, { day: t.day, seconds: t.seconds, goal: t.goal_minutes, streak: null });
+  for (const d of kept.data ?? []) {
+    days.set(d.day, { day: d.day, seconds: 0, goal: null, ...days.get(d.day), streak: d.restored ? "restored" : "met" });
+  }
+  const firsts = [firstKept.data?.day, firstTime.data?.day].filter((d): d is string => !!d).sort();
 
   return {
     year,
     today,
-    days: [...seconds].map(([day, s]) => ({ day, seconds: s })).sort((a, b) => a.day.localeCompare(b.day)),
-    firstDay: first.data?.day ?? today,
+    goal: dailyGoal(goal.data?.daily_goal_minutes ?? null),
+    days: [...days.values()].filter((d) => d.seconds > 0 || d.streak).sort((a, b) => a.day.localeCompare(b.day)),
+    firstDay: firsts[0] ?? today,
   };
 }
 

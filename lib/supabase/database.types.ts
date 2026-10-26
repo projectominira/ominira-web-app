@@ -772,8 +772,8 @@ export type Database = {
       /** migrations/20261107_reading_time.sql (rooms-spec §5.7): seconds read
        * per local day, credited by record_reading_time. */
       reader_reading_time: {
-        Row: { reader_id: string; day: string; seconds: number; last_at: string };
-        Insert: { reader_id: string; day: string; seconds?: number; last_at: string };
+        Row: { reader_id: string; day: string; seconds: number; last_at: string; goal_minutes: number | null };
+        Insert: { reader_id: string; day: string; seconds?: number; last_at: string; goal_minutes?: number | null };
         Update: Partial<Database["public"]["Tables"]["reader_reading_time"]["Insert"]>;
         Relationships: [];
       };
@@ -950,7 +950,10 @@ export type Database = {
       set_current_group_book: { Args: { grp: string; material: string; reader?: string | null }; Returns: boolean };
       reorder_group_books: { Args: { grp: string; materials: string[] }; Returns: undefined };
       /** migrations/20261111_reading_history.sql: one reading-position save, and its book. */
-      record_reading_time: { Args: { reader: string; material: string; today: string; at: string; idle_seconds: number }; Returns: undefined };
+      record_reading_time: {
+        Args: { reader: string; material: string; today: string; at: string; idle_seconds: number };
+        Returns: { day_seconds: number; day_goal: number };
+      };
       /** A reader's seconds per book per month (`month` is its first day). */
       reading_history_day_books: {
         Args: { reader: string; from_day: string; to_day: string };

@@ -22,10 +22,13 @@ describe("streakCopy", () => {
   test("not read today: the next day", () => {
     expect(streakCopy(streak({ kind: "open", days: 12 }, ["2026-10-12"], null), { minutes: 0, goal: 60, collectiveMinutes: COLLECTIVE })).toEqual({
       title: "12-day streak",
-      sub: "Start today's reading to make it day 13.",
+      sub: "Read 1 hour to make it day 13.",
     });
   });
-  test("read today: what's left of the goal", () => {
+  test("read under the goal: what's left before the day counts", () => {
+    expect(streakCopy(streak({ kind: "open", days: 12 }, ["2026-10-12"], null), { minutes: 42, goal: 60, collectiveMinutes: COLLECTIVE }).sub).toBe("Read 18 minutes more to make it day 13.");
+  });
+  test("goal raised after the day counted: what's left of it", () => {
     expect(streakCopy(streak({ kind: "kept", days: 13 }, ["2026-10-13"], null), { minutes: 42, goal: 60, collectiveMinutes: COLLECTIVE }).sub).toBe("18 minutes left of today's goal.");
   });
   test("a milestone day reads like any other (the design has no milestone)", () => {
@@ -35,7 +38,7 @@ describe("streakCopy", () => {
   test("a new reader", () => {
     expect(streakCopy(streak({ kind: "none" }, [], null), { minutes: 0, goal: 60, collectiveMinutes: COLLECTIVE })).toMatchObject({
       title: "Start a streak",
-      sub: "Read today to start one.",
+      sub: "Read 1 hour today to start one.",
     });
   });
   test("goal met", () => {

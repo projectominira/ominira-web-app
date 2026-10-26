@@ -1,6 +1,7 @@
 // Reading streaks (studygroup-spec.md §4.4, C1). Pure: no I/O, shared by the
 // recorder, the restore route, the cron's `streak_risk` and the UI. Days are
-// the reader's local days ("YYYY-MM-DD", lib/time/zone.ts).
+// the reader's local days ("YYYY-MM-DD", lib/time/zone.ts); a day counts once
+// its daily goal is met (lib/streaks/record.ts).
 //
 // The stored streak is the run ending at `lastDay`; whether it's still alive
 // is read against today, so a missed day needs no job to close it.
@@ -11,7 +12,7 @@ export type Streak = {
   /** Days in the run ending at `lastDay`. */
   current: number;
   best: number;
-  /** The latest day read (or restored); null before the first. */
+  /** The latest day the goal was met (or restored); null before the first. */
   lastDay: LocalDay | null;
   /** The run a single missed day just ended, kept for the day the reader
    * read again so Restore can still bring it back; 0 otherwise. */
@@ -32,9 +33,9 @@ export const RESTORE_AFTER = 7;
 
 export type StreakState =
   | { kind: "none" }
-  /** Read today. */
+  /** Goal met today. */
   | { kind: "kept"; days: number }
-  /** Alive, not yet read today ("One read before midnight keeps it going"). */
+  /** Alive, today's goal not yet met. */
   | { kind: "open"; days: number }
   /** Missed yesterday, and the run can come back ("Keep your 12 days?"). */
   | { kind: "restore"; days: number }

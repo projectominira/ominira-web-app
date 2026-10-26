@@ -6,16 +6,23 @@ import SearchableAppPage from "@/app/components/shell/SearchableAppPage";
 import NoResults from "@/app/components/shared/NoResults";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useReadingHistory } from "@/lib/streaks/hooks";
-import { dayLabel, monthGrid, monthSummary, shade, timeLabel } from "@/lib/streaks/history";
+import { dayLabel, dayNote, monthGrid, monthSummary, timeLabel, wasRead } from "@/lib/streaks/history";
+import { goalLabel } from "@/lib/rooms/home";
 import type { ReadingHistory } from "@/lib/streaks/types";
 
 const EYEBROW = "text-ui-xs tracking-eyebrow uppercase";
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
-/** A day's fill by shade (lib/streaks/history.ts `shade`): unread, then lighter to deeper. */
-const FILL = ["bg-[var(--color-app-surface-muted)]", "bg-brand-100", "bg-brand-300", "bg-brand-500", "bg-brand-700"];
-/** The day's number over its fill. */
-const INK = ["text-[var(--color-app-text)]", "text-sand-900", "text-sand-900", "text-sand-25", "text-sand-25"];
+/** A day's circle, its date inside, as on the streak card's week: filled
+ * when the goal was met (a streak day, restored ones too),
+ * filled light when read under it, an empty ring for today until it's met. */
+type MarkKind = "met" | "under" | "today" | "none";
+const MARK: Record<MarkKind, string> = {
+  met: "bg-brand-500 font-bold text-sand-25",
+  under: "bg-brand-100 text-sand-900",
+  today: "border-[1.5px] border-brand-500 font-bold text-[var(--color-app-brand)]",
+  none: "text-[var(--color-app-text)]",
+};
 
 const days = (n: number) => `${n} ${n === 1 ? "day" : "days"}`;
 /** Months as one count (year × 12 + month − 1), so arrows cross years. */
@@ -37,7 +44,9 @@ export default function HistoryView() {
       {!isAuthenticated ? (
         <NoResults message="Sign in to see how you’ve been reading." />
       ) : !data ? (
-        <div className="h-[30rem] animate-pulse rounded-sm bg-[var(--color-app-surface-muted)]" aria-hidden />
+        <div className="flex justify-center py-16">
+          <div role="status" aria-label="Loading" className="size-7 animate-spin rounded-full border-[2.5px] border-sand-200 border-t-brand-500" />
+        </div>
       ) : (
         // The year before stays shown while the next loads: its days aren't this month's.
         <Month key={at} history={data} at={at} loading={data.year !== Math.floor(at / 12)} onGo={setAt} />
@@ -47,17 +56,18 @@ export default function HistoryView() {
 }
 
 /** One month: its time, days, longest streak and best day, and beside them
- * every day of it, read days shaded by time. */
+ * every day of it, marked by whether its goal was met. */
 function Month({ history, at, loading, onGo }: { history: ReadingHistory; at: number; loading: boolean; onGo: (at: number) => void }) {
   const month = (at % 12) + 1;
   const year = Math.floor(at / 12);
   const name = MONTH_NAMES[month - 1];
   const thisMonth = at === monthIndex(history.today);
   const [picked, setPicked] = useState<string | null>(null);
-  const seconds = useMemo(() => (loading ? new Map<string, number>() : new Map(history.days.map((d) => [d.day, d.seconds]))), [history, loading]);
+  const byDay = useMemo(() => new Map(loading ? [] : history.days.map((d) => [d.day, d])), [history, loading]);
   const summary = useMemo(() => monthSummary(loading ? { ...history, days: [] } : history, month), [history, loading, month]);
   const cells = monthGrid(year, month);
   const pastDays = cells.filter((d) => d && d <= history.today).length;
+  const note = (day: string) => dayNote(day, byDay.get(day), history.today);
 
   return (
     <section className="grid rounded-sm border border-[var(--color-app-border)] bg-[var(--reader-bg)] text-[var(--color-app-text)] md:grid-cols-[minmax(15rem,2fr)_3fr]">
@@ -82,55 +92,61 @@ function Month({ history, at, loading, onGo }: { history: ReadingHistory; at: nu
           {summary.daysRead ? `You read on ${days(summary.daysRead)} in ${name}` : thisMonth ? `You haven’t read in ${name} yet` : `You didn’t read in ${name}`}
         </div>
 
-        <dl className="m-0 mt-6 flex flex-col divide-y divide-[var(--color-app-border)] border-t border-[var(--color-app-border)] md:mt-auto">
-          <Stat label="Days you read" value={`${summary.daysRead} of ${pastDays}`} />
+        <dl className="m-0 mt-6 flex flex-col divide-y divide-[var(--color-app-border)] border-t border-[var(--color-app-border)]">
+          <Stat label="Your daily goal" value={goalLabel(history.goal)} />
+          <Stat label="Days you met your goal" value={`${summary.goalDays} of ${pastDays}`} />
           <Stat label="Your longest streak" value={summary.longestRun ? days(summary.longestRun) : "—"} />
           <Stat label="Your best day" value={summary.bestDay ? timeLabel(summary.bestDay.seconds) : "—"} sub={summary.bestDay ? dayLabel(summary.bestDay.day) : undefined} />
         </dl>
       </div>
 
-      <div className="p-4 md:p-7 md:pt-8">
-        <div className={`mx-auto grid max-w-md grid-cols-7 gap-1.5 ${loading ? "animate-pulse" : ""}`}>
+      <div className="flex flex-col p-4 md:p-7 md:pt-8">
+        <div className={`mx-auto grid w-full max-w-lg grid-cols-7 gap-y-2 ${loading ? "animate-pulse" : ""}`}>
           {WEEKDAYS.map((d, i) => (
-            <span key={i} className="pb-1 text-center text-[11px] font-semibold text-[var(--color-app-text-muted)]">
+            <span key={i} className="pb-2 text-center text-ui-xs font-semibold text-[var(--color-app-text-muted)]">
               {d}
             </span>
           ))}
           {cells.map((day, j) => {
             if (!day) return <span key={j} />;
-            const time = seconds.get(day) ?? 0;
-            const level = shade(seconds.has(day), time);
+            const d = byDay.get(day);
+            const kind: MarkKind = d?.streak ? "met" : day === history.today ? "today" : d && wasRead(d) ? "under" : "none";
             return (
               <button
                 key={day}
                 type="button"
                 disabled={day > history.today}
                 aria-pressed={picked === day}
-                aria-label={`${dayLabel(day, true)}: ${seconds.has(day) ? (time ? `you read ${timeLabel(time).toLowerCase()}` : "you read") : "you didn’t read"}`}
+                aria-label={`${dayLabel(day, true)}: ${note(day)}`}
                 onClick={() => setPicked(picked === day ? null : day)}
-                className={`flex aspect-square cursor-pointer items-center justify-center rounded-full text-ui-sm tabular-nums transition-shadow disabled:cursor-default disabled:opacity-35 ${
-                  level ? `${FILL[level]} ${INK[level]} font-bold` : "hover:bg-sand-75"
-                } ${picked === day ? "ring-2 ring-[var(--color-app-text)] ring-offset-2 ring-offset-[var(--reader-bg)]" : day === history.today ? "ring-1 ring-brand-500" : ""}`}
+                className="group flex cursor-pointer justify-center disabled:cursor-default disabled:opacity-35"
               >
-                {+day.slice(8)}
+                <Mark kind={kind} picked={picked === day}>
+                  {+day.slice(8)}
+                </Mark>
               </button>
             );
           })}
         </div>
 
-        <div className="mx-auto mt-4 flex max-w-md items-center justify-between gap-3">
-          <p className="m-0 min-h-5 text-ui-sm text-[var(--color-app-text-secondary)]" aria-live="polite">
+        {/* The picked day, the legend under it on mobile, beside it (stacked, so the sentence keeps its width) when wide. */}
+        <div className="mx-auto mt-5 flex w-full max-w-lg flex-col gap-4 md:mt-auto md:flex-row md:items-end md:justify-between md:pt-5">
+          {/* Room for the longest sentence, so picking a day never moves the page. */}
+          <p className="m-0 min-h-16 text-ui-sm text-pretty text-[var(--color-app-text-secondary)]" aria-live="polite">
             {picked ? (
               <>
-                <span className="font-bold text-[var(--color-app-text)]">{dayLabel(picked, true)}</span>
-                {" · "}
-                {seconds.has(picked) ? (seconds.get(picked) ? `You read ${timeLabel(seconds.get(picked)!).toLowerCase()}` : "You read") : picked === history.today ? "You haven’t read yet" : "You didn’t read"}
+                <span className="mb-1 block font-bold text-[var(--color-app-text)]">{dayLabel(picked, true)}</span>
+                {note(picked)}
               </>
             ) : (
-              <span className="text-[var(--color-app-text-muted)]">Pick a day to see how long you read</span>
+              <span className="text-[var(--color-app-text-muted)]">Pick a day to see its reading against your goal</span>
             )}
           </p>
-          <Legend />
+          <div className="flex flex-none flex-wrap gap-x-3 gap-y-1.5 text-[10px] text-[var(--color-app-text-muted)] md:flex-col">
+            <Key kind="met">Goal met</Key>
+            <Key kind="under">Under goal</Key>
+            <Key kind="today">Today</Key>
+          </div>
         </div>
       </div>
     </section>
@@ -163,14 +179,23 @@ function IconButton({ label, disabled, onClick, children }: { label: string; dis
   );
 }
 
-function Legend() {
+function Mark({ kind, picked, small, children }: { kind: MarkKind; picked?: boolean; small?: boolean; children?: ReactNode }) {
   return (
-    <div className="flex flex-none items-center gap-1 text-[10px] text-[var(--color-app-text-muted)]">
-      Less
-      {FILL.map((s) => (
-        <span key={s} className={`size-2.5 rounded-full ${s}`} />
-      ))}
-      More
-    </div>
+    <span
+      className={`flex flex-none items-center justify-center rounded-full tabular-nums transition-colors ${
+        small ? "size-2.5" : `size-10 text-ui-sm md:size-11 ${kind === "none" ? "group-enabled:group-hover:bg-sand-75" : ""}`
+      } ${MARK[kind]} ${picked ? "ring-2 ring-[var(--color-app-text)] ring-offset-2 ring-offset-[var(--reader-bg)]" : ""}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function Key({ kind, children }: { kind: MarkKind; children: ReactNode }) {
+  return (
+    <span className="flex items-center gap-1 whitespace-nowrap">
+      <Mark kind={kind} small />
+      {children}
+    </span>
   );
 }

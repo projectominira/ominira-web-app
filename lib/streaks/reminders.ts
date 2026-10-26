@@ -12,7 +12,7 @@ const GRACE = 60;
 
 /**
  * `streak_risk` (§7): at 19:00 local, each reader with a live streak who
- * hasn't read today. One per reader and day. There's no midnight job: a
+ * hasn't met today's goal. One per reader and day. There's no midnight job: a
  * missed day ends the streak by being read against today (rules.ts).
  */
 export async function sendStreakRisk(now = Date.now()): Promise<NotifyTally> {
@@ -51,8 +51,8 @@ export async function sendStreakRisk(now = Date.now()): Promise<NotifyTally> {
   for (const [days, ids] of byDays) {
     const sent = await notifyReaders(ids, {
       kind: "streak_risk",
-      title: `One read before midnight keeps your ${days} ${days === 1 ? "day" : "days"}`,
-      body: "Read or listen to any page today.",
+      title: `Meet today's goal before midnight to keep your ${days} ${days === 1 ? "day" : "days"}`,
+      body: "Read or listen to reach today's goal.",
       url: "/home",
       tag: "streak-risk",
       ref: "streak",
