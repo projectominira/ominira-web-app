@@ -36,6 +36,8 @@ export const NOTIFICATION_POLICY: Record<NotificationKind, NotificationPolicy> =
   broadcast: inAppOnly,
 
   session_soon: groupPushEmail,
+  // When it's scheduled; one per session.
+  session_scheduled: groupPush,
   room_live: groupPush,
   target_reminder: groupPushEmail,
   streak_risk: { ...push, dedupe: true },

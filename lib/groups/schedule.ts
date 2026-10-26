@@ -1,5 +1,6 @@
 import "server-only";
 
+import { after } from "next/server";
 import { z } from "zod";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { notifyReaders, type NotifyTally } from "@/lib/notifications/notify";
@@ -10,6 +11,7 @@ import { currentBook } from "@/lib/groups/targets";
 import { nextOccurrence, reminderDue, reminderKey, SESSION_LENGTH, sessionPhase, SOON, startsIn, wallTime } from "@/lib/groups/sessions";
 import { SESSION_TOPIC_MAX, type GroupSession, type SessionPeople, type SessionsView } from "@/lib/groups/types";
 import { comradesById } from "@/lib/rooms/comrades";
+import { formatInstant } from "@/lib/time/format";
 import type { NextSession } from "@/lib/room/types";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -210,7 +212,7 @@ export type SessionInput = z.infer<typeof SessionInput>;
 export async function createSession(group: Group, actorId: string, input: SessionInput): Promise<GroupOutcome> {
   if (!(await isModerator(group.id, actorId))) return "forbidden";
   if (Date.parse(input.startsAt) <= Date.now()) return "starts_in_past";
-  const { error } = await getSupabaseAdminClient().rpc("add_group_session", {
+  const { data: sessionId, error } = await getSupabaseAdminClient().rpc("add_group_session", {
     grp: group.id,
     series: null,
     new_topic: input.topic,
@@ -221,7 +223,45 @@ export async function createSession(group: Group, actorId: string, input: Sessio
     reader: actorId,
   });
   if (error) throw error;
+  if (sessionId) notifySessionScheduled(group, actorId, sessionId, input.topic, Date.parse(input.startsAt));
   return "ok";
+}
+
+/** `session_scheduled` to every member but the moderator who scheduled it,
+ * after the response: "New session · Ch. 4 discussion, Thu 30 Oct 19:00",
+ * on each reader's own clock. */
+function notifySessionScheduled(group: Group, actorId: string, sessionId: string, topic: string, startsAt: number) {
+  after(async () => {
+    try {
+      const admin = getSupabaseAdminClient();
+      const { data: members, error } = await admin.from("group_members").select("reader_id").eq("group_id", group.id).neq("reader_id", actorId);
+      if (error) throw error;
+      if (!members.length) return;
+      const { data: readers, error: readersError } = await admin.from("readers").select("id, timezone").in("id", members.map((m) => m.reader_id));
+      if (readersError) throw readersError;
+      // One send per local day and time.
+      const byWhen = new Map<string, string[]>();
+      for (const r of readers) {
+        const tz = r.timezone ?? group.timezone;
+        const when = `${formatInstant(startsAt, "day", tz)} ${wallTime(startsAt, tz)}`;
+        byWhen.set(when, [...(byWhen.get(when) ?? []), r.id]);
+      }
+      for (const [when, ids] of byWhen) {
+        await notifyReaders(ids, {
+          kind: "session_scheduled",
+          groupId: group.id,
+          title: `New session · ${topic}, ${when}`,
+          body: group.name,
+          url: groupHref(group.slug),
+          tag: `group-session-${sessionId}`,
+          actorReaderId: actorId,
+          ref: sessionId,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to send session_scheduled", err);
+    }
+  });
 }
 
 /** A session of this group that's still to come or on. */

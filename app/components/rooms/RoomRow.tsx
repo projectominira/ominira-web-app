@@ -3,7 +3,7 @@
 import Link from "next/link";
 import BookCover from "@/app/components/shared/BookCover";
 import PulseDot from "@/app/components/shared/PulseDot";
-import { chatTime, rowSender } from "@/lib/rooms/home";
+import { chatTime, rowPreview } from "@/lib/rooms/home";
 import type { RoomLast } from "@/lib/rooms/types";
 import { useNow } from "@/lib/time/useNow";
 import RoomAvatar, { GroupAvatar } from "./RoomAvatar";
@@ -47,9 +47,9 @@ export default function RoomRow({ href, name, mark, last, empty, unread, live, s
         <span className="flex min-w-0 items-center gap-1.5">
           {last ? (
             <>
-              <RoomAvatar comrade={{ readerId: "", pseudonym: last.who, avatar: last.avatar }} size={20} />
+              {last.who && <RoomAvatar comrade={{ readerId: "", pseudonym: last.who, avatar: last.avatar }} size={20} />}
               <span className={`min-w-0 flex-1 truncate text-[13px] ${unread ? "text-[var(--color-app-text)]" : "text-[var(--reader-text-muted)]"}`}>
-                {rowSender(last)}: {last.text}
+                {rowPreview(last)}
               </span>
             </>
           ) : (

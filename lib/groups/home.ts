@@ -11,7 +11,8 @@ import { toMaterialSummary } from "@/lib/materials/summary";
 import { visiblePostsFilter } from "@/lib/community/visibility";
 import { loadPostViewer } from "@/lib/community/viewer";
 import { comradesById } from "@/lib/rooms/comrades";
-import { previewText } from "@/lib/rooms/home";
+import { byLatest, previewText } from "@/lib/rooms/home";
+import { eventItem, type GroupEventPayload } from "@/lib/rooms/timeline";
 import { groupPostScope } from "@/lib/rooms/stream";
 import type { GroupCardView, RoomLast } from "@/lib/rooms/types";
 
@@ -81,36 +82,52 @@ export async function homeGroups(readerId: string | null): Promise<GroupCardView
       ? admin.from("reader_activities").select("reader_id, material_id, progress_percent").in("material_id", currentIds).in("reader_id", readerIds).then(ok)
       : [],
     Promise.all(live.map(async (r) => [r.group_id, ok(await admin.rpc("room_active_count", { room: r.id }))] as const)).then((pairs) => new Map(pairs)),
-    // Comrades' notes and replies in each of your groups since you last
-    // read it.
+    // Comrades' notes, replies and actions (never joins) in each of your
+    // groups since you last read it, and its milestones.
     Promise.all(
       mine.map(async (id) => {
         const since = lastRead.get(id);
         if (!since || !readerId) return [id, 0] as const;
-        const { count, error } = await admin
-          .from("posts")
-          .select("id", { count: "exact", head: true })
-          .or(groupPostScope(id, membersOf.get(id) ?? [], booksOf.get(id) ?? []))
-          .neq("reader_id", readerId)
-          .gt("created_at", since);
-        if (error) throw error;
-        return [id, count ?? 0] as const;
+        const counts = await Promise.all([
+          admin
+            .from("posts")
+            .select("id", { count: "exact", head: true })
+            .or(groupPostScope(id, membersOf.get(id) ?? [], booksOf.get(id) ?? []))
+            .neq("reader_id", readerId)
+            .gt("created_at", since),
+          admin
+            .from("group_events")
+            .select("id", { count: "exact", head: true })
+            .eq("group_id", id)
+            .neq("kind", "joined")
+            .or(`actor_id.is.null,actor_id.neq.${readerId}`)
+            .gt("created_at", since),
+          admin.from("group_milestones").select("id", { count: "exact", head: true }).eq("group_id", id).gt("created_at", since),
+        ]);
+        for (const r of counts) if (r.error) throw r.error;
+        return [id, counts.reduce((n, r) => n + (r.count ?? 0), 0)] as const;
       })
     ).then((pairs) => new Map(pairs)),
-    // Each of your groups' latest note or reply you can read, for its row's
-    // preview.
+    // Each of your groups' latest note or reply you can read, action and
+    // milestone, for its row's preview: the newest of them.
     Promise.all(
       mine.map(async (id) => {
-        const { data, error } = await admin
-          .from("posts")
-          .select("reader_id, kind, content, created_at, parent_id")
-          .or(visible)
-          .or(groupPostScope(id, membersOf.get(id) ?? [], booksOf.get(id) ?? []))
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (error) throw error;
-        return [id, data] as const;
+        const [post, event, milestone] = await Promise.all([
+          admin
+            .from("posts")
+            .select("reader_id, kind, content, created_at, parent_id")
+            .or(visible)
+            .or(groupPostScope(id, membersOf.get(id) ?? [], booksOf.get(id) ?? []))
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          admin.from("group_events").select("*").eq("group_id", id).neq("kind", "joined").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+          admin.from("group_milestones").select("title, created_at").eq("group_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        ]);
+        if (post.error) throw post.error;
+        if (event.error) throw event.error;
+        if (milestone.error) throw milestone.error;
+        return [id, { post: post.data, event: event.data, milestone: milestone.data }] as const;
       })
     ).then((pairs) => new Map(pairs)),
   ]);
@@ -124,13 +141,20 @@ export async function homeGroups(readerId: string | null): Promise<GroupCardView
         return [m.id, outline ? chapterEnds(outline.toc, outline.spine) : []] as const;
       })
     ).then((pairs) => new Map(pairs)),
-    comradesById([...latest.values()].flatMap((p) => (p ? [p.reader_id] : []))),
+    comradesById([...latest.values()].flatMap(({ post, event }) => [...(post ? [post.reader_id] : []), ...(event?.actor_id ? [event.actor_id] : [])])),
   ]);
   const lastOf = (id: string): RoomLast | null => {
-    const p = latest.get(id);
-    if (!p) return null;
-    const who = authors.get(p.reader_id);
-    return { who: who?.pseudonym ?? "", avatar: who?.avatar ?? { color: null, url: null }, mine: p.reader_id === readerId, reply: p.parent_id !== null, text: previewText(p), at: p.created_at };
+    const { post, event, milestone } = latest.get(id) ?? {};
+    const by = (actorId: string | null) => {
+      const who = actorId ? authors.get(actorId) : undefined;
+      return { who: who?.pseudonym ?? "", avatar: who?.avatar ?? { color: null, url: null }, mine: actorId !== null && actorId === readerId };
+    };
+    const rows: RoomLast[] = [];
+    if (post) rows.push({ ...by(post.reader_id), kind: post.parent_id ? "reply" : "note", text: previewText(post), at: post.created_at });
+    const line = event && eventItem({ id: event.id, kind: event.kind, actor: null, ref: event.ref, payload: event.payload as GroupEventPayload, createdAt: event.created_at });
+    if (event && line?.t === "system") rows.push({ ...by(event.actor_id), kind: "action", text: [line.text, line.em, line.post].filter(Boolean).join(" "), at: event.created_at });
+    if (milestone) rows.push({ who: "", avatar: { color: null, url: null }, mine: false, kind: "action", text: milestone.title, at: milestone.created_at });
+    return byLatest(rows.map((last) => ({ last })))[0]?.last ?? null;
   };
   const summaries = new Map(materials.map((m) => [m.id, toMaterialSummary(m)]));
   const pctOf = (groupId: string, materialId: string) => {

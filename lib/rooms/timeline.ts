@@ -78,7 +78,7 @@ export function eventItem(ev: GroupEvent): RoomItem | null {
   const { id, payload: p, createdAt: at, ref } = ev;
   if (ev.kind === "joined") return ev.actor ? { t: "joins", id, comrades: [ev.actor], at } : null;
   const line = (text: string, em: string | null = null, post: string | null = null, mic = false): RoomItem => ({
-    t: "system", id, actor: ev.actor?.pseudonym ?? null, text, em, post, mic, at, ref,
+    t: "system", id, actor: ev.actor?.pseudonym ?? null, text, em, post, mic, at, ref, eventBy: ev.actor?.readerId ?? null,
   });
   switch (ev.kind) {
     case "target_set":

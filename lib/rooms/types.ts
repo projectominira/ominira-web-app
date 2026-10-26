@@ -70,7 +70,20 @@ export type RoomItem =
   /** `actor` is the person who made the change; null for a room's own
    * line ("Reading room ended"). `ref` is what it's about (a target,
    * session or room): a card is placed after its line (lib/rooms/timeline). */
-  | { t: "system"; id: string; actor: string | null; text: string; em: string | null; post: string | null; mic: boolean; at: string; ref?: string | null }
+  | {
+      t: "system";
+      id: string;
+      actor: string | null;
+      text: string;
+      em: string | null;
+      post: string | null;
+      mic: boolean;
+      at: string;
+      ref?: string | null;
+      /** A group event's actor id: group events count as unread
+       * (lib/rooms/unread), a book room's lines don't. */
+      eventBy?: string | null;
+    }
   | { t: "joins"; id: string; comrades: Comrade[]; at: string }
   /** `book`: the finished book's title, set in italics on the card. */
   | { t: "milestone"; milestone: GroupMilestone; book: string | null }
@@ -169,8 +182,10 @@ export type RoomSuggestions = { mine: StartableBook[]; today: StartableBook[] };
 
 /** A book room as a chat row on Home (`RoomRow`, home-spec §2): its latest
  * note you can see. */
-/** A room's latest note or reply, as its row previews it. */
-export type RoomLast = { who: string; avatar: Comrade["avatar"]; mine: boolean; reply: boolean; text: string; at: string };
+/** A room's latest note, reply or group action, as its row previews it.
+ * An action's `text` follows its actor ("scheduled Ch. 4"); a milestone's
+ * has none (`who` empty). */
+export type RoomLast = { who: string; avatar: Comrade["avatar"]; mine: boolean; kind: "note" | "reply" | "action"; text: string; at: string };
 
 export type RoomRowView = {
   slug: string;
@@ -198,12 +213,12 @@ export type GroupCardView = {
   book: { title: string; cover: string | null; pct: number | null; chapter: string | null } | null;
   /** The next session's start (or the one on now); null with none planned. */
   nextAt: string | null;
-  /** Comrades' notes and replies since you last read the group (or,
-   * never opened, since you joined it). */
+  /** Comrades' notes, replies and group actions (never joins) since you
+   * last read the group (or, never opened, since you joined it). */
   unread: number;
   /** Listening, while the group's reading room is on. */
   live: number | null;
-  /** The group room's latest note or reply you can read; null for a group you're
+  /** The group room's latest note, reply or action; null for a group you're
    * not in, or one with no notes yet. */
   last: RoomLast | null;
 };
