@@ -27,7 +27,7 @@ export function InfoButton({ label, onClick }: { label: string; onClick: () => v
 export default function InfoPanel({ title, onClose, actions, children }: { title: string; onClose: () => void; actions?: ReactNode; children: ReactNode }) {
   const wide = useShell();
   const panel = (
-    <aside className={`flex flex-col bg-[var(--reader-bg)] ${wide ? "w-120 flex-none border-l border-[var(--color-app-border)]" : "absolute inset-0 z-10"}`}>
+    <aside className={`flex flex-col bg-[var(--reader-bg)] text-[var(--reader-text)] ${wide ? "w-120 flex-none border-l border-[var(--color-app-border)]" : "absolute inset-0 z-10"}`}>
       <div className="flex min-h-14 flex-none items-center gap-1 pr-2 pl-5">
         <span className="flex-1 text-ui-md">{title}</span>
         {actions}

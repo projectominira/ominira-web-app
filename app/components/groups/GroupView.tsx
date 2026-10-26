@@ -180,7 +180,15 @@ export default function GroupView({ slug, initialAbout }: { slug: string; initia
     });
     if (ok) deleteGroup.mutate(undefined, { onError: onFail("Couldn't delete the group.") });
   };
-  const onRemind = upcoming?.remind != null ? () => reminder.mutate({ session: upcoming, on: !upcoming.remind }) : undefined;
+  // Says what was set (or that it's off), since the bell alone doesn't.
+  const onRemind =
+    upcoming?.remind != null
+      ? () => {
+          const on = !upcoming.remind;
+          reminder.mutate({ session: upcoming, on }, { onError: onFail("Couldn't change the reminder.") });
+          showToast(on ? "We'll remind you an hour before" : "Reminder off");
+        }
+      : undefined;
   const close = () => setOpen(null);
   const team: RoomOverlay | null =
     aboutOpen

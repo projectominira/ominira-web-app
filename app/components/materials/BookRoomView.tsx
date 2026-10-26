@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bookmark, Mic, Share } from "lucide-react";
+import { Bookmark, Info, Mic, Share } from "lucide-react";
+import { ModeIcon, switchLabel } from "@/app/components/rooms/RoomHeader";
 import type { OverflowMenuItem } from "@/app/components/reader/notes/OverflowMenu";
 import { shareLink } from "./ShareButton";
 import { showToast } from "@/stores/toast-store";
@@ -104,7 +105,11 @@ export default function BookRoomView({ material, initialInfo }: { material: Mate
   const { ready: positionReady, onContinue, onSwitch } = useResume(material);
   const isOwnUpload = !!material.contributor && material.contributor.readerId === viewerId;
 
+  // Book info, then resume and its switch as Book info has them.
   const menu: OverflowMenuItem[] = [
+    ...(infoOpen ? [] : [{ label: "Book info", icon: <Info size={14} />, onClick: () => showInfo(true) }]),
+    { label: header.cta, icon: <ModeIcon listening={header.listening} size={14} />, disabled: !positionReady, onClick: onContinue },
+    { label: switchLabel(header.listening, material.narratorCount > 0), icon: <ModeIcon listening={!header.listening} size={14} />, disabled: !positionReady, onClick: onSwitch },
     ...(canStart && !liveRoom && !inRoom
       ? [{ label: "Start room", icon: <Mic size={14} />, disabled: starting, onClick: () => void enter({ materialId: material.id, start: { bookTitle: material.title } }) }]
       : []),

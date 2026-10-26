@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Headphones, Pin, PinOff, Target } from "lucide-react";
+import { Bell, Headphones, Pin, PinOff, Target } from "lucide-react";
 import { activeRoom, useRoomStore } from "@/stores/room-store";
 import PulseDot from "@/app/components/shared/PulseDot";
 import { sessionMeta, sessionPeople, targetRange } from "@/lib/rooms/cards";
@@ -151,11 +151,24 @@ export function SessionCard({
           </div>
         ) : (
           // Remind me is on unless turned off; someone outside the group has none.
-          session.remind !== null && (
-            <button type="button" onClick={onRemind} aria-pressed={session.remind} className={`${button("outlineBrand", { full: true })} ${session.remind ? "bg-brand-50" : ""}`}>
-              {session.remind ? "Reminder set" : "Remind me"}
+          // Once set it's a quiet line, not a pressed button; tap it to turn off.
+          session.remind !== null &&
+          (session.remind ? (
+            <button
+              type="button"
+              onClick={onRemind}
+              aria-pressed
+              aria-label="Reminder on, an hour before. Turn off"
+              className="flex min-h-9 cursor-pointer items-center gap-2 self-start text-ui-caption font-bold text-[var(--color-app-text-secondary)]"
+            >
+              <Bell size={14} strokeWidth={1.75} className="text-[var(--color-app-brand)]" aria-hidden />
+              Reminder on · an hour before
             </button>
-          )
+          ) : (
+            <button type="button" onClick={onRemind} aria-pressed={false} className={button("outlineBrand", { full: true })}>
+              Remind me
+            </button>
+          ))
         ))}
       {live && (
         <button type="button" onClick={onJoin} className={button("primary", { full: true })}>

@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Bell, BellOff } from "lucide-react";
 import CalendarLeaf from "@/app/components/shared/CalendarLeaf";
 import { scheduleLine } from "@/lib/rooms/cards";
 import { personName } from "@/lib/rooms/names";
@@ -82,16 +83,18 @@ export function ScheduleRow({ card, next = false, reminded = false, onRemind }: 
         <span className="truncate text-ui-sm font-bold">{card.session.topic}</span>
         <span className="text-ui-caption text-[var(--color-app-text-secondary)]">{scheduleLine(card, next ? "next" : card.state === "ended" ? "past" : "later")}</span>
       </div>
-      {next && (
+      {next && onRemind && (
+        // A bell toggle, so the topic keeps the row's width.
         <button
           type="button"
           aria-pressed={reminded}
+          aria-label={reminded ? "Reminder on, an hour before" : "Remind me an hour before"}
           onClick={onRemind}
-          className={`min-h-9 flex-none cursor-pointer rounded-sm border border-brand-500 px-3 font-sans text-[13px]/none font-bold ${
-            reminded ? "bg-brand-500 text-sand-25" : "text-[var(--color-app-brand)]"
+          className={`flex size-9 flex-none cursor-pointer items-center justify-center rounded-sm hover:bg-[var(--color-app-surface-muted)] ${
+            reminded ? "text-[var(--color-app-brand)]" : "text-[var(--color-app-text-muted)]"
           }`}
         >
-          {reminded ? "Reminder set" : "Remind me"}
+          {reminded ? <Bell size={18} strokeWidth={1.75} /> : <BellOff size={18} strokeWidth={1.75} />}
         </button>
       )}
     </div>

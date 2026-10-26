@@ -27,8 +27,11 @@ type ResumeProps = {
  * (Listen, or Switch to reading). Held as a placeholder until the server's
  * position lands (`ready`), so it never resumes from a stale one. `compact`:
  * a group's target card. */
+/** The mode switch's label: the other mode from the one you're in. */
+export const switchLabel = (listening: boolean, audiobook: boolean) => (listening ? "Switch to reading" : audiobook ? "Listen (audiobook)" : "Listen");
+
 export function ResumeButtons({ header: h, audiobook, ready, onContinue, onSwitch, compact = false }: ResumeProps & { compact?: boolean }) {
-  const other = h.listening ? "Switch to reading" : audiobook ? "Listen (audiobook)" : "Listen";
+  const other = switchLabel(h.listening, audiobook);
   const size = compact ? "flex-1 px-4 py-2" : "flex-1 px-6 py-2.5 shell:flex-none";
   return (
     <div className={`flex items-center justify-center ${compact ? "gap-1.5" : "gap-2"}`}>
