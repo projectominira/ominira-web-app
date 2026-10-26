@@ -7,15 +7,17 @@ import { enrichFeedItems } from "@/lib/community/feed";
 import { canReadPost } from "@/lib/community/visibility";
 import { loadPostViewer } from "@/lib/community/viewer";
 import { isModerator } from "@/lib/groups/membership";
+import { officialReaderIds, pagePassages } from "@/lib/rooms/passage";
+import { toRoomNote } from "@/lib/rooms/timeline";
+import type { NoteThread } from "@/lib/rooms/types";
 import type { NoteContent } from "@/lib/api/types";
 import { deleteMaterialAssets } from "@/lib/materials/deleteMaterialAssets";
 import type { Database } from "@/lib/supabase/database.types";
 
-/** One thread, in the same `FeedItem` shape the home feed ships — so
- * /post/[id] renders through the very same NoteCard the feed does, with no
- * second enrichment path to keep in sync (this route used to hand-roll its
- * own, minus the excerpt, which is exactly the drift enrichFeedItems exists
- * to prevent).
+/** One thread as a room shows it (`toRoomNote` over the feed's own
+ * enrichment) — so /note/[id] renders the very same NoteBubble a room does:
+ * the official and moderator tags, the pin and the passage's question. A
+ * note posted in a group says whether the viewer moderates it (Remove).
  *
  * Asking for a *reply* returns its root thread with `focusId` set to that
  * reply: a reply has no standalone page of its own — it's only ever read in
@@ -41,10 +43,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ note
     rootRow = parent as NoteRow;
   }
 
-  const [item] = await enrichFeedItems([rootRow], viewer);
+  const now = Date.now();
+  const groupId = rootRow.group_id;
+  const [[item], officialIds, passages, moderators, group] = await Promise.all([
+    enrichFeedItems([rootRow], viewer),
+    officialReaderIds(),
+    pagePassages([rootRow], now),
+    groupId ? admin.from("group_members").select("reader_id").eq("group_id", groupId).eq("role", "moderator") : null,
+    groupId ? admin.from("groups").select("pinned_post_id").eq("id", groupId).maybeSingle() : null,
+  ]);
   if (!item) return notFound();
 
-  return NextResponse.json({ ...item, focusId: row.parent_id ? row.id : null });
+  const teamIds = new Set(moderators?.data?.map((m) => m.reader_id) ?? []);
+  const note = toRoomNote(item, { now, pinnedId: group?.data?.pinned_post_id ?? null, teamIds, officialIds, passages, alsoIn: false });
+  const body: NoteThread = { ...note, focusId: row.parent_id ? row.id : null, moderator: !!reader && teamIds.has(reader.readerId) };
+  return NextResponse.json(body);
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ noteId: string }> }) {

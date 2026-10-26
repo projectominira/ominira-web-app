@@ -105,7 +105,7 @@ export async function setPassage(input: PassageInput, setBy: string | null): Pro
           kind: "passage",
           title: PASSAGE_PIN,
           body: notificationSnippet(input.question) ?? input.question,
-          url: `/post/${post.id}`,
+          url: `/note/${post.id}`,
           tag: "passage",
           actorReaderId: authorId,
           snippet: input.question,

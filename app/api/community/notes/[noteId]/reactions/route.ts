@@ -52,7 +52,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ not
         // The reacted-to note's own page — in-app row and push share this
         // one url, and it opens the thread itself rather than loading a
         // whole book to reach one note (the page links on into the reader).
-        const url = `/post/${note.id}`;
+        const url = `/note/${note.id}`;
         const actorName = actor?.pseudonym ? comradeName(actor.pseudonym) : "A comrade";
         // The reacted-to note's own words — what was reacted to says far
         // more than "tap to view in <book>" ever did, on a lock screen and

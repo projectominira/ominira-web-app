@@ -296,9 +296,9 @@ export async function POST(request: Request) {
           admin.from("materials").select("slug, title").eq("id", materialId).maybeSingle(),
         ]);
         if (!replyMaterial) return;
-        // The reply itself — /post/[id] resolves a reply to its root thread
+        // The reply itself — /note/[id] resolves a reply to its root thread
         // and focuses it. Same url for the in-app row and the push.
-        const url = `/post/${data.id}`;
+        const url = `/note/${data.id}`;
         const actorName = actor?.pseudonym ? comradeName(actor.pseudonym) : "A comrade";
         // What they actually said, not an instruction to go read it — same
         // rule as the reaction notification. A voice reply has no text, so

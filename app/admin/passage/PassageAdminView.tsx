@@ -90,7 +90,7 @@ function TodayStrip({ today }: { today: TodayView }) {
           <p className="m-0 mt-0.5 text-ui-caption text-[var(--reader-text-muted)]">
             {today.passage.cite} · set by {today.setBy ?? "an admin"} at {new Date(today.at).toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" })} ·{" "}
             {plural(today.passage.answers, "answer")} ·{" "}
-            <Link href={`/post/${today.postId}`} target="_blank" className="font-semibold text-[var(--reader-text)] hover:underline">
+            <Link href={`/note/${today.postId}`} target="_blank" className="font-semibold text-[var(--reader-text)] hover:underline">
               Open thread
             </Link>
           </p>
@@ -158,7 +158,7 @@ function HistoryList({ items }: { items: DayView[] }) {
           <ul className="m-0 list-none divide-y divide-[var(--reader-border)] rounded-sm border border-[var(--reader-border)] p-0">
             {days.map((d) => (
               <li key={d.day}>
-                <a href={`/post/${d.postId}`} target="_blank" rel="noopener noreferrer" className="flex gap-4 px-4 py-4 no-underline hover:bg-[var(--reader-surface-hover)]">
+                <a href={`/note/${d.postId}`} target="_blank" rel="noopener noreferrer" className="flex gap-4 px-4 py-4 no-underline hover:bg-[var(--reader-surface-hover)]">
                   <span className="flex w-10 flex-none flex-col items-center pt-0.5">
                     <span className="font-serif text-[18px]/[1] font-semibold text-[var(--reader-text)]">{date(d.day, { day: "numeric" })}</span>
                     <span className="mt-1 text-ui-xs uppercase text-[var(--reader-text-subtle)]">{date(d.day, { weekday: "short" })}</span>

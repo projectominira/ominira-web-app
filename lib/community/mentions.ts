@@ -63,7 +63,7 @@ export function notifyMentioned(post: {
         kind: "mention",
         title: post.groupName ? `${name} mentioned you · ${post.groupName}` : `${name} mentioned you`,
         body: quoted ? `“${quoted}”` : "Tap to read the note",
-        url: `/post/${post.id}`,
+        url: `/note/${post.id}`,
         tag: `mention-${post.id}`,
         actorReaderId: post.authorId,
         snippet: post.text,

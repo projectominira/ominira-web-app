@@ -77,7 +77,7 @@ function notifyPinned(group: Group, actorId: string, postId: string, text: strin
           groupId: group.id,
           title: `${name} pinned a note in ${group.name}`,
           body: quoted ? `“${quoted}”` : group.name,
-          url: `/post/${postId}`,
+          url: `/note/${postId}`,
           tag: `group-pin-${group.id}`,
           actorReaderId: actorId,
           snippet: text,

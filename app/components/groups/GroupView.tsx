@@ -260,7 +260,7 @@ export default function GroupView({ slug, initialAbout }: { slug: string; initia
         target={pins?.target ? (roomTarget ?? null) : null}
         onUnpinTarget={isModerator ? () => setPin({ target: false }, false) : undefined}
         pin={pins?.note ?? null}
-        onOpenPin={(id) => router.push(`/post/${id}`)}
+        onOpenPin={(id) => router.push(`/note/${id}`)}
         onUnpin={isModerator ? () => setPin({ postId: null }, false) : undefined}
         menu={menu}
         onBack={() => (window.history.length > 1 ? router.back() : router.push("/home"))}

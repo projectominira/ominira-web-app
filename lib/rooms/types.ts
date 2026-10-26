@@ -33,6 +33,11 @@ export type RoomNote = FeedItem & {
   alsoIn: string | null;
 };
 
+/** `GET /api/community/notes/{id}`: a note on its own page (/note/[id]).
+ * `focusId`: the reply asked for, when it was one; `moderator`: the viewer
+ * moderates the group it was posted in. */
+export type NoteThread = RoomNote & { focusId: string | null; moderator: boolean };
+
 /** A reading room as a card in the stream. */
 export type RoomSession = {
   session: GroupSession;

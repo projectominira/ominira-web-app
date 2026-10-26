@@ -6,6 +6,7 @@ import type { AnnotationRange, Note } from "@/lib/api/types";
 import { apiFetch } from "@/lib/api/client";
 import { makeTempId } from "@/lib/api/optimisticId";
 import { useProfile } from "@/lib/auth/useProfile";
+import { communityKeys } from "@/lib/community/queryKeys";
 import { flipReaction, useCreateNote, type CreateNoteInput } from "@/lib/community/useNoteMutations";
 import { groupKeys } from "@/lib/groups/queryKeys";
 import { materialKeys } from "@/lib/materials/queryKeys";
@@ -13,7 +14,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { showToast } from "@/stores/toast-store";
 import { getBookStream, getGroupStream, getReaderRoomHead } from "./api";
 import { pendingNote } from "./timeline";
-import type { RoomItem, RoomNote, RoomStreamPage } from "./types";
+import type { NoteThread, RoomItem, RoomNote, RoomStreamPage } from "./types";
 
 // A room's data on the client (rooms-spec §5): its stream a page at a time,
 // your notes and replies on their way, and hearts.
@@ -123,6 +124,28 @@ export function useRoomDelete(key: QueryKey) {
     onError: () => showToast("Couldn’t delete it. Try again."),
     onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
   });
+}
+
+/** A note on its own page (/note/[id]), with what it takes to react,
+ * reply and delete there as in a room. Deleting the note itself leaves the
+ * page (`onGone`); a reply goes at once, back if the delete fails. */
+export function useNoteThread(noteId: string, onGone: () => void) {
+  const queryClient = useQueryClient();
+  const key = communityKeys.thread(noteId);
+  const thread = useQuery({ queryKey: key, queryFn: () => apiFetch<NoteThread>(`/community/notes/${encodeURIComponent(noteId)}`) });
+  const patcher: NotePatcher = (qc, id, patch) => qc.setQueryData<NoteThread>(key, (t) => (t && t.note.id === id ? { ...t, ...patch(t) } : t));
+  const heart = useRoomHeart(key, patcher);
+  const reply = useRoomReply(key, patcher);
+  const del = useMutation({
+    mutationFn: ({ noteId }: { noteId: string; rootId: string }) => apiFetch<void>(`/community/notes/${noteId}`, { method: "DELETE" }),
+    onMutate: ({ noteId, rootId }) => {
+      if (noteId !== rootId) patcher(queryClient, rootId, (n) => ({ ...n, replies: n.replies.filter((r) => r.id !== noteId), replyCount: n.replyCount - 1 }));
+    },
+    onSuccess: (_d, { noteId, rootId }) => noteId === rootId && onGone(),
+    onError: () => showToast("Couldn’t delete it. Try again."),
+    onSettled: (_d, _e, { noteId, rootId }) => noteId !== rootId && queryClient.invalidateQueries({ queryKey: key }),
+  });
+  return { thread, heart, reply, del };
 }
 
 /** The viewer as a note's author, for what they send before it's saved. */

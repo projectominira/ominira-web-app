@@ -201,7 +201,7 @@ export default function RoomStream({
       case "replied": {
         // A note not loaded yet opens on its own page.
         const id = it.replied.id;
-        return <RepliedLine key={itemKey(it, i)} replied={it.replied} viewerId={viewerId} onOpen={() => jumpTo(id) || router.push(`/post/${id}`)} />;
+        return <RepliedLine key={itemKey(it, i)} replied={it.replied} viewerId={viewerId} onOpen={() => jumpTo(id) || router.push(`/note/${id}`)} />;
       }
       case "system":
       case "joins":

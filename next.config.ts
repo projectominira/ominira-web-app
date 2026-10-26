@@ -33,6 +33,8 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       { source: "/reading", destination: "/shelf", permanent: true },
+      // A note's page was /post/[id]; notifications already sent still link there.
+      { source: "/post/:id", destination: "/note/:id", permanent: true },
       // Superseded icon URLs. Already-sent announcement emails and installed
       // PWAs holding a stale manifest still request these.
       { source: "/icons/icon-192.png", destination: "/icons/icon-192x192.png", permanent: true },

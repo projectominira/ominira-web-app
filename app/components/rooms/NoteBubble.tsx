@@ -95,6 +95,7 @@ export default function NoteBubble({
   onBook,
   onRetry,
   flash = false,
+  allReplies = false,
 }: {
   note: RoomNote;
   viewerId: string | null;
@@ -112,10 +113,12 @@ export default function NoteBubble({
   /** Opens the note's book ("in {book}"); the passage when not given. */
   onBook?: () => void;
   onRetry?: () => void;
+  /** Opens with every reply shown (a note on its own page). */
+  allReplies?: boolean;
 }) {
   const { note } = n;
   const { onReact, onReply, onDelete, onPin } = handlers;
-  const [all, setAll] = useState(false);
+  const [all, setAll] = useState(allReplies);
   // Replying: to the note (its id) or to one reply; null while closed.
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const mine = note.author.readerId === viewerId;
