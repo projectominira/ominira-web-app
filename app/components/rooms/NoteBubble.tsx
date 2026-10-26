@@ -199,6 +199,11 @@ export default function NoteBubble({
             {n.replyingNow} comrade{n.replyingNow === 1 ? "" : "s"} replying now
           </div>
         )}
+        {n.newReplies > 0 && (
+          <span className="font-sans text-[12px]/[1.3] font-bold text-[var(--color-app-brand)]">
+            {n.newReplies} new repl{n.newReplies === 1 ? "y" : "ies"}
+          </span>
+        )}
 
         {actions && (
           <ThreadReplies

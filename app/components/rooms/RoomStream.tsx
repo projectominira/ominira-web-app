@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react";
+import { useRouter } from "next/navigation";
 import { dayLabel } from "@/lib/rooms/days";
 import type { NoteVisibility } from "@/lib/api/types";
 import type { RoomItem, RoomNote, RoomSession } from "@/lib/rooms/types";
@@ -11,7 +12,7 @@ import { MilestoneCard, SessionCard, TargetCard } from "./ActionCards";
 import { HighlightCard } from "./Highlights";
 import NoteBubble, { type BubbleState } from "./NoteBubble";
 import Loader from "@/app/components/Loader";
-import SystemLine, { DayDivider, UnreadDivider } from "./SystemLine";
+import SystemLine, { DayDivider, RepliedLine, UnreadDivider } from "./SystemLine";
 
 // The stream shell every room shares (rooms-spec §2, 4a / 7a–7c): the
 // header and pinned bar on top, the stream newest at the bottom, the input
@@ -63,7 +64,7 @@ export type StreamHandlers = {
 };
 
 const itemKey = (it: RoomItem, i: number) =>
-  it.t === "note" ? it.note.note.id : it.t === "system" || it.t === "joins" || it.t === "highlight" ? it.id : it.t === "session" ? it.card.session.id : it.t === "day" ? `day-${it.day}` : `${it.t}-${i}`;
+  it.t === "note" ? it.note.note.id : it.t === "replied" ? `replied-${it.replied.id}` : it.t === "system" || it.t === "joins" || it.t === "highlight" ? it.id : it.t === "session" ? it.card.session.id : it.t === "day" ? `day-${it.day}` : `${it.t}-${i}`;
 
 export default function RoomStream({
   ref,
@@ -122,6 +123,7 @@ export default function RoomStream({
   children?: ReactNode;
 }) {
   const now = useNow();
+  const router = useRouter();
   const scroller = useRef<HTMLDivElement>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -144,24 +146,18 @@ export default function RoomStream({
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
   }, []);
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      toBottom,
-      jumpTo(anchor, last = false) {
-        const el = scroller.current;
-        const all = el?.querySelectorAll<HTMLElement>(`[data-anchor="${CSS.escape(anchor)}"]`);
-        const target = all && (last ? all[all.length - 1] : all[0]);
-        if (!el || !target) return false;
-        el.scrollTo({ top: Math.max(0, target.offsetTop - 16), behavior: "smooth" });
-        clearTimeout(flashTimer.current);
-        setFlash(anchor);
-        flashTimer.current = setTimeout(() => setFlash(null), FLASH_MS);
-        return true;
-      },
-    }),
-    [toBottom],
-  );
+  const jumpTo = useCallback((anchor: string, last = false) => {
+    const el = scroller.current;
+    const all = el?.querySelectorAll<HTMLElement>(`[data-anchor="${CSS.escape(anchor)}"]`);
+    const target = all && (last ? all[all.length - 1] : all[0]);
+    if (!el || !target) return false;
+    el.scrollTo({ top: Math.max(0, target.offsetTop - 16), behavior: "smooth" });
+    clearTimeout(flashTimer.current);
+    setFlash(anchor);
+    flashTimer.current = setTimeout(() => setFlash(null), FLASH_MS);
+    return true;
+  }, []);
+  useImperativeHandle(ref, () => ({ toBottom, jumpTo }), [toBottom, jumpTo]);
   useEffect(() => () => clearTimeout(flashTimer.current), []);
 
   // Opening: at the unread divider when there is one, else the bottom.
@@ -202,6 +198,11 @@ export default function RoomStream({
         );
       case "unread":
         return <UnreadDivider key="unread" count={it.count} />;
+      case "replied": {
+        // A note not loaded yet opens on its own page.
+        const id = it.replied.id;
+        return <RepliedLine key={itemKey(it, i)} replied={it.replied} viewerId={viewerId} onOpen={() => jumpTo(id) || router.push(`/post/${id}`)} />;
+      }
       case "system":
       case "joins":
         return <SystemLine key={itemKey(it, i)} item={it} />;

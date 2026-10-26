@@ -154,9 +154,11 @@ export function previewName(pseudonym: string): string {
 export const previewText = (row: { content: unknown; kind: string }) =>
   (row.content as { text?: string } | null)?.text || (row.kind === "voice" ? "Voice note" : "Shared a passage");
 
-/** Who a row's last note is from: "Comrade Ama", or "You". */
+/** Who a row's last note is from: "Comrade Ama", or "You"; a reply's,
+ * "Comrade Ama replied". */
 export function rowSender(last: RoomRowView["last"]): string {
-  return last.mine ? "You" : previewName(last.who);
+  const who = last.mine ? "You" : previewName(last.who);
+  return last.reply ? `${who} replied` : who;
 }
 
 /** A row's signal line: "Live now · 23 listening", "12 reading now", else

@@ -242,14 +242,15 @@ export function toRoomNote(item: FeedItem, ctx: NoteContext): RoomNote {
     repliers: latestFirst.slice(0, FOOTER_REPLIERS),
     replierCount: latestFirst.length,
     replyingNow: recent.size,
+    newReplies: 0,
     alsoIn: ctx.alsoIn ? (note.group?.name ?? null) : null,
   };
 }
 
 /** A room as shown: its pages (newest page first, as fetched) joined oldest
- * first, joins collapsed, the cards placed, your notes on their way at the
- * bottom, day dividers and the unread divider. The room's first page
- * carries when you last read it. */
+ * first, joins collapsed, the cards placed, the notes with new replies and
+ * your notes on their way at the bottom, day dividers and the unread
+ * divider. The room's first page carries when you last read it. */
 export function roomItems(
   pages: RoomStreamPage[],
   o: {
@@ -268,7 +269,8 @@ export function roomItems(
   // A sent note the room already has is shown there, not twice.
   const loaded = new Set(items.flatMap((it) => (it.t === "note" ? [it.note.note.id] : [])));
   const pending = (o.pending ?? []).filter((it) => it.t !== "note" || !loaded.has(it.note.note.id));
-  const days = withDays([...placed, ...pending], o.tz);
+  const replied = (pages[0]?.replied ?? []).map((r): RoomItem => ({ t: "replied", replied: r }));
+  const days = withDays([...placed, ...replied, ...pending], o.tz);
   return withUnread(days, pages[0]?.lastReadAt ?? null, o.viewerId);
 }
 
@@ -281,6 +283,6 @@ export function pendingNote(id: string, text: string, author: Note["author"], at
       reactionCount: 0, reactedByMe: false, bookmarkedByMe: false, group, mentions: [], createdAt: at, updatedAt: at,
     },
     material: null, sectionId: null, label: null, excerpt: null, replies: [],
-    authorTag: null, fromReader: false, pinned: null, question: null, replyCount: 0, repliers: [], replierCount: 0, replyingNow: 0, alsoIn: null,
+    authorTag: null, fromReader: false, pinned: null, question: null, replyCount: 0, repliers: [], replierCount: 0, replyingNow: 0, newReplies: 0, alsoIn: null,
   };
 }

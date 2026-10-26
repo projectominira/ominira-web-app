@@ -27,6 +27,8 @@ export type RoomNote = FeedItem & {
   replierCount: number;
   /** Distinct comrades who replied in the last 10 minutes (spec §2). */
   replyingNow: number;
+  /** Comrades' replies since you last read the room (lib/rooms/unread). */
+  newReplies: number;
   /** "Also in Rodney Reading Group": a book note that's in the group too. */
   alsoIn: string | null;
 };
@@ -75,6 +77,9 @@ export type RoomItem =
   | { t: "target"; target: RoomTarget }
   | { t: "session"; card: RoomSession }
   | { t: "note"; note: RoomNote }
+  /** At the bottom: a note with comrades' replies since you last read the
+   * room, wherever the note is. */
+  | { t: "replied"; replied: RepliedNote }
   /** A highlight in a book's room: a public one, or your own private one.
    * `href` opens the reader at its line. */
   | {
@@ -90,11 +95,16 @@ export type RoomItem =
     }
   | { t: "empty" };
 
+/** A note with comrades' replies since you last read the room: `count`
+ * of them, by `repliers` (latest first), the last `at`. */
+export type RepliedNote = { id: string; author: Comrade; text: string; repliers: Comrade[]; replierCount: number; count: number; at: string };
+
 /** `GET /api/groups/{slug}/stream`, `GET /api/materials/{id}/stream`: one
  * page, oldest first; `nextCursor` asks for the page before it.
- * `lastReadAt` (room_reads, the first page only) places the unread
- * divider (lib/rooms/unread). */
-export type RoomStreamPage = { items: RoomItem[]; nextCursor: string | null; lastReadAt: string | null };
+ * `lastReadAt` (room_reads, else when you joined; the first page only)
+ * places the unread divider (lib/rooms/unread); `replied` (the first page
+ * only) the notes with new replies, latest last. */
+export type RoomStreamPage = { items: RoomItem[]; nextCursor: string | null; lastReadAt: string | null; replied: RepliedNote[] };
 
 /** A book room's header (compact and expanded). */
 export type BookRoomHeader = {
@@ -159,15 +169,16 @@ export type RoomSuggestions = { mine: StartableBook[]; today: StartableBook[] };
 
 /** A book room as a chat row on Home (`RoomRow`, home-spec §2): its latest
  * note you can see. */
-/** A room's latest note, as its row previews it. */
-export type RoomLast = { who: string; avatar: Comrade["avatar"]; mine: boolean; text: string; at: string };
+/** A room's latest note or reply, as its row previews it. */
+export type RoomLast = { who: string; avatar: Comrade["avatar"]; mine: boolean; reply: boolean; text: string; at: string };
 
 export type RoomRowView = {
   slug: string;
   name: string;
   cover: string | null;
   last: RoomLast;
-  /** Comrades' notes since you last read the room. */
+  /** Comrades' notes and replies since you last read the room (or, never
+   * opened, since you joined). */
   unread: number;
   /** Listening, while a reading room is on. */
   live: number | null;
@@ -187,11 +198,12 @@ export type GroupCardView = {
   book: { title: string; cover: string | null; pct: number | null; chapter: string | null } | null;
   /** The next session's start (or the one on now); null with none planned. */
   nextAt: string | null;
-  /** Comrades' notes since you last read the group. */
+  /** Comrades' notes and replies since you last read the group (or,
+   * never opened, since you joined it). */
   unread: number;
   /** Listening, while the group's reading room is on. */
   live: number | null;
-  /** The group room's latest note you can read; null for a group you're
+  /** The group room's latest note or reply you can read; null for a group you're
    * not in, or one with no notes yet. */
   last: RoomLast | null;
 };

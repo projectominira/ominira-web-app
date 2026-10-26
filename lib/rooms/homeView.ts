@@ -92,8 +92,9 @@ async function getStrip(): Promise<StatusItem[]> {
 /** Rows shown at most: the latest. */
 const BOOK_ROOMS_MAX = 20;
 
-/** Every book room with a note you can read (book_rooms: its latest and your
- * unread), with who wrote it, live listeners and comrades reading now. */
+/** Every book room with a note you can read (book_rooms: its latest note or
+ * reply and your unread), with who wrote it, live listeners and comrades
+ * reading now. */
 async function getBookRooms(readerId: string | null): Promise<RoomRowView[]> {
   const admin = getSupabaseAdminClient();
   const now = Date.now();
@@ -127,7 +128,7 @@ async function getBookRooms(readerId: string | null): Promise<RoomRowView[]> {
         slug: m.slug,
         name: m.title,
         cover: resolveBookCoverSrc(m),
-        last: { who: who?.pseudonym ?? "", avatar: who?.avatar ?? { color: null, url: null }, mine: r.author === readerId, text: previewText(r), at: r.created_at },
+        last: { who: who?.pseudonym ?? "", avatar: who?.avatar ?? { color: null, url: null }, mine: r.author === readerId, reply: r.reply, text: previewText(r), at: r.created_at },
         unread: r.unread,
         live: listeners.get(m.id) ?? null,
         readingNow: readingNow.get(m.id) ?? 0,

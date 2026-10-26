@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, Headphones } from "lucide-react";
 import { listNames, personName, shortName } from "@/lib/rooms/names";
-import type { RoomItem } from "@/lib/rooms/types";
+import type { RepliedNote, RoomItem } from "@/lib/rooms/types";
 import RoomAvatar from "./RoomAvatar";
 
 const ICON = { strokeWidth: 1.75, "aria-hidden": true } as const;
@@ -103,6 +103,34 @@ export function UnreadDivider({ count }: { count: number }) {
       <span className="h-px flex-1 bg-brand-200" />
       <span className="font-sans text-[11px]/none font-extrabold tracking-eyebrow text-brand-700 uppercase">{count} new since you left</span>
       <span className="h-px flex-1 bg-brand-200" />
+    </div>
+  );
+}
+
+/** A note with comrades' replies since you last read the room, at the
+ * bottom wherever the note is: "Comrade Tolu and 1 other replied to your
+ * note “I read it…” · 2 new". Tapping goes to the note. */
+export function RepliedLine({ replied: r, viewerId, onOpen }: { replied: RepliedNote; viewerId: string | null; onOpen: () => void }) {
+  const [first, second] = r.repliers.map((c) => shortName(c.pseudonym));
+  const others = r.replierCount - 1;
+  const who = others === 0 ? first : others === 1 && second ? `${first} and ${second}` : `${first} and ${others} others`;
+  return (
+    <div className="flex justify-center">
+      <button
+        type="button"
+        onClick={onOpen}
+        className={`flex max-w-[92%] cursor-pointer items-center gap-2 rounded-pill-sm px-1.5 py-1 text-left hover:text-[var(--color-app-text)] ${PILL}`}
+      >
+        <span className="flex flex-none">
+          {r.repliers.map((c) => (
+            <RoomAvatar key={c.readerId} comrade={c} size={20} className="-mr-1.5 border-2 border-[var(--color-app-chip)] last:mr-0" />
+          ))}
+        </span>
+        <span className="min-w-0 truncate">
+          <b className={WHO}>{who}</b> replied to {r.author.readerId === viewerId ? "your note" : `${shortName(r.author.pseudonym)}’s note`} “{r.text}”
+        </span>
+        <span className="flex-none pr-1.5 font-bold text-[var(--color-app-brand)]">{r.count} new</span>
+      </button>
     </div>
   );
 }

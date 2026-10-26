@@ -13,6 +13,7 @@ import type { AnnotationRange, Note } from "@/lib/api/types";
 import type { Group } from "@/lib/groups/membership";
 import type { Database } from "@/lib/supabase/database.types";
 import { comradesById } from "./comrades";
+import { previewText } from "./home";
 import { officialReaderIds, pagePassages } from "./passage";
 import { lastReadAt } from "./reads";
 import {
@@ -26,7 +27,7 @@ import {
   type RoomRun,
   type Stamped,
 } from "./timeline";
-import type { RoomItem, RoomStreamPage } from "./types";
+import type { Comrade, RepliedNote, RoomItem, RoomStreamPage } from "./types";
 
 // A room's stream, one page per call (rooms-spec §5.1), for the thin
 // app/api/groups/{slug}/stream and app/api/materials/{id}/stream routes.
@@ -36,6 +37,10 @@ import type { RoomItem, RoomStreamPage } from "./types";
 
 const STREAM_PAGE = 30;
 const STREAM_PAGE_MAX = 50;
+/** Notes the room's bottom points to for their new replies, at most. */
+const REPLIED_MAX = 3;
+/** Replies read to find them. */
+const REPLIES_READ = 200;
 
 /** `?limit=`, clamped. */
 export const pageLimit = (url: URL) => Math.min(Math.max(Number(url.searchParams.get("limit")) || STREAM_PAGE, 1), STREAM_PAGE_MAX);
@@ -92,7 +97,10 @@ export async function groupStreamPage(group: Group, readerId: string | null, { c
     members.data.map((m) => m.reader_id),
     books.data.map((b) => b.material_id)
   );
-  const posts = await newestFirst(before(admin.from("posts").select("*").is("parent_id", null).or(visiblePostsFilter(viewer)).or(scope))).limit(limit + 1);
+  const [posts, replied] = await Promise.all([
+    newestFirst(before(admin.from("posts").select("*").is("parent_id", null).or(visiblePostsFilter(viewer)).or(scope))).limit(limit + 1),
+    repliedSince(scope, viewer, lastRead),
+  ]);
   if (posts.error) throw posts.error;
 
   const page = mergePage<GroupRow>(
@@ -143,7 +151,7 @@ export async function groupStreamPage(group: Group, readerId: string | null, { c
     });
     return item ? [item] : [];
   });
-  return { items, nextCursor: page.cursor && encodeCursor(page.cursor), lastReadAt: lastRead };
+  return { items, nextCursor: page.cursor && encodeCursor(page.cursor), lastReadAt: lastRead, replied };
 }
 
 /** A book's room: its notes the viewer can read (public, plus their own and
@@ -156,14 +164,16 @@ export async function bookStreamPage(materialId: string, viewer: PostViewer, { c
   const roomScope = viewer?.groupIds.length ? `group_id.is.null,group_id.in.(${viewer.groupIds.join(",")})` : "group_id.is.null";
   const rooms = () => admin.from("rooms").select("id, started_by, started_at, ended_at").eq("material_id", materialId).or(roomScope);
   const highlightScope = viewer ? `visibility.eq.public,reader_id.eq.${viewer.readerId}` : "visibility.eq.public";
-  const [posts, highlights, starts, ends, lastRead, officialIds] = await Promise.all([
+  const lastReadP = cursor ? Promise.resolve(null) : lastReadAt(viewer?.readerId, "book", materialId);
+  const [posts, highlights, starts, ends, lastRead, replied, officialIds] = await Promise.all([
     newestFirst(before(admin.from("posts").select("*").eq("material_id", materialId).is("parent_id", null).or(visiblePostsFilter(viewer)))).limit(
       limit + 1
     ),
     newestFirst(before(admin.from("highlights").select("*").eq("material_id", materialId).or(highlightScope))).limit(limit + 1),
     newestFirst(before(rooms(), "started_at"), "started_at").limit(limit + 1),
     newestFirst(before(rooms().eq("status", "ended"), "ended_at"), "ended_at").limit(limit + 1),
-    cursor ? null : lastReadAt(viewer?.readerId, "book", materialId),
+    lastReadP,
+    lastReadP.then((since) => repliedSince(`material_id.eq.${materialId}`, viewer, since)),
     officialReaderIds(),
   ]);
   if (posts.error) throw posts.error;
@@ -211,7 +221,55 @@ export async function bookStreamPage(materialId: string, viewer: PostViewer, { c
     const it = notes.get(r.row.id);
     return it ? [{ t: "note", note: toRoomNote(it, ctx) }] : [];
   });
-  return { items, nextCursor: page.cursor && encodeCursor(page.cursor), lastReadAt: lastRead };
+  return { items, nextCursor: page.cursor && encodeCursor(page.cursor), lastReadAt: lastRead, replied };
+}
+
+/** The room's notes (`scope`, a PostgREST `or` filter) with comrades'
+ * replies since `since`, wherever they are in the room: the latest
+ * REPLIED_MAX, latest last, for the lines at its bottom. A reply counts
+ * only where its note can be read too. */
+async function repliedSince(scope: string, viewer: PostViewer, since: string | null): Promise<RepliedNote[]> {
+  if (!viewer || !since) return [];
+  const admin = getSupabaseAdminClient();
+  const visible = visiblePostsFilter(viewer);
+  const replies = await admin
+    .from("posts")
+    .select("parent_id, reader_id, created_at")
+    .not("parent_id", "is", null)
+    .neq("reader_id", viewer.readerId)
+    .gt("created_at", since)
+    .or(visible)
+    .or(scope)
+    .order("created_at", { ascending: false })
+    .limit(REPLIES_READ);
+  if (replies.error) throw replies.error;
+  if (replies.data.length === 0) return [];
+  const notes = await admin
+    .from("posts")
+    .select("id, reader_id, kind, content")
+    .in("id", [...new Set(replies.data.map((r) => r.parent_id!))])
+    .is("parent_id", null)
+    .or(visible)
+    .or(scope);
+  if (notes.error) throw notes.error;
+  const byId = new Map(notes.data.map((n) => [n.id, n]));
+  // Newest reply first: each thread's repliers latest first, and the
+  // threads in order of their latest reply.
+  const threads = new Map<string, { at: string; repliers: string[]; count: number }>();
+  for (const r of replies.data) {
+    if (!byId.has(r.parent_id!)) continue;
+    const t = threads.get(r.parent_id!) ?? { at: r.created_at, repliers: [], count: 0 };
+    t.count++;
+    if (!t.repliers.includes(r.reader_id)) t.repliers.push(r.reader_id);
+    threads.set(r.parent_id!, t);
+  }
+  const shown = [...threads].slice(0, REPLIED_MAX);
+  const people = await comradesById(shown.flatMap(([id, t]) => [byId.get(id)!.reader_id, ...t.repliers.slice(0, 2)]));
+  const comrade = (id: string): Comrade => people.get(id) ?? { readerId: id, pseudonym: "", avatar: { color: null, url: null } };
+  return shown.reverse().map(([id, t]) => {
+    const note = byId.get(id)!;
+    return { id, author: comrade(note.reader_id), text: previewText(note), repliers: t.repliers.slice(0, 2).map(comrade), replierCount: t.repliers.length, count: t.count, at: t.at };
+  });
 }
 
 type HighlightBook = { slug: string; labels: Map<string, string> | undefined };

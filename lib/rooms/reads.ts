@@ -14,16 +14,20 @@ export async function markRoomRead(readerId: string, kind: RoomKind, roomId: str
   if (error) throw error;
 }
 
-/** When the reader last read the room to the bottom; null if never. */
+/** When the reader last read the room to the bottom. Every member belongs
+ * to every book room, so one never opened counts from when they joined
+ * Ominira (a group's, from when they joined the group); null signed out, or
+ * not in the group. */
 export async function lastReadAt(readerId: string | null | undefined, kind: RoomKind, roomId: string): Promise<string | null> {
   if (!readerId) return null;
-  const { data, error } = await getSupabaseAdminClient()
-    .from("room_reads")
-    .select("last_read_at")
-    .eq("reader_id", readerId)
-    .eq("room_kind", kind)
-    .eq("room_id", roomId)
-    .maybeSingle();
-  if (error) throw error;
-  return data?.last_read_at ?? null;
+  const admin = getSupabaseAdminClient();
+  const [read, joined] = await Promise.all([
+    admin.from("room_reads").select("last_read_at").eq("reader_id", readerId).eq("room_kind", kind).eq("room_id", roomId).maybeSingle(),
+    kind === "book"
+      ? admin.from("readers").select("joined_at").eq("id", readerId).maybeSingle()
+      : admin.from("group_members").select("joined_at").eq("group_id", roomId).eq("reader_id", readerId).maybeSingle(),
+  ]);
+  if (read.error) throw read.error;
+  if (joined.error) throw joined.error;
+  return read.data?.last_read_at ?? joined.data?.joined_at ?? null;
 }

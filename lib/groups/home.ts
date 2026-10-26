@@ -34,9 +34,10 @@ export async function homeGroups(readerId: string | null): Promise<GroupCardView
   const admin = getSupabaseAdminClient();
   // Who may read which notes, for the groups' previews; read alongside.
   const viewerP = loadPostViewer(readerId);
-  const mine = readerId
-    ? ok(await admin.from("group_members").select("group_id").eq("reader_id", readerId).order("joined_at", { ascending: false }).limit(MAX_CARDS)).map((m) => m.group_id)
+  const memberships = readerId
+    ? ok(await admin.from("group_members").select("group_id, joined_at").eq("reader_id", readerId).order("joined_at", { ascending: false }).limit(MAX_CARDS))
     : [];
+  const mine = memberships.map((m) => m.group_id);
   // Newest first, so a group just started has a chance to be found; sorted
   // by size once its members are counted.
   const open =
@@ -68,7 +69,8 @@ export async function homeGroups(readerId: string | null): Promise<GroupCardView
   const currentOf = new Map(books.filter((b) => b.status === "current").map((b) => [b.group_id, b.material_id]));
   const nextOf = new Map<string, string>();
   for (const s of sessions) if (!nextOf.has(s.group_id)) nextOf.set(s.group_id, s.starts_at);
-  const lastRead = new Map(reads.map((r) => [r.room_id, r.last_read_at]));
+  // A group never opened counts from when you joined it.
+  const lastRead = new Map([...memberships.map((m) => [m.group_id, m.joined_at] as const), ...reads.map((r) => [r.room_id, r.last_read_at] as const)]);
   const currentIds = [...new Set(currentOf.values())];
   const readerIds = [...new Set(members.map((m) => m.reader_id))];
 
@@ -79,8 +81,8 @@ export async function homeGroups(readerId: string | null): Promise<GroupCardView
       ? admin.from("reader_activities").select("reader_id, material_id, progress_percent").in("material_id", currentIds).in("reader_id", readerIds).then(ok)
       : [],
     Promise.all(live.map(async (r) => [r.group_id, ok(await admin.rpc("room_active_count", { room: r.id }))] as const)).then((pairs) => new Map(pairs)),
-    // Comrades' notes in each of your groups since you last read it; a group
-    // you've never opened shows none.
+    // Comrades' notes and replies in each of your groups since you last
+    // read it.
     Promise.all(
       mine.map(async (id) => {
         const since = lastRead.get(id);
@@ -88,7 +90,6 @@ export async function homeGroups(readerId: string | null): Promise<GroupCardView
         const { count, error } = await admin
           .from("posts")
           .select("id", { count: "exact", head: true })
-          .is("parent_id", null)
           .or(groupPostScope(id, membersOf.get(id) ?? [], booksOf.get(id) ?? []))
           .neq("reader_id", readerId)
           .gt("created_at", since);
@@ -96,13 +97,13 @@ export async function homeGroups(readerId: string | null): Promise<GroupCardView
         return [id, count ?? 0] as const;
       })
     ).then((pairs) => new Map(pairs)),
-    // Each of your groups' latest note you can read, for its row's preview.
+    // Each of your groups' latest note or reply you can read, for its row's
+    // preview.
     Promise.all(
       mine.map(async (id) => {
         const { data, error } = await admin
           .from("posts")
-          .select("reader_id, kind, content, created_at")
-          .is("parent_id", null)
+          .select("reader_id, kind, content, created_at, parent_id")
           .or(visible)
           .or(groupPostScope(id, membersOf.get(id) ?? [], booksOf.get(id) ?? []))
           .order("created_at", { ascending: false })
@@ -129,7 +130,7 @@ export async function homeGroups(readerId: string | null): Promise<GroupCardView
     const p = latest.get(id);
     if (!p) return null;
     const who = authors.get(p.reader_id);
-    return { who: who?.pseudonym ?? "", avatar: who?.avatar ?? { color: null, url: null }, mine: p.reader_id === readerId, text: previewText(p), at: p.created_at };
+    return { who: who?.pseudonym ?? "", avatar: who?.avatar ?? { color: null, url: null }, mine: p.reader_id === readerId, reply: p.parent_id !== null, text: previewText(p), at: p.created_at };
   };
   const summaries = new Map(materials.map((m) => [m.id, toMaterialSummary(m)]));
   const pctOf = (groupId: string, materialId: string) => {
