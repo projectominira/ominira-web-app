@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api/client";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
@@ -52,4 +53,18 @@ export function useUnreadNotificationsCount() {
     enabled: isAuthenticated,
     refetchInterval: 30_000,
   });
+}
+
+/** Keeps the app icon's badge (Badging API, installed PWAs) on the unread
+ * count while the app is open: down as notifications are read, cleared on
+ * sign-out. A push sets it while the app is closed (sw.js). Mounted once,
+ * in AppShell. */
+export function useAppBadge() {
+  const isAuthenticated = useIsAuthenticated();
+  const { data: count = 0 } = useUnreadNotificationsCount();
+  const unread = isAuthenticated ? count : 0;
+  useEffect(() => {
+    if (!("setAppBadge" in navigator)) return;
+    void (unread > 0 ? navigator.setAppBadge(unread) : navigator.clearAppBadge()).catch(() => {});
+  }, [unread]);
 }

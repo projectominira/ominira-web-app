@@ -5,6 +5,7 @@ import AppSidebar from "./AppSidebar";
 import AppBottomNav from "./AppBottomNav";
 import { useDockedHeight } from "@/app/components/useBottomDock";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useAppBadge } from "@/lib/notifications/useNotifications";
 
 /**
  * Shared chrome for every page under app/(app) — reserves space for the
@@ -23,6 +24,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const dockedHeight = useDockedHeight();
   const bottomNavHeight = useLayoutStore((s) => s.bottomNavHeight);
   const topBarHeight = useLayoutStore((s) => s.topBarHeight);
+  useAppBadge();
   return (
     <div className="min-h-screen" style={{ background: "var(--reader-bg)" }}>
       <AppSidebar />

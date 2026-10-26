@@ -928,6 +928,8 @@ export type Database = {
       /** Study groups (migrations/20261021_groups.sql). */
       is_group_member: { Args: { grp: string; reader: string }; Returns: boolean };
       is_group_moderator: { Args: { grp: string; reader: string }; Returns: boolean };
+      /** migrations/20261126_unread_notification_counts.sql — the app icon's badge, per push. */
+      unread_notification_counts: { Args: { readers: string[] }; Returns: { reader_id: string; unread: number }[] };
       /** migrations/20261024_group_notes.sql: "Bring in", most shared books first. */
       reading_comrades: { Args: { reader: string; max_rows?: number }; Returns: { reader_id: string; shared: number }[] };
       /** migrations/20261101_mention_comrades.sql — the tag picker before a name is typed. */

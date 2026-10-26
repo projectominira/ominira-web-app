@@ -12,6 +12,9 @@ export type PushPayload = {
   // in sw.js if omitted.
   icon?: string;
   badge?: string;
+  // The reader's unread notifications, for the app icon's badge (sw.js);
+  // absent on a broadcast, which leaves the badge as it is.
+  badgeCount?: number;
 };
 
 type SubscriptionRow = { id: string; endpoint: string; p256dh: string; auth: string };
@@ -48,15 +51,20 @@ async function sendToRows(rows: SubscriptionRow[], payload: PushPayload) {
 
 // Only called through lib/notifications (notifyReader/notifyReaders), never
 // straight from a route — that's what keeps the in-app row, push and email
-// in step. Best-effort, like every send here. Returns how many devices
-// accepted the push.
+// in step. Best-effort, like every send here. Each push carries its reader's
+// unread count (the notification rows are written first), counted in one
+// query for the readers with a device. Returns how many devices accepted it.
 export async function sendToReaders(readerIds: string[], payload: PushPayload): Promise<number> {
   if (readerIds.length === 0) return 0;
-  const { data } = await getSupabaseAdminClient()
-    .from("push_subscriptions")
-    .select("id, endpoint, p256dh, auth")
-    .in("reader_id", readerIds);
-  return data?.length ? sendToRows(data, payload) : 0;
+  const admin = getSupabaseAdminClient();
+  const { data } = await admin.from("push_subscriptions").select("id, endpoint, p256dh, auth, reader_id").in("reader_id", readerIds);
+  if (!data?.length) return 0;
+  const { data: counts } = await admin.rpc("unread_notification_counts", { readers: [...new Set(data.flatMap((row) => (row.reader_id ? [row.reader_id] : [])))] });
+  // No counts (the read failed): the badge is left as it is.
+  const unread = counts && new Map(counts.map((c) => [c.reader_id, c.unread]));
+  const badge = (readerId: string | null) => (unread ? { badgeCount: (readerId && unread.get(readerId)) || 0 } : {});
+  const results = await Promise.allSettled(data.map((row) => sendToSubscription(row, { ...payload, ...badge(row.reader_id) })));
+  return results.filter((result) => result.status === "fulfilled" && result.value).length;
 }
 
 // Everyone with a live subscription — installed PWA or plain web. Paginated

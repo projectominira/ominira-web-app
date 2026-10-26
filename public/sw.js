@@ -214,11 +214,20 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
-// Payload shape is lib/push/send.ts's PushPayload — { title, body, url, tag?, icon?, badge? }.
+// The app icon's count (Badging API): installed PWAs on iOS 16.4+, desktop
+// Chrome/Edge and Safari's Dock apps. Elsewhere there's no setAppBadge and
+// this does nothing.
+function setBadge(count) {
+  if (!("setAppBadge" in self.navigator)) return Promise.resolve();
+  return (count > 0 ? self.navigator.setAppBadge(count) : self.navigator.clearAppBadge()).catch(() => {});
+}
+
+// Payload shape is lib/push/send.ts's PushPayload — { title, body, url, tag?, icon?, badge?, badgeCount? }.
 self.addEventListener("push", (event) => {
   if (!event.data) return;
   const payload = event.data.json();
-  event.waitUntil(
+  event.waitUntil(Promise.all([
+    typeof payload.badgeCount === "number" ? setBadge(payload.badgeCount) : null,
     self.registration.showNotification(payload.title, {
       body: payload.body,
       tag: payload.tag,
@@ -233,8 +242,8 @@ self.addEventListener("push", (event) => {
       requireInteraction: false,
       silent: false,
       actions: [{ action: "open", title: "Open" }],
-    })
-  );
+    }),
+  ]));
 });
 
 // Focuses the exact destination when it is already open. If the reader is
