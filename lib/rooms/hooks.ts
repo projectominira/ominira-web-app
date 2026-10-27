@@ -170,7 +170,7 @@ export function useNoteThread(noteId: string, onGone: () => void) {
 }
 
 /** The viewer as a note's author, for what they send before it's saved. */
-function useAuthor(): Note["author"] {
+export function useAuthor(): Note["author"] {
   const readerId = useSessionStore((s) => s.readerId);
   const { data: profile } = useProfile();
   return { readerId: readerId ?? "", pseudonym: profile?.pseudonym ?? "", city: profile?.city ?? null, avatar: profile?.avatar ?? null };

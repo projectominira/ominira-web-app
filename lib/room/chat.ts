@@ -17,7 +17,8 @@ export type SharedPassage = NonNullable<RoomEvent<"chat">["passage"]>;
 export type ChatPerson = Pick<RoomPresence, "name" | "avatar">;
 
 export type ChatItem =
-  | { kind: "message"; id: string; readerId: string; text: string; at: number; passage?: SharedPassage }
+  /** `sending`: your shared passage, shown at once while its note saves. */
+  | { kind: "message"; id: string; readerId: string; text: string; at: number; passage?: SharedPassage; sending?: boolean }
   /** A reaction digest (reactions.ts): folded locally, never sent. */
   | { kind: "digest"; id: string; at: number; text: string; emojis: string[] };
 
@@ -61,9 +62,22 @@ export function clipQuote(quote: string): string {
   return line.length <= MAX_QUOTE_LENGTH ? line : `${line.slice(0, MAX_QUOTE_LENGTH - 1).trimEnd()}…`;
 }
 
+const clipPassage = (passage: SharedPassage): SharedPassage => ({
+  quote: clipQuote(passage.quote),
+  label: passage.label.slice(0, 200),
+  ...(passage.noteId && { noteId: passage.noteId }),
+});
+
 export type Chat = {
   /** False when there's nothing to send or the rate limit refused it. */
   send(text: string, passage?: SharedPassage): boolean;
+  /** Your shared passage, in your chat at once (`sending`) while its note
+   * saves; null when blank or too soon. Its id, for `shared`/`unshare`. */
+  share(text: string, passage: SharedPassage): string | null;
+  /** Its note saved as `noteId`: sent to the room. */
+  shared(id: string, noteId: string): void;
+  /** Its note didn't save: taken out again. */
+  unshare(id: string): void;
   /** False within 2 s of your last message, when a send would be refused. */
   ready(): boolean;
   /** A local line (a reaction digest). */
@@ -102,11 +116,29 @@ export function createChat(o: ChatOptions): Chat {
     send(text, passage) {
       const trimmed = text.trim().slice(0, MAX_CHAT_LENGTH);
       if (!trimmed) return false;
-      const shared = passage && { quote: clipQuote(passage.quote), label: passage.label.slice(0, 200) };
+      const shared = passage && clipPassage(passage);
       if (!o.channel.send("chat", { from: o.readerId, text: trimmed, ...(shared && { passage: shared }) })) return false;
       lastSentAt = Date.now();
       add({ kind: "message", id: nextId(), readerId: o.readerId, text: trimmed, at: lastSentAt, passage: shared });
       return true;
+    },
+    share(text, passage) {
+      const trimmed = text.trim().slice(0, MAX_CHAT_LENGTH);
+      if (!trimmed || Date.now() - lastSentAt < CHAT_INTERVAL_MS) return null;
+      lastSentAt = Date.now();
+      const id = nextId();
+      add({ kind: "message", id, readerId: o.readerId, text: trimmed, at: lastSentAt, passage: clipPassage(passage), sending: true });
+      return id;
+    },
+    shared(id, noteId) {
+      const item = chat.items.find((i) => i.id === id);
+      if (item?.kind !== "message" || !item.passage) return;
+      const passage = { ...item.passage, noteId };
+      o.channel.send("chat", { from: o.readerId, text: item.text, passage });
+      set({ ...chat, items: chat.items.map((i) => (i === item ? { ...item, passage, sending: false } : i)) });
+    },
+    unshare(id) {
+      set({ ...chat, items: chat.items.filter((i) => i.id !== id) });
     },
     ready: () => Date.now() - lastSentAt >= CHAT_INTERVAL_MS,
     add: (item) => add({ ...item, id: nextId() }),

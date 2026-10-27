@@ -5,6 +5,11 @@ import { ArrowDown, X } from "lucide-react";
 import { RoomField, hasKeyboard } from "@/app/components/rooms/RoomInput";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import QuoteCard from "@/app/components/reader/notes/QuoteCard";
+import NoteBubble from "@/app/components/rooms/NoteBubble";
+import { useAuthor, useNoteThread } from "@/lib/rooms/hooks";
+import { pendingNote } from "@/lib/rooms/timeline";
+import type { RoomNote } from "@/lib/rooms/types";
+import { useSessionStore } from "@/stores/session-store";
 import { formatShortTimeAgo } from "@/lib/time/relative";
 import { useRoom } from "@/lib/room/hooks";
 import type { ChatItem, ChatPerson } from "@/lib/room/chat";
@@ -110,6 +115,8 @@ function Message({
 }) {
   const name = person?.name ?? "A comrade";
   const when = formatShortTimeAgo(item.at, now);
+  if (item.sending) return <SendingNote item={item} />;
+  if (item.passage?.noteId) return <SharedNote noteId={item.passage.noteId} item={item} />;
   return (
     <div className="flex gap-2.5">
       <ReaderAvatar pseudonym={person?.name ?? "comrade"} avatar={person?.avatar ?? null} size={28} className="flex-none" />
@@ -135,6 +142,39 @@ function Message({
   );
 }
 
+/** A passage shared to the chat: the note it was saved as, in the same
+ * NoteBubble the book's room shows — react and reply as there. */
+function SharedNote({ noteId, item }: { noteId: string; item: Extract<ChatItem, { kind: "message" }> }) {
+  const viewerId = useSessionStore((s) => s.readerId);
+  const now = useNow();
+  const { thread, heart, reply, del } = useNoteThread(noteId, () => {});
+  const n = thread.data;
+  // Yours stays as it was sent until the saved note loads.
+  if (!n) return item.readerId === viewerId ? <SendingNote item={item} /> : null;
+  return (
+    <NoteBubble
+      note={n}
+      viewerId={viewerId}
+      now={now}
+      moderator={n.moderator}
+      handlers={{
+        onReact: (replyId) => viewerId && heart.mutate({ noteId: replyId ?? n.note.id, rootId: n.note.id }),
+        onReply: viewerId ? (r, to) => void reply(n.note.id, r, to, n.note.ranges) : undefined,
+        onDelete: viewerId ? (replyId) => del.mutate({ noteId: replyId ?? n.note.id, rootId: n.note.id }) : undefined,
+      }}
+    />
+  );
+}
+
+/** Your shared passage as it was sent, before its note is saved and loaded. */
+function SendingNote({ item }: { item: Extract<ChatItem, { kind: "message" }> }) {
+  const author = useAuthor();
+  const now = useNow();
+  const base = pendingNote(item.id, item.text, author, new Date(item.at).toISOString());
+  const note: RoomNote = { ...base, excerpt: item.passage?.quote ?? null, label: item.passage?.label || null, fromReader: true };
+  return <NoteBubble note={note} viewerId={author.readerId} now={now} state="sending" />;
+}
+
 function Digest({ item }: { item: Extract<ChatItem, { kind: "digest" }> }) {
   return (
     <p className="m-0 flex items-center gap-2 text-xs font-medium text-[var(--reader-text-muted)]">
@@ -157,7 +197,6 @@ export function RoomChatComposer({ materialId, className = "px-4 pt-2 pb-3" }: {
   const sendPassage = useSendPassage(materialId);
   const connecting = useRoom((s) => s.connection === "connecting");
   const [text, setText] = useState("");
-  const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -172,22 +211,17 @@ export function RoomChatComposer({ materialId, className = "px-4 pt-2 pb-3" }: {
     if (passage) inputRef.current?.focus();
   }, [passage]);
 
-  const send = async () => {
-    if (!session || !text.trim() || saving) return;
+  const send = () => {
+    if (!session || !text.trim()) return;
     if (!passage) {
       if (session.sendChat(text)) setText("");
       else setNotice(SLOW);
       return;
     }
-    setSaving(true);
-    const result = await sendPassage(passage, text);
-    setSaving(false);
-    if (result === "sent") {
+    if (sendPassage(passage, text) === "sent") {
       setText("");
       clearPassage();
-    } else {
-      setNotice(result === "wait" ? SLOW : "Couldn't save it as a note. Check your connection and try again.");
-    }
+    } else setNotice(SLOW);
   };
 
   const submit = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -223,7 +257,7 @@ export function RoomChatComposer({ materialId, className = "px-4 pt-2 pb-3" }: {
         placeholder={passage ? "Say something about it" : "Message the room"}
         inputRef={inputRef}
         maxLength={MAX_CHAT_LENGTH}
-        canSend={!!text.trim() && !saving && connecting === false}
+        canSend={!!text.trim() && connecting === false}
         onSend={() => void send()}
         onKeyDown={submit}
       />

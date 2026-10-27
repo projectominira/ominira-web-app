@@ -3,11 +3,12 @@
 import type { AnnotationRange } from "@/lib/api/types";
 import { useCreateNote } from "@/lib/community/useNoteMutations";
 import { roomChatUnread, useRoomStore } from "@/stores/room-store";
+import { showToast } from "@/stores/toast-store";
 
 // Share passage (spec §1.4, §3.2): from the reader's selection menu, the
 // passage goes to the room chat's composer; sending it saves a normal public
 // note on the passage, through the notes' own create path (useCreateNote),
-// then posts its quote card to the chat ("Saved as a note"). Nothing about
+// then posts it to the chat, which shows that note (NoteBubble). Nothing about
 // the note is room-specific, except that a group room's note is posted to
 // the group (`group_id`), so it shows on the group's Notes tab.
 
@@ -21,26 +22,32 @@ export function useShareToRoom(materialId: string): ((passage: PendingPassage) =
   return inRoom ? attach : null;
 }
 
-/** Sends a shared passage with your words: `wait` within 2 s of your last
- * message (checked before the note is saved), `failed` when the note
- * couldn't be saved, so nothing was posted. */
+/** Sends a shared passage with your words: in your chat at once, posted to
+ * the room once its note saves (the chat shows that note, NoteBubble), and
+ * taken out with a toast if it doesn't. `wait` within 2 s of your last
+ * message. */
 export function useSendPassage(materialId: string) {
   const createNote = useCreateNote(materialId);
-  return async (passage: PendingPassage, text: string): Promise<"sent" | "wait" | "failed"> => {
+  return (passage: PendingPassage, text: string): "sent" | "wait" => {
     const session = useRoomStore.getState().session;
-    if (!session?.chatReady()) return "wait";
-    try {
-      // In a group room, the note is the group's too (studygroup-spec §11).
-      const groupSlug = useRoomStore.getState().snapshot?.room.group?.slug;
-      await createNote.mutateAsync({
+    const id = session?.shareChat(text, { quote: passage.quote, label: passage.label });
+    if (!session || !id) return "wait";
+    // In a group room, the note is the group's too (studygroup-spec §11).
+    const groupSlug = useRoomStore.getState().snapshot?.room.group?.slug;
+    createNote
+      .mutateAsync({
         ranges: passage.ranges,
         content: { kind: "text", text: text.trim() },
         visibility: "public",
         ...(groupSlug && { groupSlug }),
-      });
-    } catch {
-      return "failed";
-    }
-    return session.sendChat(text, passage) ? "sent" : "wait";
+      })
+      .then(
+        (note) => session.sharedChat(id, note.id),
+        () => {
+          session.unshareChat(id);
+          showToast("Couldn’t share the passage. Check your connection and try again.");
+        },
+      );
+    return "sent";
   };
 }

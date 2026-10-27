@@ -106,6 +106,24 @@ describe("createChat", () => {
     expect(sent).toEqual([{ from: "me", text: "look", passage: { quote: "the veil", label: "Ch. I" } }]);
   });
 
+  test("a shared passage shows at once, and goes out with its note once saved", () => {
+    const { chat, sent, latest } = setup();
+    const id = chat.share("look", { quote: "the veil", label: "Ch. I" })!;
+    expect(sent).toEqual([]);
+    expect(latest().items).toMatchObject([{ id, text: "look", sending: true }]);
+    expect(chat.share("again", { quote: "x", label: "" })).toBeNull();
+    chat.shared(id, "note-1");
+    expect(sent).toEqual([{ from: "me", text: "look", passage: { quote: "the veil", label: "Ch. I", noteId: "note-1" } }]);
+    expect(latest().items).toMatchObject([{ id, sending: false, passage: { noteId: "note-1" } }]);
+  });
+
+  test("a shared passage whose note didn't save is taken out", () => {
+    const { chat, sent, latest } = setup();
+    chat.unshare(chat.share("look", { quote: "the veil", label: "Ch. I" })!);
+    expect(latest().items).toHaveLength(0);
+    expect(sent).toEqual([]);
+  });
+
   test("received messages count as unread until the chat is on screen", () => {
     const { chat, receive, latest } = setup();
     receive({ from: "ada", text: "one" });

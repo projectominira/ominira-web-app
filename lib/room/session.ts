@@ -254,9 +254,17 @@ export class RoomSession {
     return this.engine?.chat.send(text, passage) ?? false;
   }
 
-  /** Whether a message would be sent now (Share passage checks before saving its note). */
-  chatReady(): boolean {
-    return this.engine?.chat.ready() ?? false;
+  /** Your shared passage, in your chat at once while its note saves (chat.ts share). */
+  shareChat(text: string, passage: SharedPassage): string | null {
+    return this.engine?.chat.share(text, passage) ?? null;
+  }
+
+  sharedChat(id: string, noteId: string): void {
+    this.engine?.chat.shared(id, noteId);
+  }
+
+  unshareChat(id: string): void {
+    this.engine?.chat.unshare(id);
   }
 
   setChatViewing(viewing: boolean): void {

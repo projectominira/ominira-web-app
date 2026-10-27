@@ -108,8 +108,11 @@ export const EVENT_SCHEMAS = {
     from: id,
     text: z.string().trim().min(1).max(MAX_CHAT_LENGTH),
     /** Share passage (spec §1.4): the quote card. The note itself is saved
-     * through the notes API, so nothing here is stored. */
-    passage: z.object({ quote: z.string().min(1).max(MAX_QUOTE_LENGTH), label: z.string().max(200) }).optional(),
+     * through the notes API, so nothing here is stored; `noteId` is that
+     * note, which the chat shows as its NoteBubble. */
+    passage: z
+      .object({ quote: z.string().min(1).max(MAX_QUOTE_LENGTH), label: z.string().max(200), noteId: z.string().max(64).optional() })
+      .optional(),
   }),
   /** Coalesced taps, in tap order. */
   reaction: z.object({
