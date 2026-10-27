@@ -41,6 +41,8 @@ export const NOTIFICATION_POLICY: Record<NotificationKind, NotificationPolicy> =
   room_live: groupPush,
   target_reminder: groupPushEmail,
   streak_risk: { ...push, dedupe: true },
+  // No streak at stake, today started but unfinished; one a day.
+  goal_reminder: { ...push, dedupe: true },
   // Being tagged always reaches you, muted group or not.
   mention: { ...push, dedupe: true },
   group_post: groupPushEmail,

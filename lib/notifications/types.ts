@@ -14,6 +14,7 @@ export type NotificationKind =
   | "room_live"
   | "target_reminder"
   | "streak_risk"
+  | "goal_reminder"
   | "mention"
   | "group_post"
   | "book_changed"
