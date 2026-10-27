@@ -153,9 +153,12 @@ export function previewName(pseudonym: string): string {
 export const noteWords = (row: { content: unknown; kind: string }) =>
   (row.content as { text?: string } | null)?.text || (row.kind === "voice" ? "Voice note" : "");
 
-/** A row's preview of a note: its words, or what it is when it has none. */
-export const previewText = (row: { content: unknown; kind: string }) =>
-  (row.content as { text?: string } | null)?.text || (row.kind === "voice" ? "Voice note" : "Shared a passage");
+/** A row's preview of a note: its words, or what it is when it has none —
+ * a highlight is "Added a passage" while private (only its author sees it),
+ * "Shared a passage" once public. */
+export const previewText = (row: { content: unknown; kind: string; visibility: string }) =>
+  (row.content as { text?: string } | null)?.text ||
+  (row.kind === "voice" ? "Voice note" : row.visibility === "private" ? "Added a passage" : "Shared a passage");
 
 /** A row's preview line: "Ama: …" (or "You: …"), "Ama
  * replied: …", "Ama scheduled Ch. 4", or a milestone's own words. */

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { Copy, Headphones, Highlighter, MessageCircle, MessageSquareQuote, Share, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Eye, Headphones, Image as ImageIcon, Highlighter, MessageCircle, MessageSquareQuote, Share, Trash2 } from "lucide-react";
 import { useDockedHeight } from "@/app/components/useBottomDock";
 import { quoteForRanges } from "@/lib/reader/annotationSelection";
 import type { SelectionOverlay, SelectionState } from "@/lib/reader/useTextAnnotations";
@@ -28,12 +28,14 @@ export function useNarrowViewport() {
 
 /**
  * The selection menu for every reader (EPUB, PDF, DOCX, web article) — the
- * one place its actions are defined: Highlight, Note, Copy, Listen, Share,
- * Share to room, Delete. Also the signed-out / couldn't-save prompts that
- * replace it in place.
+ * one place its actions are defined: Highlight (private), Add note, Copy,
+ * Listen, Share…, Delete. Share… swaps the list in place for Share publicly,
+ * Share in live room and Share as image, with a Back row. Also the
+ * signed-out / couldn't-save prompts that replace it in place.
  *
- * Listen shows only when the reader passes `onListenFrom`; Share to room only
- * while the reader is in this material's room; Delete only on an existing mark.
+ * Listen shows only when the reader passes `onListenFrom`; Share in live room
+ * only while the reader is in this material's room; Share publicly until
+ * your mark is public; Delete only on an existing mark.
  */
 export default function SelectionActions({
   materialId,
@@ -44,6 +46,8 @@ export default function SelectionActions({
   hasExistingAnnotation,
   onHighlight,
   onNote,
+  canSharePublicly,
+  onSharePublicly,
   onDelete,
   onDismiss,
   onDismissOverlay,
@@ -60,6 +64,10 @@ export default function SelectionActions({
   hasExistingAnnotation: boolean;
   onHighlight: () => void;
   onNote: () => void;
+  /** False once your mark here is already public. */
+  canSharePublicly: boolean;
+  /** Makes your highlight public — the room and your group see it. */
+  onSharePublicly: () => void;
   onDelete: () => void;
   onDismiss: () => void;
   onDismissOverlay: () => void;
@@ -76,15 +84,49 @@ export default function SelectionActions({
   const isMobile = useNarrowViewport();
   const shareToRoom = useShareToRoom(materialId);
   const [copied, setCopied] = useState(false);
+  // The selection the Share options are open for — a new selection opens on
+  // the main list again.
+  const [sharingFor, setSharingFor] = useState<SelectionState | null>(null);
 
   const iconSize = isMobile ? 18 : 14;
   const items = (): Item[] => {
     if (!selection) return [];
     const { ranges } = selection;
     const quote = () => quoteForRanges(ranges, getPassageText);
+    if (sharingFor === selection) {
+      return [
+        { key: "back", icon: <ArrowLeft size={iconSize} />, label: "Back", onClick: () => setSharingFor(null) },
+        ...(canSharePublicly
+          ? [{ key: "public", icon: <Eye size={iconSize} />, label: "Share publicly", onClick: onSharePublicly }]
+          : []),
+        ...(shareToRoom
+          ? [
+              {
+                key: "room",
+                icon: <MessageSquareQuote size={iconSize} />,
+                label: "Share in live room",
+                onClick: () => {
+                  shareToRoom({ ranges, quote: quote(), label: locationLabel(ranges[0].passageId) });
+                  onSharedToRoom();
+                  onDismiss();
+                },
+              },
+            ]
+          : []),
+        {
+          key: "image",
+          icon: <ImageIcon size={iconSize} />,
+          label: "Share as image",
+          onClick: () => {
+            onShare(quote());
+            onDismiss();
+          },
+        },
+      ];
+    }
     return [
       { key: "highlight", icon: <Highlighter size={iconSize} />, label: "Highlight", onClick: onHighlight },
-      { key: "note", icon: <MessageCircle size={iconSize} />, label: "Note", onClick: onNote },
+      { key: "note", icon: <MessageCircle size={iconSize} />, label: "Add note", onClick: onNote },
       {
         key: "copy",
         icon: <Copy size={iconSize} />,
@@ -111,29 +153,7 @@ export default function SelectionActions({
             },
           ]
         : []),
-      {
-        key: "share",
-        icon: <Share size={iconSize} />,
-        label: "Share",
-        onClick: () => {
-          onShare(quote());
-          onDismiss();
-        },
-      },
-      ...(shareToRoom
-        ? [
-            {
-              key: "room",
-              icon: <MessageSquareQuote size={iconSize} />,
-              label: "Share to room",
-              onClick: () => {
-                shareToRoom({ ranges, quote: quote(), label: locationLabel(ranges[0].passageId) });
-                onSharedToRoom();
-                onDismiss();
-              },
-            },
-          ]
-        : []),
+      { key: "share", icon: <Share size={iconSize} />, label: "Share…", onClick: () => setSharingFor(selection) },
       ...(hasExistingAnnotation
         ? [{ key: "delete", icon: <Trash2 size={iconSize} />, label: "Delete", onClick: async () => {
           if (await confirmAction(DELETE_ANNOTATION)) onDelete();

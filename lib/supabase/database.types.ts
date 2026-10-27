@@ -934,10 +934,10 @@ export type Database = {
       reading_comrades: { Args: { reader: string; max_rows?: number }; Returns: { reader_id: string; shared: number }[] };
       /** migrations/20261101_mention_comrades.sql — the tag picker before a name is typed. */
       mention_comrades: { Args: { reader: string; max_rows?: number }; Returns: { reader_id: string; score: number }[] };
-      /** migrations/20261122_book_rooms_replies.sql — Home's rooms column. */
+      /** migrations/20261130_book_rooms_visibility.sql — Home's rooms column. */
       book_rooms: {
         Args: { reader: string | null };
-        Returns: { material_id: string; author: string; kind: "citation" | "text" | "link" | "video" | "book_share" | "voice"; content: Json; created_at: string; reply: boolean; unread: number }[];
+        Returns: { material_id: string; author: string; kind: "citation" | "text" | "link" | "video" | "book_share" | "voice"; content: Json; visibility: "public" | "private"; created_at: string; reply: boolean; unread: number }[];
       };
       /** migrations/20261110_book_rooms.sql — readers per book, the day's and now. */
       book_readers: { Args: { day_since: string; now_since: string; reader: string | null }; Returns: { material_id: string; day: number; now: number }[] };

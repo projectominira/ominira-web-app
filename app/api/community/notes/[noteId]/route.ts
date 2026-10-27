@@ -7,6 +7,7 @@ import { enrichFeedItems } from "@/lib/community/feed";
 import { canReadPost } from "@/lib/community/visibility";
 import { loadPostViewer } from "@/lib/community/viewer";
 import { isModerator } from "@/lib/groups/membership";
+import { readerGroupsWithBook } from "@/lib/groups/books";
 import { officialReaderIds, pagePassages } from "@/lib/rooms/passage";
 import { toRoomNote } from "@/lib/rooms/timeline";
 import type { NoteThread } from "@/lib/rooms/types";
@@ -66,7 +67,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ no
 
   const { noteId } = await params;
   const admin = getSupabaseAdminClient();
-  const { data: existing } = await admin.from("posts").select("reader_id, kind").eq("id", noteId).maybeSingle();
+  const { data: existing } = await admin
+    .from("posts")
+    .select("reader_id, kind, material_id, group_id, parent_id, thread_type")
+    .eq("id", noteId)
+    .maybeSingle();
   if (!existing) return notFound();
   if (existing.reader_id !== reader.readerId) return forbidden();
 
@@ -79,6 +84,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ no
   // which the posts_citation_requires_material check constraint rejects.
   if (body.content) Object.assign(update, contentToColumns(body.content, existing.kind as PostKind));
   if (body.visibility) update.visibility = body.visibility;
+  // Made public, a book note with no group goes to the author's group as
+  // if it had been posted public (routeNote) — so a private highlight
+  // reaches the group only once it's shared publicly.
+  if (body.visibility === "public" && !existing.group_id && !existing.parent_id && existing.thread_type === "note" && existing.material_id) {
+    update.group_id = (await readerGroupsWithBook(reader.readerId, existing.material_id))[0]?.id ?? null;
+  }
 
   const { data, error } = await admin.from("posts").update(update).eq("id", noteId).select("*").single();
   if (error || !data) return validationError("Could not update note.");
@@ -93,7 +104,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ n
 
   const { noteId } = await params;
   const admin = getSupabaseAdminClient();
-  const { data: existing } = await admin.from("posts").select("reader_id, material_id, group_id").eq("id", noteId).maybeSingle();
+  const { data: existing } = await admin.from("posts").select("reader_id, material_id, group_id, kind").eq("id", noteId).maybeSingle();
   if (!existing) return notFound();
   // The author, or a moderator of the group it was posted in (Remove note,
   // spec §3.2 Pin).
@@ -112,8 +123,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ n
   // was only ever attached to this one post would otherwise sit orphaned in
   // `materials` forever. Only clean it up when it's this reader's own
   // personal upload and no other post still points at it; a catalog book or
-  // a material shared by another post is left untouched.
-  if (existing.material_id) {
+  // a material shared by another post is left untouched. Only for a post
+  // that *attached* the upload (book_share) — a note or highlight on a book
+  // never takes the book with it.
+  if (existing.material_id && existing.kind === "book_share") {
     const { data: material } = await admin
       .from("materials")
       .select("id, slug, uploaded_by")

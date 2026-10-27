@@ -151,7 +151,8 @@ export async function POST(request: Request) {
   const isReply = !!body.parentId;
   const isDiscussion = !isReply && body.threadType === "discussion";
   // Only a note on a line can go without words: that's a highlight.
-  if (body.content.kind === "text" && !body.content.text.trim() && (isReply || isDiscussion || !body.ranges?.length)) {
+  const wordless = body.content.kind === "text" && !body.content.text.trim();
+  if (wordless && (isReply || isDiscussion || !body.ranges?.length)) {
     return validationError("Write something first.", "content");
   }
 
@@ -188,11 +189,11 @@ export async function POST(request: Request) {
   // A note on a book with no group named (the reader, the book room) is
   // routed by the lock alone (rooms-spec §5.3): public, and also in the
   // author's group when its list has the book; locked is private, with no
-  // group and no tags.
+  // group and no tags. A highlight is locked unless asked public.
   const route =
     !isReply && !isDiscussion && !group && material
       ? routeNote({
-          locked: body.visibility === "private",
+          locked: wordless ? body.visibility !== "public" : body.visibility === "private",
           mentionIds: requestedMentions,
           groupsWithBook: (await readerGroupsWithBook(reader.readerId, material.id)).map((g) => g.id),
         })

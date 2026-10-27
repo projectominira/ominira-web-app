@@ -80,6 +80,8 @@ export function useDocumentAnnotations({
     highlightSelection,
     noteFromSelection,
     hasExistingAnnotation,
+    shareSelectionPublicly,
+    canSharePublicly,
     deleteSelection,
     closeNotesPanel,
     onNoteMarkerClick,
@@ -130,6 +132,8 @@ export function useDocumentAnnotations({
         locationLabel={(block) => locate(block)?.label ?? ""}
         hasExistingAnnotation={hasExistingAnnotation}
         onHighlight={highlightSelection}
+        canSharePublicly={canSharePublicly}
+        onSharePublicly={shareSelectionPublicly}
         onNote={noteFromSelection}
         onDelete={deleteSelection}
         onDismiss={dismissSelection}

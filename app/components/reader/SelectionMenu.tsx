@@ -13,8 +13,8 @@ type Props = {
    * on screen. Unused on mobile (see isMobile below), which anchors to the
    * bottom of the screen instead regardless of where the selection is. */
   anchor: SelectionAnchor;
-  /** On mobile this renders as a bar pinned to the bottom of the screen
-   * instead of a pill floating above the selection — iOS's own native
+  /** On mobile this renders as a vertical list pinned to the bottom of the
+   * screen, one row per action, instead of a pill floating above the selection — iOS's own native
    * selection callout (Copy/Look Up/Translate) always centers itself
    * directly above the selection, and there's no supported way to suppress
    * that native UI on a regular web page, so a floating pill there just
@@ -65,11 +65,13 @@ const VIEWPORT_MARGIN = 8;
  * Two layouts, picked via isMobile (see the Props doc above for why):
  * desktop floats a pill above/below the selection (measure-then-place,
  * since its width varies with which actions are showing); mobile is a
- * fixed bottom bar, position independent of the selection entirely.
+ * vertical list fixed to the bottom, position independent of the selection.
  */
 export default function SelectionMenu({ anchor, isMobile, bottomOffsetPx, theme, items, override, onDismiss }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; flipped: boolean } | null>(null);
+  // Re-measure when the actions change (Share… swaps the list in place).
+  const itemKeys = items.map((item) => item.key).join(",");
 
   useLayoutEffect(() => {
     if (isMobile) return;
@@ -93,7 +95,7 @@ export default function SelectionMenu({ anchor, isMobile, bottomOffsetPx, theme,
     top = Math.max(top, VIEWPORT_MARGIN);
 
     setPos({ top, left, flipped });
-  }, [isMobile, anchor]);
+  }, [isMobile, anchor, itemKeys]);
 
   // Tapping anywhere that isn't the pill itself and isn't inside a reading
   // section dismisses it — content-area taps already end the selection via
@@ -128,16 +130,16 @@ export default function SelectionMenu({ anchor, isMobile, bottomOffsetPx, theme,
         className={
           override
             ? "reader-menu-in fixed inset-x-0 z-30 select-none no-callout p-3"
-            : "reader-menu-in fixed inset-x-0 z-30 flex items-stretch justify-around select-none no-callout"
+            : "reader-menu-in fixed inset-x-0 z-30 flex flex-col max-h-[60vh] overflow-y-auto py-1 select-none no-callout"
         }
       >
         {override ??
-          items.map((item) => (
+          items.map((item, i) => (
             <button
               key={item.key}
               onClick={item.onClick}
-              style={{ color: item.danger ? DANGER_COLOR : fg }}
-              className="flex-1 flex flex-col items-center justify-center gap-1 bg-transparent border-none py-2.5 cursor-pointer text-[11px] font-semibold"
+              style={{ color: item.danger ? DANGER_COLOR : fg, borderTop: i > 0 ? `1px solid ${divider}` : "none" }}
+              className="flex items-center gap-3 bg-transparent border-x-0 border-b-0 px-5 py-3 cursor-pointer text-left text-sm font-semibold"
             >
               {item.icon}
               {item.label}

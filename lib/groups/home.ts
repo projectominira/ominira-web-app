@@ -115,7 +115,7 @@ export async function homeGroups(readerId: string | null): Promise<GroupCardView
         const [post, event, milestone] = await Promise.all([
           admin
             .from("posts")
-            .select("reader_id, kind, content, created_at, parent_id")
+            .select("reader_id, kind, content, visibility, created_at, parent_id")
             .or(visible)
             .or(groupPostScope(id, membersOf.get(id) ?? [], booksOf.get(id) ?? []))
             .order("created_at", { ascending: false })

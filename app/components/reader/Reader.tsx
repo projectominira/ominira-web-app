@@ -135,6 +135,8 @@ export default function Reader({
     highlightSelection,
     noteFromSelection,
     hasExistingAnnotation,
+    shareSelectionPublicly,
+    canSharePublicly,
     deleteSelection,
     onNoteMarkerClick,
     closeNotesPanel,
@@ -1069,6 +1071,8 @@ export default function Reader({
               locationLabel={(passageId) => locateFeedEntry(passageId)?.label ?? ""}
               hasExistingAnnotation={hasExistingAnnotation}
               onHighlight={highlightSelection}
+              canSharePublicly={canSharePublicly}
+              onSharePublicly={shareSelectionPublicly}
               onNote={() => {
                 noteFeed.close();
                 noteFromSelection();

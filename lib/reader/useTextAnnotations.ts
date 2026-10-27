@@ -4,7 +4,7 @@ import { sameRanges, type Annotation } from "@/stores/library-store";
 import { useSessionStore } from "@/stores/session-store";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useAnnotations } from "./useAnnotations";
-import { useCreateNote, useDeleteNote } from "@/lib/community/useNoteMutations";
+import { useCreateNote, useDeleteNote, useUpdateNote } from "@/lib/community/useNoteMutations";
 import { topLevelNotes } from "./noteThread";
 import type { SelectionAnchor, TextSelection } from "@/lib/annotations/useTextSelection";
 
@@ -17,6 +17,15 @@ export type SelectionState = TextSelection;
  * why a click target is wrong for a row that isn't backed by anything real
  * yet). */
 export const PENDING_ANNOTATION_ID = "pending-selection";
+
+/** Your own top-level mark on a span: the highlight first, else a note you
+ * wrote there. */
+function ownMark(existing: Annotation | undefined, readerId: string | null) {
+  return (
+    existing?.notes.find((n) => n.id === existing.highlightId) ??
+    existing?.notes.find((n) => !n.parentId && n.author.readerId === readerId)
+  );
+}
 
 /** The synthetic id of a jumped-to quote with no mark of its own in this
  * reader's text (someone else's highlight) — see `flash` below. */
@@ -66,6 +75,7 @@ export function useTextAnnotations(materialId: string) {
   const { annotationsByPassage, allAnnotations } = useAnnotations(materialId);
   const createNote = useCreateNote(materialId);
   const deleteNote = useDeleteNote(materialId);
+  const updateNote = useUpdateNote(materialId);
   const isAuthenticated = useIsAuthenticated();
   const readerId = useSessionStore((s) => s.readerId);
 
@@ -101,7 +111,8 @@ export function useTextAnnotations(materialId: string) {
   // click-to-cancel menu on marked text). A span you've already written on
   // is already yours, so there's nothing to add. existing.highlightId is
   // that empty note's own id — existing.id is the grouped view's
-  // deterministic range-derived key, not a real row id.
+  // deterministic range-derived key, not a real row id. A highlight is
+  // private: only Share publicly (below) puts it in the room and group.
   const highlightSelection = useCallback(() => {
     if (!selection) return;
     const { ranges, anchor } = selection;
@@ -114,9 +125,26 @@ export function useTextAnnotations(materialId: string) {
     const onError = () => setOverlay({ anchor, kind: "error" });
     if (existing?.highlightId) deleteNote.mutate(existing.highlightId, { onError });
     else if (!existing?.notes.some((n) => !n.parentId && n.author.readerId === readerId))
-      createNote.mutate({ ranges, content: { kind: "text", text: "" } }, { onError });
+      createNote.mutate({ ranges, content: { kind: "text", text: "" }, visibility: "private" }, { onError });
     setSelection(null);
   }, [selection, getForPassage, deleteNote, createNote, isAuthenticated, readerId]);
+
+  // Makes your mark at the selection public, or highlights it publicly when
+  // there's none yet.
+  const shareSelectionPublicly = useCallback(() => {
+    if (!selection) return;
+    const { ranges, anchor } = selection;
+    if (!isAuthenticated) {
+      setOverlay({ anchor, kind: "auth" });
+      setSelection(null);
+      return;
+    }
+    const onError = () => setOverlay({ anchor, kind: "error" });
+    const mark = ownMark(getForPassage(ranges[0].passageId).find((a) => sameRanges(a.ranges, ranges)), readerId);
+    if (mark) updateNote.mutate({ noteId: mark.id, visibility: "public" }, { onError });
+    else createNote.mutate({ ranges, content: { kind: "text", text: "" }, visibility: "public" }, { onError });
+    setSelection(null);
+  }, [selection, getForPassage, updateNote, createNote, isAuthenticated, readerId]);
 
   // Adding a note always inserts a brand-new, independent note row — there
   // is no shared parent object to find-or-create, so a re-selection of an
@@ -230,6 +258,9 @@ export function useTextAnnotations(materialId: string) {
     highlightSelection,
     noteFromSelection,
     hasExistingAnnotation: Boolean(existingForSelection),
+    shareSelectionPublicly,
+    /** False once your mark here is already public. */
+    canSharePublicly: ownMark(existingForSelection, readerId)?.visibility !== "public",
     deleteSelection,
     onNoteMarkerClick,
     closeNotesPanel,
