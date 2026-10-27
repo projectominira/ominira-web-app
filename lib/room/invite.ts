@@ -7,7 +7,6 @@ import { MATERIAL_SUMMARY_COLUMNS } from "@/lib/materials/columns";
 import { toMaterialSummary } from "@/lib/materials/summary";
 import { existingReaders } from "@/lib/community/mentions";
 import { notifyReaders } from "@/lib/notifications/notify";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { comradesById } from "@/lib/rooms/comrades";
 import { roomTitle } from "@/lib/room/title";
 import type { RoomInfo, RoomInvite } from "@/lib/room/types";
@@ -52,7 +51,7 @@ export function inviteReaders(room: Pick<RoomInfo, "id" | "materialId" | "bookTi
         {
           kind: "room_live",
           title: `${room.bookTitle} is live`,
-          body: `${comradeName(starter.data.pseudonym)} started a reading room. Join in.`,
+          body: `${starter.data.pseudonym} started a reading room. Join in.`,
           url: `/room/${room.id}`,
           tag: `room-${room.id}`,
           actorReaderId: starterId,
@@ -99,7 +98,7 @@ export async function roomInvite(roomId: string): Promise<RoomInvite | null> {
     title: roomTitle(room.title, book.title),
     live,
     members: members?.data ?? 0,
-    host: host ? comradeName(host.pseudonym) : null,
+    host: host?.pseudonym ?? null,
     hostId: room.started_by,
     people: faces.flatMap((id) => comrades.get(id) ?? []),
     materialId: book.id,
@@ -131,7 +130,7 @@ export async function inviteToRoom(roomId: string, actorId: string, readerIds: s
     admin.from("readers").select("pseudonym").eq("id", actorId).maybeSingle(),
   ]);
   if (book.error) throw book.error;
-  const who = actor.data?.pseudonym ? comradeName(actor.data.pseudonym) : "A comrade";
+  const who = actor.data?.pseudonym || "A comrade";
   await notifyReaders(tagged, {
     kind: "room_live",
     title: `${who} invited you to a reading room`,

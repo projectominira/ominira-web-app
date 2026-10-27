@@ -1,12 +1,9 @@
 "use client";
 
-import { serialized } from "@/lib/bookmarks/serialize";
-import { showToast } from "@/stores/toast-store";
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api/client";
 import { materialKeys } from "@/lib/materials/queryKeys";
 import { communityKeys } from "@/lib/community/queryKeys";
-import { bookmarkKeys } from "@/lib/bookmarks/useBookmarks";
 import { makeTempId } from "@/lib/api/optimisticId";
 import { useProfile } from "@/lib/auth/useProfile";
 import { useSessionStore } from "@/stores/session-store";
@@ -206,7 +203,6 @@ export function useCreateNote(materialId: string | null) {
         visibility: input.visibility ?? "public",
         reactionCount: 0,
         reactedByMe: false,
-        bookmarkedByMe: false,
         group: null,
         mentions: [],
         createdAt: now,
@@ -327,53 +323,6 @@ export function useToggleReaction(materialId: string | null) {
     onSuccess: (result, noteId) => {
       cache.set((old) => old.map((n) => (n.id === noteId ? { ...n, ...result } : n)));
       invalidateFanoutQueries(queryClient, materialId);
-    },
-  });
-}
-
-/** `POST /api/bookmarks` for a post — useToggleReaction's private twin,
- * and deliberately its exact shape (optimistic flip in this material's own
- * note list plus both feeds, invalidate-and-refetch on failure) rather
- * than anything cleverer: the two controls sit side by side in the same
- * action row, so they have to feel identical under the same flaky network.
- *
- * Unlike the reaction, this also invalidates the Saved shelf — a post
- * bookmarked here has to appear (or vanish) there, and reconstructing its
- * full FeedItem client-side to insert by hand isn't worth it for a list
- * the reader usually isn't looking at. */
-const NOTE_BOOKMARK_MUTATION_KEY = ["bookmarks", "toggle-note"] as const;
-
-/** Same optimistic + idempotent + serialized scheme as
- * useToggleMaterialBookmark (see its doc comment): the caller passes the
- * state it wants, the toast and every cache flip happen immediately, and only
- * the last in-flight request reconciles. */
-export function useToggleNoteBookmark(materialId: string | null) {
-  const queryClient = useQueryClient();
-  const cache = localNotesCache(queryClient, materialId);
-  return useMutation({
-    mutationKey: NOTE_BOOKMARK_MUTATION_KEY,
-    mutationFn: ({ noteId, bookmarked }: { noteId: string; bookmarked: boolean }) =>
-      serialized(`post:${noteId}`, () =>
-        apiFetch<{ bookmarked: boolean }>("/bookmarks", { json: { targetType: "post", targetId: noteId, bookmarked } })
-      ),
-    onMutate: async ({ noteId, bookmarked }) => {
-      showToast(bookmarked ? "Saved to bookmark" : "Removed from bookmark");
-      await cache.cancel();
-      await queryClient.cancelQueries({ queryKey: communityKeys.feedPrefix });
-      if (materialId) await queryClient.cancelQueries({ queryKey: materialKeys.notesFeedPrefix(materialId) });
-      const patch = { bookmarkedByMe: bookmarked };
-      cache.set((old) => old.map((n) => (n.id === noteId ? { ...n, ...patch } : n)));
-      updateNoteInFeeds(queryClient, materialId, noteId, patch);
-    },
-    onError: (_err, { noteId, bookmarked }) => {
-      showToast("Couldn't update bookmark");
-      const patch = { bookmarkedByMe: !bookmarked };
-      cache.set((old) => old.map((n) => (n.id === noteId ? { ...n, ...patch } : n)));
-      updateNoteInFeeds(queryClient, materialId, noteId, patch);
-    },
-    onSettled: () => {
-      if (queryClient.isMutating({ mutationKey: NOTE_BOOKMARK_MUTATION_KEY }) > 1) return;
-      queryClient.invalidateQueries({ queryKey: bookmarkKeys.saved("post") });
     },
   });
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown, Headphones } from "lucide-react";
-import { listNames, personName, shortName } from "@/lib/rooms/names";
+import { listNames, shortName } from "@/lib/rooms/names";
 import type { RepliedNote, RoomItem } from "@/lib/rooms/types";
 import RoomAvatar from "./RoomAvatar";
 
@@ -23,7 +23,7 @@ export default function SystemLine({ item, defaultOpen = false }: { item: Line; 
         <div className={`flex max-w-[92%] items-center gap-1.5 rounded-pill-sm px-3 py-1.25 text-center text-pretty ${PILL}`}>
           <Headphones size={13} {...ICON} className="flex-none" />
           <span>
-            {item.actor && <b className={WHO}>{personName(item.actor)} </b>}
+            {item.actor && <b className={WHO}>{item.actor} </b>}
             {item.text}
           </span>
         </div>
@@ -33,7 +33,7 @@ export default function SystemLine({ item, defaultOpen = false }: { item: Line; 
   return (
     <div className="flex justify-center">
       <div className={`max-w-[88%] rounded-pill-sm px-3 py-1.25 text-center text-pretty ${PILL}`}>
-        {item.actor && <b className={WHO}>{personName(item.actor)} </b>}
+        {item.actor && <b className={WHO}>{item.actor} </b>}
         {item.text}
         {item.em && (
           <>
@@ -76,7 +76,7 @@ function Joins({ item, defaultOpen }: { item: Extract<RoomItem, { t: "joins" }>;
         <div className="flex max-w-[92%] flex-wrap justify-center gap-1">
           {comrades.map((c) => (
             <span key={c.readerId} className={`rounded-full px-2.5 py-0.75 ${PILL}`}>
-              <b className={WHO}>{personName(c.pseudonym)}</b> joined
+              <b className={WHO}>{c.pseudonym}</b> joined
             </span>
           ))}
         </div>
@@ -101,14 +101,16 @@ export function UnreadDivider({ count }: { count: number }) {
   return (
     <div data-anchor="unread" className="-mx-3 flex items-center gap-2.5 bg-brand-50 px-3 py-1.75">
       <span className="h-px flex-1 bg-brand-200" />
-      <span className="font-sans text-[11px]/none font-extrabold tracking-eyebrow text-brand-700 uppercase">{count} new since you left</span>
+      <span className="font-sans text-[11px]/none font-extrabold tracking-eyebrow text-brand-700 uppercase">
+        {count} new message{count === 1 ? "" : "s"}
+      </span>
       <span className="h-px flex-1 bg-brand-200" />
     </div>
   );
 }
 
 /** A note with comrades' replies since you last read the room, at the
- * bottom wherever the note is: "Comrade Tolu and 1 other replied to your
+ * bottom wherever the note is: "Tolu and 1 other replied to your
  * note “I read it…” · 2 new". Tapping goes to the note. */
 export function RepliedLine({ replied: r, viewerId, onOpen }: { replied: RepliedNote; viewerId: string | null; onOpen: () => void }) {
   const [first, second] = r.repliers.map((c) => shortName(c.pseudonym));

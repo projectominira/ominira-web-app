@@ -7,7 +7,6 @@ import NoResults from "@/app/components/shared/NoResults";
 import BookCover from "@/app/components/shared/BookCover";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import { useReaderRoomHead } from "@/lib/rooms/hooks";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import type { FeedEntry, FeedLocator } from "@/lib/reader/annotationFeed";
 import type { FeedItem, FeedTab } from "@/lib/reader/useFeed";
 import type { AnnotationRange, Note } from "@/lib/api/types";
@@ -276,7 +275,7 @@ export default function FeedPanel({
             >
               <ReaderAvatar pseudonym={focusedAuthor.author.pseudonym} avatar={focusedAuthor.author.avatar} size={26} />
               <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--reader-text-muted)]">
-                <span className="font-semibold text-[var(--reader-text)]">{comradeName(focusedAuthor.author.pseudonym)}</span>
+                <span className="font-semibold text-[var(--reader-text)]">{focusedAuthor.author.pseudonym}</span>
                 {" · "}
                 {notesLabel(focusedAuthor.count)}
               </span>

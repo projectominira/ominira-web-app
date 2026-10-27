@@ -3,10 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useReaderProfile, type ReaderProfilePage } from "@/lib/reader/useReaderProfile";
-import { comradeName } from "@/lib/reader/authorDisplay";
+import { useProfileNoteActions, useReaderProfile, type ReaderProfilePage } from "@/lib/reader/useReaderProfile";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
-import { resolveBookThumbnailSrc } from "@/lib/materials/image";
 import { communityFeedItemHref } from "@/lib/community/useCommunityFeed";
 import type { MaterialSummary } from "@/lib/api/types";
 import Loader from "@/app/components/Loader";
@@ -15,7 +13,10 @@ import DetailHeader from "@/app/components/shared/DetailHeader";
 import NoResults from "@/app/components/shared/NoResults";
 import BookListRow from "@/app/components/shell/BookListRow";
 import QuoteCard from "@/app/components/reader/notes/QuoteCard";
-import NoteCard from "@/app/components/reader/notes/NoteCard";
+import NoteBubble from "@/app/components/rooms/NoteBubble";
+import { quoteReaderHref } from "@/app/components/rooms/PassageQuote";
+import { useNow } from "@/lib/time/useNow";
+import { useSessionStore } from "@/stores/session-store";
 
 type Tab = "posts" | "highlights";
 // A visitor still gets the tab bar, just with the one tab they're allowed to
@@ -38,7 +39,7 @@ function ProfileIdentity({ reader, isSelf }: { reader: ReaderProfilePage["reader
       <ReaderAvatar pseudonym={reader.pseudonym} avatar={reader.avatar} size={64} />
       <div className="flex min-w-0 flex-col gap-1">
         <h1 className="m-0 truncate text-[15px] font-semibold text-[var(--reader-text)]">
-          {comradeName(reader.pseudonym)}
+          {reader.pseudonym}
         </h1>
         {reader.city && reader.country && (
           <span className="text-[13px] font-medium text-[var(--reader-text-muted)]">
@@ -99,29 +100,31 @@ function BookSection({ title, items, emptyText }: { title: string; items: Materi
   );
 }
 
-function PostsList({ items, emptyText }: { items: ReaderProfilePage["publicNotes"]; emptyText: string }) {
+/** Their notes in the one NoteBubble every room and /note/[id] use, each
+ * with its book ("in {book}"): react, reply and delete as there. */
+function PostsList({ slug, items, emptyText }: { slug: string; items: ReaderProfilePage["publicNotes"]; emptyText: string }) {
+  const router = useRouter();
+  const viewerId = useSessionStore((s) => s.readerId);
+  const now = useNow();
+  const { heart, reply, del } = useProfileNoteActions(slug);
   if (items.length === 0) return <NoResults className="mt-4 mb-0" message={emptyText} />;
+  const go = (href: string | null) => href && router.push(href);
   return (
-    <div className="flex flex-col">
-      {items.map((item) => (
-        <NoteCard
-          key={item.note.id}
-          materialId={item.material?.id ?? null}
-          note={item.note}
-          replies={item.replies}
-          excerpt={item.excerpt}
-          {...(item.material
-            ? {
-                bookContext: {
-                  href: communityFeedItemHref(item) ?? "",
-                  title: item.material.title,
-                  author: item.material.author,
-                  section: item.label ?? undefined,
-                  coverUrl: resolveBookThumbnailSrc(item.material),
-                  materialType: item.material.materialType,
-                },
-              }
-            : {})}
+    <div className="flex flex-col gap-4 pt-4">
+      {items.map((n) => (
+        <NoteBubble
+          key={n.note.id}
+          note={n}
+          viewerId={viewerId}
+          now={now}
+          showBook
+          handlers={{
+            onReact: (replyId) => viewerId && heart.mutate({ noteId: replyId ?? n.note.id, rootId: n.note.id }),
+            onReply: viewerId ? (r, to) => void reply(n.note.id, r, to, n.note.ranges) : undefined,
+            onDelete: viewerId ? (replyId) => del.mutate({ noteId: replyId ?? n.note.id, rootId: n.note.id }) : undefined,
+          }}
+          onPassage={() => go(quoteReaderHref(n))}
+          onBook={() => go(communityFeedItemHref(n))}
         />
       ))}
     </div>
@@ -190,7 +193,7 @@ export default function ReaderProfileView({ slug }: { slug: string }) {
   }
 
   const { reader, isSelf, stats, currentlyReading, publicNotes, highlights, contributions } = data;
-  const displayName = comradeName(reader.pseudonym);
+  const displayName = reader.pseudonym;
 
   return (
     <div className="pb-12 shell:mx-auto shell:max-w-4xl">
@@ -214,6 +217,7 @@ export default function ReaderProfileView({ slug }: { slug: string }) {
       </div>
       {tab === "posts" ? (
         <PostsList
+          slug={slug}
           items={publicNotes}
           emptyText={
             isSelf

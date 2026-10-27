@@ -100,10 +100,6 @@ export type Note = {
   visibility: NoteVisibility;
   reactionCount: number;
   reactedByMe: boolean;
-  /** Whether the caller has saved this post (migrations/20261003_bookmarks
-   * .sql). No matching count: unlike a reaction, a bookmark is private, so
-   * there's no public total to carry. False for a signed-out caller. */
-  bookmarkedByMe: boolean;
   /** The group it was posted from (studygroup-spec.md §4.5): Community
    * notes label it "· Sankara Study Circle". Null for every other post. */
   group: { slug: string; name: string } | null;

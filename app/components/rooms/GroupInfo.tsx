@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { Bell, BellOff } from "lucide-react";
 import CalendarLeaf from "@/app/components/shared/CalendarLeaf";
 import { scheduleLine } from "@/lib/rooms/cards";
-import { personName } from "@/lib/rooms/names";
 import type { MemberRow as Member, ReadingListRow, RoomSession } from "@/lib/rooms/types";
 import CoverStatus from "@/app/components/groups/CoverStatus";
 import ReadingProgress from "@/app/components/shared/ReadingProgress";
@@ -108,7 +107,7 @@ export function MemberRow({ member }: { member: Member }) {
       <RoomAvatar comrade={comrade} size={36} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-center gap-1.5">
-          <span className="text-ui-sm font-bold">{personName(comrade.pseudonym)}</span>
+          <span className="text-ui-sm font-bold">{comrade.pseudonym}</span>
           {role && <span className="rounded-xs bg-[var(--color-app-chip)] px-1.5 py-px font-sans text-[10px]/[1.4] font-bold text-[var(--color-app-text-secondary)]">{role}</span>}
         </div>
         {member.pct !== undefined &&

@@ -63,7 +63,7 @@ export default function GroupRoom({
 }: {
   name: string;
   memberCount: number;
-  /** "Comrades Yeast, Muiz, You"; the count until it loads. */
+  /** "Yeast, Muiz, You"; the count until it loads. */
   members: string;
   aboutOpen: boolean;
   onAbout: () => void;

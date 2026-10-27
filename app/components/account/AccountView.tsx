@@ -18,7 +18,6 @@ import { useUpdateProfile } from "@/lib/auth/useUpdateProfile";
 import { useCheckAvailability } from "@/lib/auth/useCheckAvailability";
 import { errorMessage, fieldError } from "@/lib/api/client";
 import { pseudonymToSlug } from "@/lib/reader/profileSlug";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import type { ReaderProfile } from "@/lib/api/types";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import AvatarPicker from "@/app/components/account/AvatarPicker";
@@ -295,7 +294,7 @@ export default function AccountView() {
             <ReaderAvatar pseudonym={reader.pseudonym} avatar={reader.avatar} size={56} />
             <div className="min-w-0">
               <div className="truncate text-[15px] font-bold text-[var(--reader-text)]">
-                {comradeName(reader.pseudonym)}
+                {reader.pseudonym}
               </div>
               <div className="text-xs font-semibold text-[var(--reader-text-muted)] group-hover:text-brand-500">
                 View profile

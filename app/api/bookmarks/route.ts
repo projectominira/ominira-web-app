@@ -4,26 +4,11 @@ import { notFound, unauthorized, validationError } from "@/lib/api/errors";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { setBookmark, toggleBookmark, type BookmarkTarget } from "@/lib/bookmarks/store";
 
-const TARGETS: BookmarkTarget[] = ["material", "post"];
+const TARGETS: BookmarkTarget[] = ["material"];
 
-/** Which table each target type has to exist in before it can be saved.
- * bookmarks.target_id carries no FK (it spans both), so this existence
- * check is the only thing standing between a typo'd id and a permanent
- * blank row on someone's Saved shelf. */
-const TABLE_BY_TARGET: Record<BookmarkTarget, "materials" | "posts"> = {
-  material: "materials",
-  post: "posts",
-};
-
-/**
- * One route for both bookmarkable entities, unlike reactions (which are one
- * route per entity, nested under the thing being reacted to). The difference
- * is that a reaction route does entity-specific work either side of the
- * toggle — read the owner, push them a notification, re-read the
- * denormalized counter — while a bookmark is private and counterless, so
- * both types share literally every line here except which table the
- * existence check reads.
- */
+/** Saves or unsaves a book (only books are saveable). bookmarks.target_id
+ * carries no FK, so the existence check below is the only thing standing
+ * between a typo'd id and a blank row on someone's Saved shelf. */
 export async function POST(request: Request) {
   const reader = await getAuthenticatedReader(request);
   if (!reader) return unauthorized();
@@ -35,7 +20,7 @@ export async function POST(request: Request) {
   }
 
   const { data: target } = await getSupabaseAdminClient()
-    .from(TABLE_BY_TARGET[targetType])
+    .from("materials")
     .select("id")
     .eq("id", body.targetId)
     .maybeSingle();

@@ -6,7 +6,6 @@ import PulseDot from "@/app/components/shared/PulseDot";
 import { sessionPeople, shortWhen, targetRange } from "@/lib/rooms/cards";
 import { formatDay } from "@/lib/time/format";
 import type { GroupPin } from "@/lib/groups/types";
-import { personName } from "@/lib/rooms/names";
 import type { RoomSession, RoomTarget } from "@/lib/rooms/types";
 
 // The rows pinned under a room's header (rooms-spec §2, sheet #c5): what a
@@ -93,7 +92,7 @@ export default function PinnedBar({
   const rows: ReactNode[] = [];
   if (pin) {
     rows.push(
-      <PinRow key="pin" flush={flush} icon={<Pin {...ICON} className="flex-none text-[var(--color-app-brand)]" />} title={`Pinned · ${personName(pin.author)}`} sub={pin.text} onJump={onPin} onUnpin={onUnpin} />,
+      <PinRow key="pin" flush={flush} icon={<Pin {...ICON} className="flex-none text-[var(--color-app-brand)]" />} title={`Pinned · ${pin.author}`} sub={pin.text} onJump={onPin} onUnpin={onUnpin} />,
     );
   }
   if (target?.view.target) {

@@ -1,9 +1,9 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 
-/** The two things a reader can save (migrations/20261003_bookmarks.sql's own
- * check constraint). Widening this means widening that constraint too — the
- * DB is the real gate, this type just keeps callers honest. */
-export type BookmarkTarget = "material" | "post";
+/** What a reader can save: books only, since notes stopped being saveable
+ * (2026-10-27). The table's check constraint (migrations/20261003_bookmarks
+ * .sql) still allows "post"; this type is the gate now. */
+export type BookmarkTarget = "material";
 
 /**
  * Every write here used to `const { data } =` and drop the error on the
@@ -90,30 +90,6 @@ export async function setBookmark(
     assertOk(error, "delete");
   }
   return bookmarked;
-}
-
-/**
- * "Which of these did I save?" — the batch lookup hydrateNotes uses to fill
- * every note's `bookmarkedByMe` in one query for a whole feed page, exactly
- * as getReactedNoteIds does for `reactedByMe`.
- *
- * Empty set for a signed-out caller rather than a thrown error: nothing on a
- * public feed is gated on this, the flag just renders as "not saved".
- */
-export async function getBookmarkedIds(
-  readerId: string | undefined,
-  targetType: BookmarkTarget,
-  targetIds: string[]
-): Promise<Set<string>> {
-  if (!readerId || targetIds.length === 0) return new Set();
-  const { data, error } = await getSupabaseAdminClient()
-    .from("bookmarks")
-    .select("target_id")
-    .eq("target_type", targetType)
-    .eq("reader_id", readerId)
-    .in("target_id", targetIds);
-  assertOk(error, "batch lookup");
-  return new Set((data ?? []).map((row) => row.target_id));
 }
 
 /**

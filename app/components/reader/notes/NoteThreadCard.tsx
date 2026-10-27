@@ -9,7 +9,6 @@ import AuthorRow from "./AuthorRow";
 import NoteContent from "./NoteContent";
 import ReactionButton from "./ReactionButton";
 import ReplyButton from "./ReplyButton";
-import BookmarkButton from "@/app/components/shared/BookmarkButton";
 import NoteComposer from "./NoteComposer";
 import HighlightCard from "./HighlightCard";
 import EntryMenu from "./EntryMenu";
@@ -204,28 +203,6 @@ export default function NoteThreadCard({
               }}
             />
 
-            {/* ml-auto, not part of the react/reply cluster: those two are
-                what a reader does *to* the conversation, this is what they
-                do with it for themselves. Pushed to the row's trailing
-                edge so it reads as a separate, private act — and it stays
-                countless on purpose (see BookmarkButton), which is also
-                what keeps it from looking like a third social metric
-                sitting next to two real ones.
-
-                Hidden on your own post, same rule 1 BookListRow applies to
-                your own uploads: your posts are already collected on your
-                profile, so saving one is an offer to do something that's
-                already true. Unlike a book row this stays unconditionally
-                visible otherwise (rule 3) — a post has no detail page to
-                fall back to, so hover-reveal here would leave it
-                unsavable on touch entirely. */}
-            {!own && (
-              <BookmarkButton
-                saved={note.bookmarkedByMe}
-                onToggle={() => actions.toggleBookmark(note.id, note.bookmarkedByMe)}
-                className="ml-auto"
-              />
-            )}
           </div>
 
           {/* Mounts right here, under the root note's own action row — not

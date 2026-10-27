@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { SmilePlus } from "lucide-react";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { ROOM_REACTIONS } from "@/lib/room/events";
 import { useRoom } from "@/lib/room/hooks";
 import { useRoomStore } from "@/stores/room-store";
@@ -90,7 +89,7 @@ export function RisingReactions() {
           className="room-rise flex items-center gap-1.5 rounded-full border border-[var(--reader-border)] bg-[var(--reader-surface)] py-0.5 pr-2.5 pl-1.5 text-xs font-semibold whitespace-nowrap text-[var(--reader-text)] shadow-sm"
         >
           <span className="text-lg leading-none">{r.emoji}</span>
-          {comradeName(people?.[r.readerId]?.name ?? "comrade")}
+          {people?.[r.readerId]?.name ?? "comrade"}
         </span>
       ))}
     </div>

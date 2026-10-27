@@ -3,9 +3,12 @@ import { MATERIAL_SUMMARY_COLUMNS } from "@/lib/materials/columns";
 import { toMaterialSummary } from "@/lib/materials/summary";
 import { applyLibraryTypeFilter, withCurrentReaders } from "@/lib/materials/list";
 import { resolveExcerpt } from "@/lib/community/excerpt";
-import { enrichFeedItems, type FeedItem } from "@/lib/community/feed";
+import { enrichFeedItems } from "@/lib/community/feed";
 import { loadPostViewer } from "@/lib/community/viewer";
 import type { NoteRow } from "@/lib/community/notes";
+import { officialReaderIds, pagePassages } from "@/lib/rooms/passage";
+import { toRoomNote } from "@/lib/rooms/timeline";
+import type { RoomNote } from "@/lib/rooms/types";
 import { resolveReaderBySlug } from "./profileSlug";
 import { listReaderActivities } from "./activity";
 import type { AnnotationRange, MaterialSummary } from "@/lib/api/types";
@@ -64,7 +67,8 @@ export type ReaderProfilePage = {
   isSelf: boolean;
   stats: ReaderProfileStats;
   currentlyReading: ReaderProfileCurrentlyReading[];
-  publicNotes: FeedItem[];
+  /** As a room shows them (`toRoomNote`), for the one NoteBubble. */
+  publicNotes: RoomNote[];
   /** Only populated when `isSelf` — highlights have no `visibility` column
    * at all (migrations/migration.sql), always private to their author, so
    * a public request never even queries them. */
@@ -152,7 +156,17 @@ export async function getReaderProfilePage(slug: string, viewerId: string | unde
     reactions: (ownPublicNotes ?? []).reduce((sum, row) => sum + row.reaction_count, 0),
   };
 
-  const publicNotes = await enrichFeedItems((rootNoteRows ?? []) as NoteRow[], await loadPostViewer(viewerId));
+  // The very bubble a room and /note/[id] show: the official tag, the
+  // passage's question. No group's moderators or pin here.
+  const now = Date.now();
+  const noteRows = (rootNoteRows ?? []) as NoteRow[];
+  const [feedItems, officialIds, passages] = await Promise.all([
+    loadPostViewer(viewerId).then((viewer) => enrichFeedItems(noteRows, viewer)),
+    officialReaderIds(),
+    pagePassages(noteRows, now),
+  ]);
+  const ctx = { now, pinnedId: null, teamIds: new Set<string>(), officialIds, passages, alsoIn: false };
+  const publicNotes = feedItems.map((item) => toRoomNote(item, ctx));
 
   // Every in-progress activity, uncapped — a finished one belongs to the
   // Shelf's Finished tab, not "currently reading".

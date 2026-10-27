@@ -1,5 +1,4 @@
 import type { RoomPresence } from "@/lib/room/events";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { voiceById } from "@/lib/audio/voices";
 
 // Pure selectors over the channel's presence entries (spec §3.3, §6.2).
@@ -47,21 +46,25 @@ export function selectListening(roster: readonly RoomPresence[]): RoomPresence[]
   return roster.filter((p) => p.micOnAt === null && p.handRaisedAt === null);
 }
 
+/** Their role, as the stage shows it under their name and their card beside it. */
+export const roleOf = (p: Pick<RoomPresence, "isModerator" | "micOnAt">) =>
+  p.isModerator ? "Host" : p.micOnAt !== null ? "Speaker" : "Listener";
+
 /** The narrator voice reading aloud through this speaker's mic, by name
  * ("Leah"); null when they're not reading aloud. */
 export const narratorName = (member: Pick<RoomPresence, "readingAloud">): string | null =>
   voiceById(member.readingAloud)?.name ?? null;
 
-/** "Comrade Ada is speaking" / "… and Comrade Sekou are speaking" /
- * "…, Comrade Sekou and 2 more are speaking"; null when nobody is. A
+/** "Ada is speaking" / "… and Sekou are speaking" /
+ * "…, Sekou and 2 more are speaking"; null when nobody is. A
  * speaker reading aloud is the narrator's turn, not theirs: "Leah is
- * narrating via Comrade Ada". Takes Speaking now's order (newest first). */
+ * narrating via Ada". Takes Speaking now's order (newest first). */
 export function speakingLine(speakers: readonly Pick<RoomPresence, "name" | "readingAloud">[]): string | null {
   const narrating = speakers.flatMap((p) => {
     const narrator = narratorName(p);
-    return narrator ? [`${narrator} is narrating via ${comradeName(p.name)}`] : [];
+    return narrator ? [`${narrator} is narrating via ${p.name}`] : [];
   });
-  const [first, second, ...rest] = speakers.filter((p) => !narratorName(p)).map((p) => comradeName(p.name));
+  const [first, second, ...rest] = speakers.filter((p) => !narratorName(p)).map((p) => p.name);
   const talking = !first
     ? null
     : !second

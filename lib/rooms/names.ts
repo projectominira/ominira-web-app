@@ -1,16 +1,11 @@
-// How rooms name people (rooms-spec §4, sheet #c1, #c3): with the app's
-// "Comrade" prefix, as everywhere (user, 2026-10-13). The bubble's author,
-// and the short lists: "Comrade Kemi, Comrade Tunde and 12 others". Pure.
+// How rooms name people (rooms-spec §4, sheet #c1, #c3): by pseudonym alone,
+// as everywhere (no "Comrade" prefix since 2026-10-27). The short lists:
+// "Kemi, Tunde and 12 others". Pure.
 
-import { comradeName } from "@/lib/reader/authorDisplay";
 import type { Comrade } from "./types";
 
 /** The official account's tag (`RoomNote.authorTag`): its avatar is the mark. */
 export const OFFICIAL_TAG = "Ominira";
-
-/** A person as rooms show them: "Comrade Kemi Reads", as everywhere in the
- * app (`comradeName`); the official account is just "Ominira". */
-export const personName = (pseudonym: string, official = false) => (official ? pseudonym : comradeName(pseudonym));
 
 /** "Kemi Reads" -> "Kemi": the footer's short form. */
 export const firstName = (pseudonym: string) => pseudonym.split(/\s+/)[0];
@@ -23,15 +18,14 @@ export function listNames(names: string[], total: number): string {
   return `${names.slice(0, 2).join(", ")} and ${others} other${others === 1 ? "" : "s"}`;
 }
 
-/** A group's head, as WhatsApp's: "Comrades Kemi, Tunde, You". */
+/** A group's head, as WhatsApp's: "Kemi, Tunde, You". */
 export function memberLine(members: { readerId: string; pseudonym: string }[], viewerId: string | null): string {
   const others = members.filter((m) => m.readerId !== viewerId).map((m) => firstName(m.pseudonym.replace(/^comrade\s+/i, "")));
-  const lead = others.length ? `${others.length === 1 ? "Comrade" : "Comrades"} ${others.join(", ")}` : "";
-  return [lead, members.some((m) => m.readerId === viewerId) && "You"].filter(Boolean).join(", ");
+  return [...others, members.some((m) => m.readerId === viewerId) && "You"].filter(Boolean).join(", ");
 }
 
-/** Short names in a list: "Comrade Kemi". */
-export const shortName = (pseudonym: string) => comradeName(firstName(pseudonym.replace(/^comrade\s+/i, "")));
+/** Short names in a list: "Kemi". */
+export const shortName = (pseudonym: string) => firstName(pseudonym.replace(/^comrade\s+/i, ""));
 
 /** The replies footer: first names, latest first; the viewer is "you". */
 export const replierNames = (repliers: Comrade[], replierCount: number, viewerId: string | null) =>

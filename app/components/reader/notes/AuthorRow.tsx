@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { Lock } from "lucide-react";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { formatShortTimeAgo } from "@/lib/reader/timeAgo";
 import { pseudonymToSlug } from "@/lib/reader/profileSlug";
 
@@ -12,7 +11,7 @@ import { pseudonymToSlug } from "@/lib/reader/profileSlug";
  * rather than sharing a row with the avatar (see `AuthorAvatar`, rendered
  * as its own left column by the caller — NoteThreadCard/ReplyEntry). Reads
  * correctly with today's single hardcoded author and with real multiple
- * authors later, without changes (see lib/reader/authorDisplay.ts). Takes
+ * authors later, without changes. Takes
  * an optional trailing `menu` slot (same pattern as PanelShell's
  * `headerMenu`) — the per-entry overflow trigger lives here, anchored with
  * the author/time metadata it actually manages, rather than down in the
@@ -40,7 +39,7 @@ export default function AuthorRow({
   isPrivate?: boolean;
   menu?: ReactNode;
 }) {
-  const displayName = comradeName(name);
+  const displayName = name;
   const profileHref = `/@${pseudonymToSlug(name)}`;
   return (
     // flex-nowrap + truncate on the meta span: a single flat line everywhere

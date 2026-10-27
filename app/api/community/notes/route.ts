@@ -15,7 +15,6 @@ import { routeNote } from "@/lib/rooms/routing";
 import { enrichFeedItems } from "@/lib/community/feed";
 import type { AnnotationRange, NoteContent } from "@/lib/api/types";
 import { notifyReaders } from "@/lib/notifications/notify";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { notificationSnippet } from "@/lib/notifications/snippet";
 import { cdnUrl } from "@/lib/storage/r2";
 
@@ -299,7 +298,7 @@ export async function POST(request: Request) {
         // The reply itself — /note/[id] resolves a reply to its root thread
         // and focuses it. Same url for the in-app row and the push.
         const url = `/note/${data.id}`;
-        const actorName = actor?.pseudonym ? comradeName(actor.pseudonym) : "A comrade";
+        const actorName = actor?.pseudonym || "A comrade";
         // What they actually said, not an instruction to go read it — same
         // rule as the reaction notification. A voice reply has no text, so
         // it says so instead.

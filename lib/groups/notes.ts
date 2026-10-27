@@ -4,7 +4,6 @@ import { after } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { notifyReaders } from "@/lib/notifications/notify";
 import { notificationSnippet } from "@/lib/notifications/snippet";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { isModerator, roleOf, type Group, type GroupOutcome } from "@/lib/groups/membership";
 
 // Notes in the group (studygroup-spec.md §4.5): who may post to it, and the
@@ -68,7 +67,7 @@ function notifyPinned(group: Group, actorId: string, postId: string, text: strin
         admin.from("readers").select("pseudonym").eq("id", actorId).maybeSingle(),
       ]);
       if (!members?.length) return;
-      const name = actor?.pseudonym ? comradeName(actor.pseudonym) : "A moderator";
+      const name = actor?.pseudonym || "A moderator";
       const quoted = notificationSnippet(text);
       await notifyReaders(
         members.map((m) => m.reader_id),

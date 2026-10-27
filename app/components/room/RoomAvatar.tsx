@@ -1,16 +1,18 @@
 "use client";
 
+import { useCallback, useState, type MouseEvent } from "react";
 import { Hand } from "lucide-react";
+import MemberCard from "./MemberCard";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import { LiveBadge } from "@/app/components/reader/ReaderPresence";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import type { RoomPresence } from "@/lib/room/events";
 import { useVoice } from "@/lib/room/hooks";
 import { voiceById } from "@/lib/audio/voices";
 
 // A room member's face (spec §4 sheet 04): the reader's own avatar plus what
-// they're doing in the room. Built on ReaderAvatar rather than AuthorAvatar,
-// since a tap here follows (spec §1.6) instead of opening the profile.
+// they're doing in the room. Built on ReaderAvatar rather than AuthorAvatar:
+// with `card`, a tap opens their MemberCard (Read along, spec §1.6, and their
+// profile) rather than following outright.
 // Speaking (detected) and connecting (their audio link is down, spec §10's
 // speaker dropped) come from the room, per member.
 
@@ -19,10 +21,10 @@ type Props = {
   size?: number;
   /** Placed by progress rather than an exact position. */
   approximate?: boolean;
-  /** A tap follows them (spec §1.6). */
-  onClick?: () => void;
-  /** You follow them: the tap stops. */
-  pressed?: boolean;
+  /** A tap opens their card. */
+  card?: boolean;
+  /** The card's Read along toggle (spec §1.6); absent for yourself. */
+  readAlong?: () => void;
 };
 
 export function roomAvatarLabel({
@@ -36,19 +38,22 @@ export function roomAvatarLabel({
     : narrator
       ? `${narrator.name} narrating`
       : speaking
-      ? "speaking"
-      : member.micOnAt !== null
-        ? "mic on"
-        : member.handRaisedAt !== null
-          ? "hand raised"
-          : member.mode === "listen"
-            ? "listening"
-            : null;
-  const name = comradeName(member.name);
+        ? "speaking"
+        : member.micOnAt !== null
+          ? "mic on"
+          : member.handRaisedAt !== null
+            ? "hand raised"
+            : member.mode === "listen"
+              ? "listening"
+              : null;
+  const name = member.name;
   return state ? `${name}, ${state}` : name;
 }
 
-export default function RoomAvatar({ member, size = 32, approximate, onClick, pressed }: Props) {
+export default function RoomAvatar({ member, size = 32, approximate, card = false, readAlong }: Props) {
+  // The open card's face, which it's placed against.
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const close = useCallback(() => setAnchor(null), []);
   const { speaking, connecting } = useVoice(member.readerId);
   const micOn = member.micOnAt !== null;
   // Speaking: brand ring; mic on but quiet: a thin pale one (design "stage").
@@ -60,58 +65,62 @@ export default function RoomAvatar({ member, size = 32, approximate, onClick, pr
   const badge = Math.max(12, Math.round(size * 0.42));
   const label = roomAvatarLabel({ member, speaking, connecting });
   const narrator = voiceById(member.readingAloud);
-  const Wrapper = onClick ? "button" : "span";
+  const Wrapper = card ? "button" : "span";
 
   return (
-    <Wrapper
-      {...(onClick ? { type: "button" as const, onClick, "aria-pressed": pressed ?? false } : {})}
-      aria-label={onClick ? `Read along with ${label}` : label}
-      title={
-        onClick
-          ? pressed
-            ? `Stop reading along with ${comradeName(member.name)}`
-            : `Read along with ${comradeName(member.name)}`
-          : label
-      }
-      style={{ width: size, height: size }}
-      className={`relative inline-flex flex-none rounded-full ${onClick ? "cursor-pointer" : ""}`}
-    >
-      <ReaderAvatar
-        pseudonym={member.name}
-        avatar={member.avatar}
-        size={size}
-        className="transition-[box-shadow,opacity] duration-150"
-        style={{
-          boxShadow: ring,
-          opacity: connecting ? 0.55 : approximate ? 0.6 : 1,
-          outline: connecting
-            ? "2px dashed var(--color-brand-400)"
-            : approximate
-              ? "1.5px dashed var(--color-sand-400)"
-              : "none",
-          outlineOffset: connecting ? 2 : 1,
-        }}
-      />
-      {narrator ? (
-        // Reading aloud: the narrator's face, so it's clear whose voice the room hears.
-        <img
-          src={narrator.avatar}
-          alt=""
-          aria-hidden="true"
-          style={{ width: badge + 2, height: badge + 2 }}
-          className="absolute -bottom-[3px] -right-[3px] rounded-full object-cover ring-[1.5px] ring-[var(--reader-surface)]"
+    <>
+      <Wrapper
+        {...(card
+          ? {
+              type: "button" as const,
+              onClick: (e: MouseEvent<HTMLElement>) => setAnchor(anchor ? null : e.currentTarget),
+              "aria-haspopup": "dialog" as const,
+              "aria-expanded": anchor !== null,
+            }
+          : {})}
+        aria-label={label}
+        title={label}
+        style={{ width: size, height: size }}
+        className={`relative inline-flex flex-none rounded-full ${card ? "cursor-pointer" : ""}`}
+      >
+        <ReaderAvatar
+          pseudonym={member.name}
+          avatar={member.avatar}
+          size={size}
+          className="transition-[box-shadow,opacity] duration-150"
+          style={{
+            boxShadow: ring,
+            opacity: connecting ? 0.55 : approximate ? 0.6 : 1,
+            outline: connecting
+              ? "2px dashed var(--color-brand-400)"
+              : approximate
+                ? "1.5px dashed var(--color-sand-400)"
+                : "none",
+            outlineOffset: connecting ? 2 : 1,
+          }}
         />
-      ) : member.handRaisedAt !== null ? (
-        <span
-          aria-hidden="true"
-          style={{ width: badge, height: badge }}
-          className="absolute -bottom-[3px] -right-[3px] flex items-center justify-center rounded-full border border-brand-300 bg-[var(--reader-surface)] text-brand-500 ring-[1.5px] ring-[var(--reader-surface)]"
-        >
-          <Hand size={Math.round(badge * 0.68)} strokeWidth={2.25} />
-        </span>
-      ) : (
-        member.mode === "listen" && <LiveBadge live="listen" className="absolute -bottom-[3px] -right-[3px]" />
-      )}
-    </Wrapper>
+        {narrator ? (
+          // Reading aloud: the narrator's face, so it's clear whose voice the room hears.
+          <img
+            src={narrator.avatar}
+            alt=""
+            aria-hidden="true"
+            style={{ width: badge + 2, height: badge + 2 }}
+            className="absolute -bottom-[3px] -right-[3px] rounded-full object-cover ring-[1.5px] ring-[var(--reader-surface)]"
+          />
+        ) : member.handRaisedAt !== null ? (
+          <span
+            aria-hidden="true"
+            style={{ width: badge, height: badge }}
+            className="absolute -bottom-[3px] -right-[3px] flex items-center justify-center rounded-full border border-brand-300 bg-[var(--reader-surface)] text-brand-500 ring-[1.5px] ring-[var(--reader-surface)]"
+          >
+            <Hand size={Math.round(badge * 0.68)} strokeWidth={2.25} />
+          </span>
+        ) : (
+          member.mode === "listen" && <LiveBadge live="listen" className="absolute -bottom-[3px] -right-[3px]" />
+        )}
+      </Wrapper>
+      {anchor && <MemberCard readerId={member.readerId} anchor={anchor} readAlong={readAlong} onClose={close} />}
+    </>
   );
 }

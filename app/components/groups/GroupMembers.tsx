@@ -6,7 +6,6 @@ import NoResults from "@/app/components/shared/NoResults";
 import type { OverflowMenuItem } from "@/app/components/reader/notes/OverflowMenu";
 import { useGroupMembers, useRemoveMember, useSetMemberRole } from "@/lib/groups/hooks";
 import type { GroupMember } from "@/lib/groups/types";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { pseudonymToSlug } from "@/lib/reader/profileSlug";
 import { confirmAction } from "@/stores/confirm-store";
 import { onFail } from "./onFail";
@@ -17,7 +16,7 @@ import RowMenu from "./RowMenu";
 function MemberMenu({ slug, member, isSelf }: { slug: string; member: GroupMember; isSelf: boolean }) {
   const setRole = useSetMemberRole(slug);
   const remove = useRemoveMember(slug);
-  const name = comradeName(member.pseudonym);
+  const name = member.pseudonym;
 
   const changeRole = (role: GroupMember["role"]) =>
     setRole.mutate({ readerId: member.readerId, role }, { onError: onFail("Couldn't change their role.") });
@@ -69,7 +68,7 @@ export default function GroupMembers({
               <ReaderAvatar pseudonym={member.pseudonym} avatar={member.avatar} size={36} />
               <span className="flex min-w-0 flex-col">
                 <span className="truncate text-[13px] font-semibold text-[var(--reader-text)]">
-                  {comradeName(member.pseudonym)}
+                  {member.pseudonym}
                   {isSelf && <span className="font-medium text-[var(--reader-text-muted)]"> · you</span>}
                 </span>
                 <span className="text-xs font-medium text-[var(--reader-text-muted)]">

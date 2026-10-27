@@ -5,7 +5,6 @@ import { AtSign, SendHorizontal } from "lucide-react";
 import { splitMentions } from "@/lib/community/mentionText";
 import type { MentionCandidate } from "@/lib/community/mentionTypes";
 import { useComposerMentions, type Tagged } from "@/lib/community/useComposerMentions";
-import { personName } from "@/lib/rooms/names";
 import { TEAM_TAG } from "@/lib/rooms/timeline";
 import type { Comrade } from "@/lib/rooms/types";
 import { COMPOSER_TOOL } from "@/app/components/reader/notes/ComposerBox";
@@ -181,7 +180,7 @@ export function MentionPicker({
           className={`flex min-h-11 cursor-pointer items-center gap-2.5 rounded-sm px-2 text-left hover:bg-[var(--color-app-chip)] ${i === active ? "bg-[var(--color-app-chip)]" : ""}`}
         >
           <RoomAvatar comrade={comrade} size={28} />
-          <span className="text-[12px] font-bold">{personName(comrade.pseudonym)}</span>
+          <span className="text-[12px] font-bold">{comrade.pseudonym}</span>
           {sub && <span className="text-ui-caption text-[var(--color-app-text-muted)]">{sub}</span>}
         </button>
       ))}

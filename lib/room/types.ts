@@ -44,7 +44,7 @@ export type RoomInvite = {
   live: boolean;
   /** In the room now; 0 once it ended. */
   members: number;
-  /** "Comrade Yeast"; null if their account is gone. */
+  /** "Yeast"; null if their account is gone. */
   host: string | null;
   hostId: string;
   /** A few of those in, by face, the host first when they're in. */

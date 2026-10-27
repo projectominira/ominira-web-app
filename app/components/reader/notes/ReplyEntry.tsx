@@ -4,7 +4,6 @@ import { EllipsisVertical } from "lucide-react";
 import Link from "next/link";
 import type { Note } from "@/lib/api/types";
 import { useIsOwnNote } from "@/lib/reader/currentAuthor";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { pseudonymToSlug } from "@/lib/reader/profileSlug";
 import AuthorAvatar from "./AuthorAvatar";
 import AuthorRow from "./AuthorRow";
@@ -17,7 +16,7 @@ import { confirmAction } from "@/stores/confirm-store";
 
 /** One reply, at the flat second tier under its top-level note — same
  * author/content/action shape as NoteThreadCard, just smaller, plus the
- * "replying to Comrade X" chip when it addresses another reply rather than
+ * "replying to X" chip when it addresses another reply rather than
  * the top-level note itself (see NoteEntry.replyingToId).
  *
  * Its own "Reply" trigger doesn't mount a composer here — NoteThreadCard
@@ -104,7 +103,7 @@ export default function ReplyEntry({
           <div className="w-fit font-serif italic text-[11px] text-[var(--reader-text-muted)]">
             — in reply to{" "}
             <Link href={`/@${pseudonymToSlug(replyingToName)}`} className="text-[var(--reader-text-muted)] hover:underline">
-              {comradeName(replyingToName)}
+              {replyingToName}
             </Link>
           </div>
         )}

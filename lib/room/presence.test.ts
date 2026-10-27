@@ -102,14 +102,14 @@ describe("speakingLine", () => {
 
   test("nobody, one, two, many", () => {
     expect(speakingLine([])).toBeNull();
-    expect(speakingLine(named("Ada"))).toBe("Comrade Ada is speaking");
-    expect(speakingLine(named("Ada", "Comrade Sekou"))).toBe("Comrade Ada and Comrade Sekou are speaking");
-    expect(speakingLine(named("Ada", "Sekou", "Kofi", "Amara"))).toBe("Comrade Ada, Comrade Sekou and 2 more are speaking");
+    expect(speakingLine(named("Ada"))).toBe("Ada is speaking");
+    expect(speakingLine(named("Ada", "Sekou"))).toBe("Ada and Sekou are speaking");
+    expect(speakingLine(named("Ada", "Sekou", "Kofi", "Amara"))).toBe("Ada, Sekou and 2 more are speaking");
   });
 
   test("a speaker reading aloud is the narrator's turn", () => {
     const ada = { name: "Ada", readingAloud: "female6" };
-    expect(speakingLine([ada])).toBe("Leah is narrating via Comrade Ada");
-    expect(speakingLine([ada, ...named("Sekou")])).toBe("Leah is narrating via Comrade Ada · Comrade Sekou is speaking");
+    expect(speakingLine([ada])).toBe("Leah is narrating via Ada");
+    expect(speakingLine([ada, ...named("Sekou")])).toBe("Leah is narrating via Ada · Sekou is speaking");
   });
 });

@@ -6,7 +6,6 @@ import { groupHref } from "@/lib/groups/copy";
 import { isModerator, type Group, type GroupOutcome } from "@/lib/groups/membership";
 import { notifyReaders } from "@/lib/notifications/notify";
 import { notificationSnippet } from "@/lib/notifications/snippet";
-import { comradeName } from "@/lib/reader/authorDisplay";
 
 /** A moderator's tagged invite: `group_invite` to every tagged reader who
  * isn't a member yet. Title the group's name, body its description, then
@@ -27,7 +26,7 @@ export async function inviteToGroup(group: Group, actorId: string, readerIds: st
   const recipients = tagged.filter((id) => !joined.has(id));
   if (recipients.length === 0) return "ok";
 
-  const invited = `${actor?.pseudonym ? comradeName(actor.pseudonym) : "A comrade"} invited you to join`;
+  const invited = `${actor?.pseudonym || "A comrade"} invited you to join`;
   const description = notificationSnippet(group.description);
   await notifyReaders(recipients, {
     kind: "group_invite",

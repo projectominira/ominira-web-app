@@ -2,7 +2,6 @@
 
 import { chapterLabel, comradeCount, sessionWhen } from "@/lib/groups/copy";
 import { formatInstant } from "@/lib/time/format";
-import { personName } from "./names";
 import type { ChapterEnd } from "@/lib/groups/progress";
 import type { GroupLiveRoom, GroupSession, SessionsView, TargetView } from "@/lib/groups/types";
 import type { RoomSession, RoomTarget } from "./types";
@@ -66,7 +65,7 @@ export function liveCard(live: GroupLiveRoom, now: number, scheduled?: GroupSess
     hostId: live.starterId,
     people: live.people,
     count: live.members,
-    reading: `${personName(live.starterName)} reading${where}`,
+    reading: `${live.starterName} reading${where}`,
     minutes: Math.max(0, Math.round((now - Date.parse(live.startedAt)) / MINUTE)),
     summary: [],
   };
@@ -101,9 +100,9 @@ export function sessionMeta({ session, state, host, minutes }: RoomSession, host
   if (state === "live") return `Started ${formatInstant(start, "time")}${session.sectionLabel ? ` · ${session.sectionLabel}` : ""}`;
   if (state === "ended") {
     const ran = minutes ?? 0;
-    return `Ended ${formatInstant(start + ran * MINUTE, "time")} · ${ran} min · hosted by ${personName(host)}`;
+    return `Ended ${formatInstant(start + ran * MINUTE, "time")} · ${ran} min · hosted by ${host}`;
   }
-  return `${sessionWhen(session.startsAt)} · ${hostIsYou ? "you’re hosting" : `${personName(host)} hosting`}`;
+  return `${sessionWhen(session.startsAt)} · ${hostIsYou ? "you’re hosting" : `${host} hosting`}`;
 }
 
 /** "Thu 19:00": a session's day and time, short. */

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Eye, Lock } from "lucide-react";
 import type { Note, NoteVisibility } from "@/lib/api/types";
 import { chatTime } from "@/lib/rooms/home";
-import { personName } from "@/lib/rooms/names";
 import { pseudonymToSlug } from "@/lib/reader/profileSlug";
 import RoomAvatar from "./RoomAvatar";
 
@@ -68,13 +67,13 @@ export function CardAuthor({
       <div className="flex min-w-0 flex-1 flex-col gap-px">
         <div className="flex min-w-0 items-baseline gap-1.5">
           {official ? (
-            <span className="min-w-0 truncate text-xs font-bold text-[var(--reader-text)]">{personName(author.pseudonym, official)}</span>
+            <span className="min-w-0 truncate text-xs font-bold text-[var(--reader-text)]">{author.pseudonym}</span>
           ) : (
             <Link
               href={`/@${pseudonymToSlug(author.pseudonym)}`}
               className="min-w-0 truncate text-xs font-bold text-[var(--reader-text)] no-underline hover:underline"
             >
-              {mine ? "You" : personName(author.pseudonym)}
+              {mine ? "You" : author.pseudonym}
             </Link>
           )}
           {tag && (

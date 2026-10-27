@@ -3,16 +3,13 @@
 import { useState } from "react";
 import SearchableAppPage from "@/app/components/shell/SearchableAppPage";
 import BookListRow from "@/app/components/shell/BookListRow";
-import NoteCard from "@/app/components/reader/notes/NoteCard";
 import NoResults from "@/app/components/shared/NoResults";
 import ShelfAuthPrompt from "@/app/components/books/ShelfAuthPrompt";
 import HabitWindow from "@/app/components/history/HabitWindow";
 import UnderlineTabs from "@/app/components/UnderlineTabs";
-import { communityFeedItemHref } from "@/lib/community/useCommunityFeed";
-import { resolveBookThumbnailSrc } from "@/lib/materials/image";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useContinueReading, useRemoveFromShelf, useRestoreToShelf, type ContinueReadingItem } from "@/lib/auth/useContinueReading";
-import { useSavedMaterials, useSavedNotes, useToggleMaterialBookmark } from "@/lib/bookmarks/useBookmarks";
+import { useSavedMaterials, useToggleMaterialBookmark } from "@/lib/bookmarks/useBookmarks";
 
 type Tab = "reading" | "saved" | "finished";
 
@@ -134,7 +131,6 @@ export default function ShelfView() {
 
   const { data: activities, isLoading: activitiesLoading } = useContinueReading();
   const { data: savedBooks, isLoading: savedBooksLoading } = useSavedMaterials();
-  const { data: savedNotes, isLoading: savedNotesLoading } = useSavedNotes();
   const toggleBookmark = useToggleMaterialBookmark();
 
   // finishedAt is the reader's own explicit mark (DocumentEndPanel), never
@@ -257,59 +253,18 @@ export default function ShelfView() {
           <BookGrid items={finished.map(activityRow)} />
         ))}
 
-      {tab === "saved" && (
-        <>
-          {savedBooksLoading ? (
-            <BookGridSkeleton rows={4} />
-          ) : savedBooks?.length ? (
-            // No resumeTarget: a saved book is one the reader flagged to
-            // come back to, very often without having opened it yet, so the
-            // detail page (blurb, outline, CTAs) is the right landing spot —
-            // the same distinction the Library catalogue makes.
-            <BookGrid items={savedBooks.map((material) => ({ material, onRemove: () => toggleBookmark.mutate(material.id) }))} />
-          ) : null}
-
-          {/* Posts and books share the tab rather than splitting into a
-              fourth: both are the same act (save this, come back to it),
-              and separating them would mean two half-empty lists for most
-              readers. The heading only appears when there's actually a
-              mixed shelf to disambiguate. */}
-          {savedNotes?.length ? (
-            <div className="mx-auto mt-10 max-w-[640px]">
-              {savedBooks?.length ? (
-                <h2 className="font-serif type-3 text-balance m-0 mb-1 text-[var(--reader-text)]">Saved posts</h2>
-              ) : null}
-              <div className="flex flex-col">
-                {savedNotes.map((item) => (
-                  <NoteCard
-                    key={item.note.id}
-                    materialId={item.material?.id ?? null}
-                    note={item.note}
-                    replies={item.replies}
-                    excerpt={item.excerpt}
-                    {...(item.material
-                      ? {
-                          bookContext: {
-                            href: communityFeedItemHref(item) ?? "",
-                            title: item.material.title,
-                            author: item.material.author,
-                            section: item.label ?? undefined,
-                            coverUrl: resolveBookThumbnailSrc(item.material),
-                            materialType: item.material.materialType,
-                          },
-                        }
-                      : {})}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {!savedBooksLoading && !savedNotesLoading && !savedBooks?.length && !savedNotes?.length && (
-             <NoResults className="mt-5" message="Nothing saved yet — tap the bookmark on any book or post to keep it here." />
-          )}
-        </>
-      )}
+      {tab === "saved" &&
+        (savedBooksLoading ? (
+          <BookGridSkeleton rows={4} />
+        ) : savedBooks?.length ? (
+          // No resumeTarget: a saved book is one the reader flagged to
+          // come back to, very often without having opened it yet, so the
+          // detail page (blurb, outline, CTAs) is the right landing spot —
+          // the same distinction the Library catalogue makes.
+          <BookGrid items={savedBooks.map((material) => ({ material, onRemove: () => toggleBookmark.mutate(material.id) }))} />
+        ) : (
+          <NoResults className="mt-5" message="Nothing saved yet — tap the bookmark on any book to keep it here." />
+        ))}
     </SearchableAppPage>
   );
 }

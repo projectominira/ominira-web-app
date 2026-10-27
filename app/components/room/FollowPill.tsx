@@ -2,7 +2,6 @@
 
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import RoomAvatar from "./RoomAvatar";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { useFollowing } from "@/lib/room/hooks";
 import { useRoomStore } from "@/stores/room-store";
 
@@ -21,7 +20,7 @@ export default function FollowPill({ pausedOnly = false }: { pausedOnly?: boolea
   const following = useFollowing();
   const session = useRoomStore((s) => s.session);
   if (!following || !session || (pausedOnly && !following.paused)) return null;
-  const name = comradeName(following.member.name);
+  const name = following.member.name;
   const Arrow = following.direction === "up" ? ArrowUp : ArrowDown;
 
   if (following.paused) {

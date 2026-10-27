@@ -126,6 +126,8 @@ export default function RoomStream({
   const router = useRouter();
   const scroller = useRef<HTMLDivElement>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  // The replied lines already opened: gone at once, not on the next read.
+  const [openedLines, setOpened] = useState<ReadonlySet<string>>(() => new Set());
   const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   // The first item and the height before a render: if items arrive above,
   // the stream stays where the reader is.
@@ -201,7 +203,12 @@ export default function RoomStream({
       case "replied": {
         // A note not loaded yet opens on its own page.
         const id = it.replied.id;
-        return <RepliedLine key={itemKey(it, i)} replied={it.replied} viewerId={viewerId} onOpen={() => jumpTo(id) || router.push(`/note/${id}`)} />;
+        if (openedLines.has(id)) return null;
+        const open = () => {
+          setOpened((s) => new Set(s).add(id));
+          if (!jumpTo(id)) router.push(`/note/${id}`);
+        };
+        return <RepliedLine key={itemKey(it, i)} replied={it.replied} viewerId={viewerId} onOpen={open} />;
       }
       case "system":
       case "joins":

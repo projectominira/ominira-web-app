@@ -280,7 +280,7 @@ export function pendingNote(id: string, text: string, author: Note["author"], at
   return {
     note: {
       id, materialId: null, author, ranges: [], parentId: null, replyingToId: null, content: { kind: "text", text }, visibility: "public",
-      reactionCount: 0, reactedByMe: false, bookmarkedByMe: false, group, mentions: [], createdAt: at, updatedAt: at,
+      reactionCount: 0, reactedByMe: false, group, mentions: [], createdAt: at, updatedAt: at,
     },
     material: null, sectionId: null, label: null, excerpt: null, replies: [],
     authorTag: null, fromReader: false, pinned: null, question: null, replyCount: 0, repliers: [], replierCount: 0, replyingNow: 0, newReplies: 0, alsoIn: null,

@@ -1,70 +1,37 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { getAuthenticatedReader } from "@/lib/auth/session";
-import { unauthorized, validationError } from "@/lib/api/errors";
+import { unauthorized } from "@/lib/api/errors";
 import { listBookmarkedIds } from "@/lib/bookmarks/store";
 import { toMaterialSummary } from "@/lib/materials/summary";
 import { MATERIAL_SUMMARY_COLUMNS } from "@/lib/materials/columns";
-import { enrichFeedItems } from "@/lib/community/feed";
-import { canReadPost } from "@/lib/community/visibility";
-import { loadPostViewer } from "@/lib/community/viewer";
-import type { NoteRow } from "@/lib/community/notes";
 
 /**
- * This reader's Saved shelf — `?type=material` (the Reading page's Saved
- * tab) or `?type=post`.
- *
- * Two response shapes behind one route, discriminated by `type`: books come
- * back as `MaterialSummary[]` (what BookListRow takes) and posts as
- * `FeedItem[]` (what NoteCard takes, same as the home feed's own page), so
- * each tab renders through the component it already shares with the rest of
- * the app rather than a Saved-specific card.
- *
- * `.in(id)` loses the ordering, so both branches re-sort in app code against
- * the bookmark ids, which already came back most-recently-saved first — a
- * Saved shelf is ordered by when *you* saved something, not by when it was
- * published or last touched.
+ * This reader's Saved shelf (the Shelf's Bookmarks tab): their saved books
+ * as `MaterialSummary[]`, what BookListRow takes. `.in(id)` loses the
+ * ordering, so it's re-sorted against the bookmark ids, which already came
+ * back most-recently-saved first — a Saved shelf is ordered by when *you*
+ * saved something, not by when it was published or last touched.
  */
 export async function GET(request: Request) {
   const reader = await getAuthenticatedReader(request);
   if (!reader) return unauthorized();
 
-  const type = new URL(request.url).searchParams.get("type") ?? "material";
-  if (type !== "material" && type !== "post") return validationError("type must be 'material' or 'post'.");
-
-  const ids = await listBookmarkedIds(reader.readerId, type);
+  const ids = await listBookmarkedIds(reader.readerId, "material");
   if (ids.length === 0) return NextResponse.json({ items: [] });
 
-  const admin = getSupabaseAdminClient();
-
-  if (type === "material") {
-    const { data, error } = await admin.from("materials").select(MATERIAL_SUMMARY_COLUMNS).in("id", ids);
-    // Loud, not an empty shelf: the flatMap below drops any id it can't
-    // hydrate, so a failed query here is indistinguishable from "you saved
-    // nothing" unless it throws.
-    if (error) throw new Error(`bookmarks: material hydration failed — ${error.message}`);
-    const byId = new Map((data ?? []).map((m) => [m.id, m]));
-    // A bookmarked material the reader can no longer see (someone else's
-    // upload since made private) simply drops out — the purge trigger only
-    // covers deletion, not a visibility change.
-    const items = ids.flatMap((id) => {
-      const row = byId.get(id);
-      return row ? [toMaterialSummary(row)] : [];
-    });
-    return NextResponse.json({ items });
-  }
-
-  const { data, error } = await admin.from("posts").select("*").in("id", ids);
-  if (error) throw new Error(`bookmarks: post hydration failed — ${error.message}`);
-  // Same visibility rule as every other notes-reading path
-  // (lib/community/visibility.ts): a post saved while public may since have
-  // been made private.
-  const viewer = await loadPostViewer(reader.readerId);
-  const rows = ((data ?? []) as NoteRow[]).filter((r) => canReadPost(r, viewer));
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  const ordered = ids.flatMap((id) => {
+  const { data, error } = await getSupabaseAdminClient().from("materials").select(MATERIAL_SUMMARY_COLUMNS).in("id", ids);
+  // Loud, not an empty shelf: the flatMap below drops any id it can't
+  // hydrate, so a failed query here is indistinguishable from "you saved
+  // nothing" unless it throws.
+  if (error) throw new Error(`bookmarks: material hydration failed — ${error.message}`);
+  const byId = new Map((data ?? []).map((m) => [m.id, m]));
+  // A bookmarked material the reader can no longer see (someone else's
+  // upload since made private) simply drops out — the purge trigger only
+  // covers deletion, not a visibility change.
+  const items = ids.flatMap((id) => {
     const row = byId.get(id);
-    return row ? [row] : [];
+    return row ? [toMaterialSummary(row)] : [];
   });
-  return NextResponse.json({ items: await enrichFeedItems(ordered, viewer) });
+  return NextResponse.json({ items });
 }

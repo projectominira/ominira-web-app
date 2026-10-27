@@ -3,10 +3,9 @@
 import type { ReactNode } from "react";
 import { ChevronRight, Mic, MicOff } from "lucide-react";
 import RoomAvatar from "./RoomAvatar";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { formatShortTimeAgo } from "@/lib/time/relative";
 import { positionLabel } from "@/lib/room/follow";
-import { narratorName } from "@/lib/room/presence";
+import { narratorName, roleOf } from "@/lib/room/presence";
 import { useFollowing, useHands, useListening, usePlace, useReaderView, useRoom, useSpeaking, useVoice } from "@/lib/room/hooks";
 import type { RoomPresence } from "@/lib/room/events";
 import { useNow } from "@/lib/time/useNow";
@@ -31,14 +30,14 @@ function useEveryone() {
   return { all: [...all.filter((p) => p.isModerator), ...all.filter((p) => !p.isModerator)], speaking, hands, listening };
 }
 
-/** A tap on someone (never yourself) reads along with them. */
+/** Reading along with someone (never yourself), from their card or row. */
 function useFollowTarget() {
   const session = useRoomStore((s) => s.session);
   const me = useRoom((s) => s.readerId);
   const followingId = useFollowing()?.member.readerId;
   return (p: RoomPresence) => ({
     pressed: p.readerId === followingId,
-    onClick: p.readerId === me || !session ? undefined : () => session.follow(p.readerId),
+    readAlong: p.readerId === me || !session ? undefined : () => session.follow(p.readerId),
   });
 }
 
@@ -71,24 +70,19 @@ export function RoomStage({ onGuests }: { onGuests: () => void }) {
   );
 }
 
-/** Their role, as the stage shows it under their name. */
-function role(p: RoomPresence) {
-  return p.isModerator ? "Host" : p.micOnAt !== null ? "Speaker" : "Listener";
-}
-
-/** Someone on the stage: their face (a tap reads along), their name, and
+/** Someone on the stage: their face (a tap opens their card), their name, and
  * their role, with their mic's state for a host or speaker. */
-function Face({ member, pressed, onClick }: { member: RoomPresence; pressed: boolean; onClick: (() => void) | undefined }) {
+function Face({ member, pressed, readAlong }: { member: RoomPresence; pressed: boolean; readAlong: (() => void) | undefined }) {
   const { speaking } = useVoice(member.readerId);
   const micOn = member.micOnAt !== null;
-  const r = role(member);
+  const r = roleOf(member);
   const MicIcon = micOn ? Mic : MicOff;
   return (
     <div className="flex min-w-0 flex-col items-center gap-1.5 text-center">
-      <RoomAvatar member={member} size={52} pressed={pressed} onClick={onClick} />
+      <RoomAvatar member={member} size={52} card readAlong={readAlong} />
       <span className="flex min-w-0 max-w-full flex-col">
         <span className={`truncate text-[13px] font-bold ${pressed ? "text-[var(--reader-accent)]" : "text-[var(--reader-text)]"}`}>
-          {comradeName(member.name)}
+          {member.name}
         </span>
         <span
           className={`flex items-center justify-center gap-1 text-xs ${
@@ -165,13 +159,13 @@ function Section({ title, count, children }: { title: string; count: number; chi
 function Member({
   member,
   pressed,
-  onClick,
+  readAlong,
   fallback,
   after,
 }: {
   member: RoomPresence;
   pressed: boolean;
-  onClick: (() => void) | undefined;
+  readAlong: (() => void) | undefined;
   fallback: string;
   after?: string;
 }) {
@@ -187,9 +181,9 @@ function Member({
   const line = [status, after].filter(Boolean).join(" · ");
   return (
     <div className="flex items-center gap-3 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] py-2.5 pr-2 pl-3">
-      <RoomAvatar member={member} size={40} />
+      <RoomAvatar member={member} size={40} card readAlong={readAlong} />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-[13px] text-[var(--reader-text)] font-semibold">{comradeName(member.name)}</span>
+        <span className="truncate text-[13px] text-[var(--reader-text)] font-semibold">{member.name}</span>
         <span
           className={`truncate text-xs ${
             speaking || narrator ? "font-bold text-[var(--reader-accent)]" : "font-medium text-[var(--reader-text-muted)]"
@@ -198,12 +192,12 @@ function Member({
           {line}
         </span>
       </div>
-      {onClick && (
+      {readAlong && (
         <button
           type="button"
-          onClick={onClick}
+          onClick={readAlong}
           aria-pressed={pressed}
-          aria-label={`${pressed ? "Stop reading along with" : "Read along with"} ${comradeName(member.name)}`}
+          aria-label={`${pressed ? "Stop reading along with" : "Read along with"} ${member.name}`}
           className={`flex-none cursor-pointer rounded-sm px-1.5 text-xs font-bold whitespace-nowrap ${
             pressed
               ? "text-[var(--reader-accent)] hover:opacity-80"

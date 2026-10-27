@@ -8,7 +8,6 @@ import TagPicker, { chipFace } from "@/app/components/shared/TagPicker";
 import { useShell } from "@/app/components/useShell";
 import { useMentionCandidates } from "@/lib/community/useMentions";
 import { MAX_MENTIONS, type MentionCandidate } from "@/lib/community/mentionTypes";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { showToast } from "@/stores/toast-store";
 import { useReaderStore } from "@/stores/reader-store";
 import { primaryButton } from "@/app/components/groups/buttons";
@@ -43,7 +42,7 @@ function InviteBody({ groupSlug = null, share, send, onFail, onClose }: Omit<Inv
       {
         onSuccess: () => {
           setPending(false);
-          showToast(tagged.length === 1 ? `Invite sent to ${comradeName(tagged[0].pseudonym)}` : `Invite sent to ${tagged.length} comrades`);
+          showToast(tagged.length === 1 ? `Invite sent to ${tagged[0].pseudonym}` : `Invite sent to ${tagged.length} comrades`);
           onClose();
         },
         onError: (err) => {
@@ -58,7 +57,7 @@ function InviteBody({ groupSlug = null, share, send, onFail, onClose }: Omit<Inv
     <TagPicker
       query={query}
       onQuery={setQuery}
-      chips={tagged.map((t) => ({ key: t.readerId, label: comradeName(t.pseudonym), face: chipFace(t), onRemove: () => untag(t.readerId) }))}
+      chips={tagged.map((t) => ({ key: t.readerId, label: t.pseudonym, face: chipFace(t), onRemove: () => untag(t.readerId) }))}
       suggestions={candidates.filter((c) => !tagged.some((t) => t.readerId === c.readerId))}
       onPick={tag}
       membersTaggable={false}

@@ -11,7 +11,7 @@ import { noteMentionNames } from "@/lib/community/mentionNames";
 import { chapterLabel } from "@/lib/groups/copy";
 import { chatTime } from "@/lib/rooms/home";
 import { NOTE_PIN } from "@/lib/rooms/timeline";
-import { OFFICIAL_TAG, personName } from "@/lib/rooms/names";
+import { OFFICIAL_TAG } from "@/lib/rooms/names";
 import type { RoomNote } from "@/lib/rooms/types";
 import FistReaction, { ReplyPill } from "./FistReaction";
 import { noteMenu } from "./noteMenu";
@@ -131,7 +131,7 @@ export default function NoteBubble({
   const text = note.content.kind === "voice" || note.content.text.trim() !== "";
   const book = showBook && n.material;
   const replies = n.replies;
-  const nameOf = (r: Note) => (r.author.readerId === viewerId ? "You" : personName(r.author.pseudonym));
+  const nameOf = (r: Note) => (r.author.readerId === viewerId ? "You" : r.author.pseudonym);
   // The one reply box, right under what it answers (`to`: a reply's id).
   const composer = (to: string | undefined, whom: string) =>
     onReply && (
@@ -195,7 +195,7 @@ export default function NoteBubble({
             {onReply && <ReplyPill count={0} onClick={() => !pending && setReplyTo(replyTo === note.id ? null : note.id)} />}
           </div>
         )}
-        {actions && replyTo === note.id && composer(undefined, mine ? "your note" : personName(note.author.pseudonym, official))}
+        {actions && replyTo === note.id && composer(undefined, mine ? "your note" : note.author.pseudonym)}
         {n.replyingNow > 0 && (
           <div className="flex items-center gap-1.75 font-sans text-[12px]/[1.3] font-bold text-forest-500">
             <PulseDot tone="forest" />

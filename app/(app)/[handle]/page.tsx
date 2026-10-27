@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { resolveReaderBySlug } from "@/lib/reader/profileSlug";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { PLATFORM_NAME } from "@/lib/config/platform";
 import ReaderProfileView from "@/app/components/profile/ReaderProfileView";
 
@@ -57,7 +56,7 @@ export async function generateMetadata({
   const reader = await resolveReaderBySlug(handle.slice(1));
   if (!reader) return { title: "Reader not found" };
 
-  const name = comradeName(reader.pseudonym);
+  const name = reader.pseudonym;
   return {
     title: name,
     description: `${name}'s reading activity and public notes on ${PLATFORM_NAME}.`,

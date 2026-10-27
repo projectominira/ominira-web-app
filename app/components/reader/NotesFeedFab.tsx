@@ -2,9 +2,8 @@
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
-import { BookOpen, MessageCircle, PenLine, Plus } from "lucide-react";
+import { MessageCircle, Navigation, PenLine, Plus, X } from "lucide-react";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { pseudonymToSlug } from "@/lib/reader/profileSlug";
 import { useProfile } from "@/lib/auth/useProfile";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -84,7 +83,7 @@ const introduced = new Set<string>();
  * opens the notes panel on just their notes.
  *
  * The first time the rail is opened in a book, a short message says who's
- * here ("3 currently reading · Comrade Ada wrote here") and tucks away again. With nobody else
+ * here ("3 currently reading · Ada wrote here") and tucks away again. With nobody else
  * here the open rail is just the chat bubble and the reader's own face.
  *
  * "Currently reading" is fetched once on arrival (usePresence) — a snapshot
@@ -203,7 +202,7 @@ export default function NotesFeedFab({
   const notesLine = noteCount > 0 && `${notesLabel(noteCount)} in this book`;
   const writersLine =
     writersHere.length > 0 &&
-    `${comradeName(writersHere[0].author.pseudonym)}${
+    `${writersHere[0].author.pseudonym}${
       writersHere.length > 1 ? ` and ${writersHere.length - 1} ${writersHere.length === 2 ? "other" : "others"}` : ""
     } wrote here`;
   const liveWord = presence.anyReading ? "reading" : "listening";
@@ -420,7 +419,7 @@ function ProfileCard({
   readingAlong: boolean;
   onReadAlong: () => void;
 }) {
-  const name = comradeName(face.pseudonym);
+  const name = face.pseudonym;
   const status = face.live
     ? { text: face.live === "listen" ? "Currently listening" : "Currently reading", live: face.live }
     : { text: face.wroteHere ? "Wrote here" : `Wrote in ${face.wroteIn || "this book"}`, live: null };
@@ -472,7 +471,7 @@ function ProfileCard({
               : "border-transparent bg-brand-500 text-white hover:bg-brand-600"
           }`}
         >
-          <BookOpen size={14} strokeWidth={2.25} />
+          {readingAlong ? <X size={14} strokeWidth={2.25} /> : <Navigation size={14} strokeWidth={2.25} />}
           {readingAlong ? "Stop reading along" : "Read along"}
         </button>
       )}
@@ -508,7 +507,7 @@ function MyFace({ me, open = false }: { me: ReturnType<typeof useProfile>["data"
 }
 
 function faceLabel(f: Face, readingAlong = false) {
-  const name = comradeName(f.pseudonym);
+  const name = f.pseudonym;
   if (readingAlong) return `Reading along with ${name}`;
   if (f.live) return `${name} is currently ${f.live === "listen" ? "listening" : "reading"}`;
   if (f.wroteHere) return `${name} wrote here`;

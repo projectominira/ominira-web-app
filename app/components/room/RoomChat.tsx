@@ -5,7 +5,6 @@ import { ArrowDown, X } from "lucide-react";
 import { RoomField, hasKeyboard } from "@/app/components/rooms/RoomInput";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import QuoteCard from "@/app/components/reader/notes/QuoteCard";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { formatShortTimeAgo } from "@/lib/time/relative";
 import { useRoom } from "@/lib/room/hooks";
 import type { ChatItem, ChatPerson } from "@/lib/room/chat";
@@ -109,7 +108,8 @@ function Message({
   person: ChatPerson | undefined;
   now: number;
 }) {
-  const name = person ? comradeName(person.name) : "A comrade";
+  const name = person?.name ?? "A comrade";
+  const when = formatShortTimeAgo(item.at, now);
   return (
     <div className="flex gap-2.5">
       <ReaderAvatar pseudonym={person?.name ?? "comrade"} avatar={person?.avatar ?? null} size={28} className="flex-none" />
@@ -118,7 +118,7 @@ function Message({
           <span className="truncate font-semibold text-[var(--reader-text)]">
             {name}
           </span>
-          <span className="flex-none text-[11px] font-medium text-[var(--reader-text-subtle)]">{formatShortTimeAgo(item.at, now)} ago</span>
+          <span className="flex-none text-[11px] font-medium text-[var(--reader-text-subtle)]">{when === "now" ? "just now" : `${when} ago`}</span>
         </span>
         {item.passage && (
           <QuoteCard>

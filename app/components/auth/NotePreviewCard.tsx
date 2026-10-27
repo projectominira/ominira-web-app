@@ -31,8 +31,6 @@ const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
  * and there's nowhere to send a reader who hasn't signed up yet.
  */
 export default function NotePreviewCard({ pseudonym }: { pseudonym: string }) {
-  // AuthorRow itself now applies the "Comrade " prefix (comradeName) — pass
-  // the bare pseudonym so this preview doesn't double it up.
   const name = pseudonym.trim() || "Kofi Writes";
   const [reacted, setReacted] = useState(false);
   const [savedAt] = useState(() => Date.now() - TWO_HOURS_MS);

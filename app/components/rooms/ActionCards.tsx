@@ -5,7 +5,6 @@ import { Bell, Headphones, Pin, PinOff, Target } from "lucide-react";
 import { activeRoom, useRoomStore } from "@/stores/room-store";
 import PulseDot from "@/app/components/shared/PulseDot";
 import { sessionMeta, sessionPeople, targetRange } from "@/lib/rooms/cards";
-import { personName } from "@/lib/rooms/names";
 import type { RoomItem, RoomSession, RoomTarget } from "@/lib/rooms/types";
 import { formatDay } from "@/lib/time/format";
 import { button } from "./buttons";
@@ -56,7 +55,7 @@ export function TargetCard({ target, flash = false, resume, pin }: { target: Roo
       <div className="flex flex-col gap-0.5">
         <span className="font-serif text-[22px]/[1.2] font-semibold">{targetRange(target)}</span>
         <span className="text-ui-caption text-[var(--color-app-text-secondary)]">
-          {bookTitle} · set by {personName(setBy)}
+          {bookTitle} · set by {setBy}
         </span>
       </div>
       {resume}

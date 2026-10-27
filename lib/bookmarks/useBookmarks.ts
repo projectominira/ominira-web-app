@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { serialized } from "@/lib/bookmarks/serialize";
 import { apiFetch } from "@/lib/api/client";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
-import type { FeedItem } from "@/lib/community/feed";
 import type { MaterialSummary } from "@/lib/api/types";
 
 // Module-level constant, not `new Set()` inline at the call site: this is
@@ -16,14 +15,13 @@ const EMPTY: ReadonlySet<string> = new Set();
 
 export const bookmarkKeys = {
   materialIds: ["bookmarks", "material-ids"] as const,
-  saved: (type: "material" | "post") => ["bookmarks", "saved", type] as const,
+  saved: (type: "material") => ["bookmarks", "saved", type] as const,
 };
 
 /**
  * Every material id this reader has saved, as a Set — one fetch for the
  * whole session, shared by every BookmarkButton on every book row in the
- * app (see the ids route's own doc comment for why materials get a set and
- * notes get a per-row flag instead).
+ * app (see the ids route's own doc comment).
  *
  * Signed-out readers never fire this: the button gates itself behind
  * MembersOnlyPrompt before it could ever need the answer, and an empty set
@@ -110,18 +108,6 @@ export function useSavedMaterials() {
   return useQuery({
     queryKey: bookmarkKeys.saved("material"),
     queryFn: () => apiFetch<{ items: MaterialSummary[] }>("/auth/me/bookmarks?type=material").then((r) => r.items),
-    enabled: isAuthenticated,
-  });
-}
-
-/** `GET /api/auth/me/bookmarks?type=post` — the Saved tab's posts, in the
- * same FeedItem shape the home feed renders, so NoteCard takes them
- * unchanged. */
-export function useSavedNotes() {
-  const isAuthenticated = useIsAuthenticated();
-  return useQuery({
-    queryKey: bookmarkKeys.saved("post"),
-    queryFn: () => apiFetch<{ items: FeedItem[] }>("/auth/me/bookmarks?type=post").then((r) => r.items),
     enabled: isAuthenticated,
   });
 }

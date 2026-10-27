@@ -5,7 +5,6 @@ import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { toAvatar } from "@/lib/avatar/avatar";
 import { notifyReaders } from "@/lib/notifications/notify";
 import { notificationSnippet } from "@/lib/notifications/snippet";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { MAX_MENTIONS, type MentionCandidate } from "@/lib/community/mentionTypes";
 
 // Mentions (studygroup-spec.md §3.3, §4.5): who a post tags, the `mention`
@@ -57,7 +56,7 @@ export function notifyMentioned(post: {
         (id) => id !== post.authorId
       );
       if (recipients.length === 0) return;
-      const name = actor?.pseudonym ? comradeName(actor.pseudonym) : "A comrade";
+      const name = actor?.pseudonym || "A comrade";
       const quoted = notificationSnippet(post.text);
       await notifyReaders(recipients, {
         kind: "mention",

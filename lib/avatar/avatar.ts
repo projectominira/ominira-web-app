@@ -7,7 +7,6 @@
 // deletes the upload; picking the photo again just clears the color. With
 // neither, the circle falls back to a color hashed from the name.
 
-import { comradeName } from "@/lib/reader/authorDisplay";
 
 /** The defaults grid (ui-mockups/Profile Dropdown and Edit.dc.html). */
 export const AVATAR_COLORS = {
@@ -49,10 +48,11 @@ function hash(str: string): number {
 }
 
 /** What the circle shows — the photo, or which color sits behind the
- * initial. Hashed on comradeName so "Muiz" and "Comrade Muiz" agree. */
+ * initial. Hashed on "Comrade <name>", as names once displayed, so every
+ * reader keeps the color they've always had ("Muiz" and "Comrade Muiz" agree). */
 export function avatarChoice(pseudonym: string, avatar?: Avatar | null): AvatarColor | "photo" {
   if (avatar?.url && !avatar.color) return "photo";
-  return avatar?.color ?? FALLBACK_COLORS[hash(comradeName(pseudonym)) % FALLBACK_COLORS.length];
+  return avatar?.color ?? FALLBACK_COLORS[hash(/^comrade\s+/i.test(pseudonym) ? pseudonym : `Comrade ${pseudonym}`) % FALLBACK_COLORS.length];
 }
 
 /** The ring color to sit an avatar in — mixed toward its own background
@@ -65,8 +65,8 @@ export function avatarRingColor(pseudonym: string, avatar?: Avatar | null): stri
   return `color-mix(in srgb, ${AVATAR_COLORS[choice]} 45%, var(--reader-surface))`;
 }
 
-/** "Comrade Muiz" -> "M" — the letter after "Comrade ", uppercased; falls
- * back to the name's own first letter if it doesn't follow that pattern. */
+/** "Muiz" or "Comrade Muiz" -> "M" — the letter after any "Comrade ",
+ * uppercased; falls back to the name's own first letter. */
 export function avatarInitial(name: string): string {
   const rest = name.replace(/^Comrade\s+/i, "");
   return (rest || name).charAt(0).toUpperCase();

@@ -6,9 +6,7 @@ import { Check, Headphones } from "lucide-react";
 import type { MaterialDetail } from "@/lib/materials/detail";
 import { useMaterialReaction } from "@/lib/materials/useMaterialReaction";
 import { resolveBookCoverSrc } from "@/lib/materials/image";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { pseudonymToSlug } from "@/lib/reader/profileSlug";
-import { personName } from "@/lib/rooms/names";
 import type { BookRoomHeader } from "@/lib/rooms/types";
 import BookCover from "@/app/components/shared/BookCover";
 import { useReadingPositionStore } from "@/stores/reading-position-store";
@@ -85,7 +83,7 @@ export default function BookDetails({
               className="-mx-2 flex min-h-12 items-center gap-3 rounded-sm px-2 no-underline hover:bg-sand-75"
             >
               <RoomAvatar comrade={comrade} size={30} />
-              <span className="min-w-0 flex-1 truncate text-ui-sm font-bold text-[var(--color-app-text)]">{personName(comrade.pseudonym)}</span>
+              <span className="min-w-0 flex-1 truncate text-ui-sm font-bold text-[var(--color-app-text)]">{comrade.pseudonym}</span>
             </Link>
           ))}
           {h.everyoneCount > h.everyone.length && (
@@ -176,7 +174,7 @@ function ContributorRow({ material }: { material: MaterialDetail }) {
       <div className="min-w-0 flex-1">
         <div className="text-xs font-medium text-[var(--reader-text-subtle)]">Added by</div>
         <Link href={profileHref} className="truncate text-[13px] font-semibold text-[var(--reader-text)] no-underline hover:underline">
-          {comradeName(material.contributor.pseudonym)}
+          {material.contributor.pseudonym}
         </Link>
       </div>
       <ReactionButton count={reactionCount} reacted={reactedByMe} onToggle={onToggle} size="small" />

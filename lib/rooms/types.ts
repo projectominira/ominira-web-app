@@ -48,7 +48,7 @@ export type RoomSession = {
   people: Comrade[];
   /** Upcoming: going. Live: listening. Ended: joined. */
   count: number;
-  /** Live: "Comrade Ada.O reading Ch. 5". */
+  /** Live: "Ada.O reading Ch. 5". */
   reading: string | null;
   /** Live: minutes since it started. Ended: how long it ran. */
   minutes: number | null;

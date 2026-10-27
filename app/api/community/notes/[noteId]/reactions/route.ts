@@ -5,7 +5,6 @@ import { notFound, unauthorized } from "@/lib/api/errors";
 import { notifyReader } from "@/lib/notifications/notify";
 import { canReadPost } from "@/lib/community/visibility";
 import { loadPostViewer } from "@/lib/community/viewer";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { notificationSnippet } from "@/lib/notifications/snippet";
 
 export async function POST(request: Request, { params }: { params: Promise<{ noteId: string }> }) {
@@ -53,7 +52,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ not
         // one url, and it opens the thread itself rather than loading a
         // whole book to reach one note (the page links on into the reader).
         const url = `/note/${note.id}`;
-        const actorName = actor?.pseudonym ? comradeName(actor.pseudonym) : "A comrade";
+        const actorName = actor?.pseudonym || "A comrade";
         // The reacted-to note's own words — what was reacted to says far
         // more than "tap to view in <book>" ever did, on a lock screen and
         // in the feed row alike. A voice note has none, so it falls back to

@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import { Share, X } from "lucide-react";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { shareRoom } from "@/lib/room/share";
 import type { RoomInvite } from "@/lib/room/types";
 
@@ -66,7 +65,7 @@ export default function JoinRoomCard({
             <li key={p.readerId} className="flex min-w-0 flex-col items-center gap-1.5 text-center">
               <ReaderAvatar pseudonym={p.pseudonym} avatar={p.avatar} size={48} />
               <span className="flex min-w-0 max-w-full flex-col">
-                <span className="truncate text-[13px] font-bold text-[var(--reader-text)]">{comradeName(p.pseudonym)}</span>
+                <span className="truncate text-[13px] font-bold text-[var(--reader-text)]">{p.pseudonym}</span>
                 <span className="text-xs text-[var(--reader-text-muted)]">{p.readerId === invite.hostId ? "Host" : "Listener"}</span>
               </span>
             </li>

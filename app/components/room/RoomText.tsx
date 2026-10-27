@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import RoomAvatar from "./RoomAvatar";
 import { useDockedHeight } from "@/app/components/useBottomDock";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { useBand, useFollowing, useMargin } from "@/lib/room/hooks";
 import { spreadLines } from "@/lib/room/margin";
 import { narratorName } from "@/lib/room/presence";
@@ -80,11 +79,10 @@ function PageFrame({ left, right, inset }: { left: number; right: number; inset:
 }
 
 /** Live mics, moderators and the one you follow, at their exact line
- * (spec §1.3). A tap follows (or stops following). */
+ * (spec §1.3). A tap opens their card, to read along (or stop). */
 function Margin({ view, area, size }: { view: ReaderView; area: Area; size: number }) {
   const margin = useMargin();
   const session = useRoomStore((s) => s.session);
-  const following = useFollowing();
   const column = view.column();
   if (!column || !session || margin.length === 0) return null;
   // Just right of the text, kept on screen.
@@ -100,8 +98,8 @@ function Margin({ view, area, size }: { view: ReaderView; area: Area; size: numb
         <RoomAvatar
           member={member}
           size={size}
-          pressed={following?.member.readerId === member.readerId}
-          onClick={() => session.follow(member.readerId)}
+          card
+          readAlong={() => session.follow(member.readerId)}
         />
       </div>
     ),
@@ -148,11 +146,11 @@ function SpeakerBand({ view, area }: { view: ReaderView; area: Area }) {
         {narratorName(band.member) ? (
           <>
             {narratorName(band.member)} is narrating via{" "}
-            <strong className="font-bold text-[var(--reader-text)]">{comradeName(band.member.name)}</strong>
+            <strong className="font-bold text-[var(--reader-text)]">{band.member.name}</strong>
           </>
         ) : (
           <>
-            <strong className="font-bold text-[var(--reader-text)]">{comradeName(band.member.name)}</strong>{" "}
+            <strong className="font-bold text-[var(--reader-text)]">{band.member.name}</strong>{" "}
             {band.member.micOnAt !== null ? "is speaking from this passage" : "selected this passage"}
           </>
         )}

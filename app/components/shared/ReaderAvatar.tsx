@@ -1,6 +1,5 @@
 import type { CSSProperties } from "react";
 import { AVATAR_COLORS, avatarChoice, avatarInitial, type Avatar } from "@/lib/avatar/avatar";
-import { comradeName } from "@/lib/reader/authorDisplay";
 
 /** The single source for a reader's DP. Every avatar in the app renders
  * through here so it stays identical for the same reader everywhere: their
@@ -20,7 +19,7 @@ export default function ReaderAvatar({
   className?: string;
   style?: CSSProperties;
 }) {
-  const name = comradeName(pseudonym);
+  const name = pseudonym;
   const choice = avatarChoice(pseudonym, avatar);
   const style = { width: size, height: size, ...styleProp };
 

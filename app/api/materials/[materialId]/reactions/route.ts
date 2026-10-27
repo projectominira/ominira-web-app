@@ -3,7 +3,6 @@ import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { getAuthenticatedReader } from "@/lib/auth/session";
 import { notFound, unauthorized } from "@/lib/api/errors";
 import { notifyReader } from "@/lib/notifications/notify";
-import { comradeName } from "@/lib/reader/authorDisplay";
 
 // Mirrors app/api/community/notes/[noteId]/reactions/route.ts's own toggle +
 // fire-and-forget notify shape — the "appreciate a contributed book"
@@ -47,7 +46,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ mat
     if (material.uploaded_by && material.uploaded_by !== reader.readerId) {
       void (async () => {
         const { data: actor } = await admin.from("readers").select("pseudonym").eq("id", reader.readerId).maybeSingle();
-        const actorName = actor?.pseudonym ? comradeName(actor.pseudonym) : "A comrade";
+        const actorName = actor?.pseudonym || "A comrade";
         await notifyReader(material.uploaded_by!, {
           kind: "material_reaction",
           // Actor sentence in the title, book in the body — same shape as

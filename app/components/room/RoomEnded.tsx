@@ -6,7 +6,6 @@ import { X } from "lucide-react";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import { SPLASH_MARK } from "@/lib/config/brand-assets";
 import { materialKeys } from "@/lib/materials/queryKeys";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { getRoomSummary } from "@/lib/room/api";
 import { useRoom } from "@/lib/room/hooks";
 import { formatDuration } from "@/lib/time/duration";
@@ -46,7 +45,7 @@ export default function RoomEnded() {
 
   if (!room) return null;
   const ended = Date.parse(summary?.endedAt ?? endedAt ?? new Date().toISOString());
-  const moderators = summary?.moderatorNames.map(comradeName).join(", ");
+  const moderators = summary?.moderatorNames.join(", ");
   const joined = summary?.joined;
   const fullFor = summary && summary.fullSeconds >= 60 ? ` · full for ${formatDuration(summary.fullSeconds * 1000)}` : "";
 
@@ -99,7 +98,7 @@ export default function RoomEnded() {
             </div>
             <div className="flex items-center">
               {joined.first.map((r) => (
-                <span key={r.readerId} title={comradeName(r.name)} className="-mr-2 rounded-full ring-2 ring-[var(--reader-surface)]">
+                <span key={r.readerId} title={r.name} className="-mr-2 rounded-full ring-2 ring-[var(--reader-surface)]">
                   <ReaderAvatar pseudonym={r.name} avatar={r.avatar} size={34} />
                 </span>
               ))}

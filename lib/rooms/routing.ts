@@ -2,7 +2,6 @@
 // only choice is the lock. Pure; app/api/community/notes applies it, and
 // the reader's composer says it (routeLine, sentLine).
 
-import { personName } from "./names";
 
 export type NoteRoute = { visibility: "public" | "private"; groupId: string | null; mentionIds: string[] };
 
@@ -25,7 +24,7 @@ export type NoteGroup = { name: string; slug: string; current: boolean };
 /** "Kemi Reads is" / "3 comrades are": who the note tags, as the lines say it. */
 function taggedWho(tagged: string[]): string | null {
   if (tagged.length === 0) return null;
-  return tagged.length === 1 ? `${personName(tagged[0])} is` : `${tagged.length} comrades are`;
+  return tagged.length === 1 ? `${tagged[0]} is` : `${tagged.length} comrades are`;
 }
 
 /** The "where it goes" line under the writing (frames 12b, 13b, 13c). It

@@ -9,7 +9,7 @@ import { ChatButton } from "./RoomActions";
 import RoomAvatar from "./RoomAvatar";
 import RoomLive, { headButton, useRoomStatus } from "./RoomLive";
 import { useBottomDock, useNarrationBarHeight } from "@/app/components/useBottomDock";
-import { useFollowing, useReaderView, useRoom, useRoomControls, useVoices } from "@/lib/room/hooks";
+import { useReaderView, useRoom, useRoomControls, useVoices } from "@/lib/room/hooks";
 import { useDebounced } from "@/lib/time/useDebounced";
 import { useFeedStore } from "@/stores/feed-store";
 import { openRoomPlayer, useLayoutStore } from "@/stores/layout-store";
@@ -42,7 +42,6 @@ export default function RoomMiniPlayer() {
   // Who the pill shows: you, until someone is heard — then them.
   const featured = useRoom((s) => voices?.[0] ?? s.roster.find((p) => p.readerId === s.readerId));
   const me = useRoom((s) => s.readerId);
-  const followingId = useFollowing()?.member.readerId;
   const inReader = useReaderView() !== null;
   const feedOpen = useFeedStore((s) => inReader && s.openFor === materialId);
   useEffect(() => {
@@ -102,8 +101,8 @@ export default function RoomMiniPlayer() {
               <RoomAvatar
                 member={featured}
                 size={32}
-                pressed={featured.readerId === followingId}
-                onClick={featured.readerId !== me && !elsewhere ? () => session.follow(featured.readerId) : undefined}
+                card
+                readAlong={featured.readerId !== me && !elsewhere ? () => session.follow(featured.readerId) : undefined}
               />
             )}
             {audioSuspended && !elsewhere ? (

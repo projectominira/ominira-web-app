@@ -3,7 +3,6 @@
 // time; where you are in your book. Pure.
 
 import type { ChapterEnd } from "@/lib/groups/progress";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import type { StreakView } from "@/lib/streaks/types";
 import { formatShortTimeAgo } from "@/lib/time/relative";
 import { addDays, weekdayOf, type LocalDay } from "@/lib/time/zone";
@@ -142,21 +141,20 @@ export function byLatest<T extends { last: { at: string } | null }>(rows: T[]): 
   return [...rows].sort((a, b) => at(b) - at(a));
 }
 
-/** How a row names a note's author: "Comrade" (the app's convention) and
- * the pseudonym, or its first word when that's over 18 characters
- * ("Thandiwe of the Lagos–Johannesburg Reading Circle" → "Comrade
- * Thandiwe"). A pseudonym's own "Comrade" isn't doubled. */
+/** How a row names a note's author: the pseudonym, or its first word when
+ * that's over 18 characters ("Thandiwe of the Lagos–Johannesburg Reading
+ * Circle" → "Thandiwe"), less any "Comrade" it starts with. */
 export function previewName(pseudonym: string): string {
   const name = pseudonym.replace(/^comrade\s+/i, "").trim();
-  return comradeName(name.length > 18 ? name.split(/\s+/)[0] : name);
+  return name.length > 18 ? name.split(/\s+/)[0] : name;
 }
 
 /** A row's preview of a note: its words, or what it is when it has none. */
 export const previewText = (row: { content: unknown; kind: string }) =>
   (row.content as { text?: string } | null)?.text || (row.kind === "voice" ? "Voice note" : "Shared a passage");
 
-/** A row's preview line: "Comrade Ama: …" (or "You: …"), "Comrade Ama
- * replied: …", "Comrade Ama scheduled Ch. 4", or a milestone's own words. */
+/** A row's preview line: "Ama: …" (or "You: …"), "Ama
+ * replied: …", "Ama scheduled Ch. 4", or a milestone's own words. */
 export function rowPreview(last: RoomRowView["last"]): string {
   if (!last.who) return last.text;
   const who = last.mine ? "You" : previewName(last.who);

@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { AtSign, X } from "lucide-react";
 import ReaderAvatar from "@/app/components/shared/ReaderAvatar";
 import type { MentionCandidate } from "@/lib/community/mentionTypes";
-import { comradeName } from "@/lib/reader/authorDisplay";
 
 export type TagChip = { key: string; label: string; face: ReactNode; onRemove: () => void };
 
@@ -95,7 +94,7 @@ export default function TagPicker({
             return (
               <button key={c.readerId} type="button" disabled={locked} onClick={() => onPick(c)} className={TAG_ROW}>
                 <ReaderAvatar pseudonym={c.pseudonym} avatar={c.avatar} size={22} />
-                <span className="truncate">{comradeName(c.pseudonym)}</span>
+                <span className="truncate">{c.pseudonym}</span>
                 {c.role && <span className="ml-auto text-[11px] font-medium text-[var(--reader-text-muted)]">Member</span>}
               </button>
             );

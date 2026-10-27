@@ -1,7 +1,6 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import type { Database } from "@/lib/supabase/database.types";
 import type { AnnotationRange, Note, NoteContent } from "@/lib/api/types";
-import { getBookmarkedIds } from "@/lib/bookmarks/store";
 import { toAvatar, type Avatar } from "@/lib/avatar/avatar";
 
 // Backed by `posts` (migrations/20260919_topics_and_posts.sql), not `notes`
@@ -50,21 +49,16 @@ export type NoteMention = { readerId: string; pseudonym: string };
 
 /** snake_case posts row -> camelCase Note (api-spec.md's Shared Types,
  * unchanged even though the row is now a posts row). Author metadata, the
- * group label, mentions and the caller's own reacted/bookmarked flags are
+ * group label, mentions and whether the caller reacted are
  * looked up separately (no typed FK embedding — see the helpers below) and
  * passed in rather than queried per-row, so a list of N notes costs a few
  * extra queries, not N per note. materialId/ranges are null only for a
  * book-less discussion post — every book-anchored note/reply this endpoint
- * family reads always has both.
- *
- * The two per-caller flags travel as one object rather than two positional
- * booleans: they're the same type, adjacent, and mean opposite things, so a
- * transposed pair would type-check cleanly and silently render every note
- * saved-but-not-reacted. */
+ * family reads always has both. */
 export function toNote(
   row: NoteRow,
   author: AuthorMeta,
-  flags: { reactedByMe: boolean; bookmarkedByMe: boolean },
+  reactedByMe: boolean,
   group: NoteGroup | null,
   mentions: NoteMention[]
 ): Note {
@@ -78,8 +72,7 @@ export function toNote(
     content: contentFromRow(row),
     visibility: row.visibility,
     reactionCount: row.reaction_count,
-    reactedByMe: flags.reactedByMe,
-    bookmarkedByMe: flags.bookmarkedByMe,
+    reactedByMe,
     group,
     mentions,
     createdAt: row.created_at,
@@ -135,18 +128,15 @@ export async function getReactedNoteIds(readerId: string | undefined, noteIds: s
 }
 
 /** Batch-hydrates a set of note rows into full Note[] — one author query,
- * one reactions query, one bookmarks query, one group query and one mentions
+ * one reactions query, one group query and one mentions
  * query for the whole batch, in the same reply/thread hydration shape every
  * notes-reading route needs. */
 export async function hydrateNotes(rows: NoteRow[], callerId: string | undefined): Promise<Note[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const [authors, reacted, bookmarked, groups, mentions] = await Promise.all([
+  const [authors, reacted, groups, mentions] = await Promise.all([
     getAuthorsByReaderId(rows.map((r) => r.reader_id)),
     getReactedNoteIds(callerId, ids),
-    // Same batch-per-page shape as getReactedNoteIds above, and likewise a
-    // no-op empty set for a signed-out caller.
-    getBookmarkedIds(callerId, "post", ids),
     getGroupsById(rows.flatMap((r) => (r.group_id ? [r.group_id] : []))),
     getMentionsForPosts(ids),
   ]);
@@ -154,7 +144,7 @@ export async function hydrateNotes(rows: NoteRow[], callerId: string | undefined
     toNote(
       row,
       authors.get(row.reader_id) ?? { pseudonym: "Unknown", city: null, avatar: null },
-      { reactedByMe: reacted.has(row.id), bookmarkedByMe: bookmarked.has(row.id) },
+      reacted.has(row.id),
       (row.group_id && groups.get(row.group_id)) || null,
       mentions.get(row.id) ?? []
     )

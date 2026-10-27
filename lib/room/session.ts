@@ -15,7 +15,6 @@ import { createSignalling, type Signalling } from "@/lib/room/signalling";
 import { startSpeakingDetector } from "@/lib/room/speaking";
 import type { RoomInfo, RoomJoinPayload, RoomLeaveStats, RoomStartHost } from "@/lib/room/types";
 import type { ReaderView } from "@/lib/room/view";
-import { comradeName } from "@/lib/reader/authorDisplay";
 
 // RoomSession: the room's one orchestrator (spec §8.1). Framework-free: it
 // pushes immutable snapshots to subscribers (stores/room-store.ts) and no
@@ -474,7 +473,7 @@ export class RoomSession {
         const mics = selectSpeaking(engine.roster);
         return (mics.find((p) => this.snapshot?.speakingIds.includes(p.readerId)) ?? mics[0])?.readerId ?? null;
       },
-      nameOf: (id) => comradeName(this.snapshot?.chat.people[id]?.name ?? "comrade"),
+      nameOf: (id) => this.snapshot?.chat.people[id]?.name ?? "comrade",
       onRising: (rising) => this.patch({ rising }),
       onDigest: ({ text, emojis }) => chat.add({ kind: "digest", id: "", at: Date.now(), text, emojis }),
       signal,

@@ -12,7 +12,6 @@ import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useNotifications, type NotificationItem } from "@/lib/notifications/useNotifications";
 import { useMarkNotificationsRead } from "@/lib/notifications/useMarkNotificationsRead";
 import { apiFetch } from "@/lib/api/client";
-import { comradeName } from "@/lib/reader/authorDisplay";
 import { formatTimeAgo } from "@/lib/time/relative";
 import { notificationSnippet } from "@/lib/notifications/snippet";
 import type { NotificationKind } from "@/lib/notifications/types";
@@ -59,7 +58,7 @@ const KIND_STYLE: Partial<Record<NotificationKind, { color: string; icon: (props
 // the emoji is stripped rather than shown twice.
 const LEADING_EMOJI = /^\p{Extended_Pictographic}[\p{Emoji_Modifier}‍\p{Extended_Pictographic}️]*\s*/u;
 
-// Every actor-driven title reads "<Comrade Name> <did something>", so the
+// Every actor-driven title reads "<Name> <did something>", so the
 // name is split off the front and bolded, leaving the rest at normal weight
 // — the mockup's one-bold-span line, not a wall of semibold. Falls back to
 // parsing the title when actor_reader_id is null (every row written before
@@ -82,7 +81,7 @@ function NotificationRow({ item, isUnread }: { item: NotificationItem; isUnread:
 
   const room = item.kind === "room_live";
   const parsed = TITLE_ACTOR.exec(title);
-  const actor = item.actorPseudonym ? comradeName(item.actorPseudonym) : (parsed?.[1] ?? null);
+  const actor = item.actorPseudonym || (parsed?.[1] ?? null);
   const action = room ? (/ invited you/.test(title) ? " invited you to a reading room" : " started a reading room") : actor ? (title.startsWith(actor) ? title.slice(actor.length) : (parsed?.[2] ?? null)) : null;
 
   // A book appreciation's body is the bare book title — it trails the
