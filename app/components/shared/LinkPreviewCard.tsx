@@ -6,7 +6,7 @@ import { ArrowUpRight, Link as LinkIcon, Loader2, X } from "lucide-react";
 import LiteYouTubeEmbed from "react-lite-youtube-embed";
 import "react-lite-youtube-embed/dist/LiteYouTubeEmbed.css";
 import { useLinkPreview } from "@/lib/community/useLinkPreview";
-import { youtubeVideoId } from "@/lib/community/links";
+import { inAppPath, isOwnSiteUrl, youtubeVideoId } from "@/lib/community/links";
 import { useUploadFromUrl } from "@/lib/materials/useUploadFromUrl";
 import { ApiError } from "@/lib/api/client";
 
@@ -43,7 +43,10 @@ function hostname(url: string) {
  * the card shows why and becomes a plain external link to the original
  * (see openInReader for why that isn't an automatic window.open). The hover
  * arrow (BookPreview's own affordance) is what signals "this opens in the
- * reader," not just another external link. */
+ * reader," not just another external link.
+ *
+ * Our own pages (projectominira.org and its subdomains) are never ingested:
+ * the card links straight to the page, soft-navigating when it's this app. */
 export default function LinkPreviewCard({ url, dismissible, onDismiss }: { url: string; dismissible?: boolean; onDismiss?: () => void }) {
   const router = useRouter();
   const { data, isLoading } = useLinkPreview(url);
@@ -114,6 +117,29 @@ export default function LinkPreviewCard({ url, dismissible, onDismiss }: { url: 
       {videoId ? (
         <a href={url} target="_blank" rel="noopener noreferrer nofollow" onClick={(e) => e.stopPropagation()} className="min-w-0 no-underline">
           {metaStrip}
+        </a>
+      ) : isOwnSiteUrl(url) ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener"
+          onClick={(e) => {
+            e.stopPropagation();
+            const path = inAppPath(url);
+            if (!path) return;
+            e.preventDefault();
+            router.push(path);
+          }}
+          className="flex min-w-0 items-center gap-2 no-underline"
+        >
+          <div className="min-w-0 flex-1">{metaStrip}</div>
+          <div className="flex-none pr-3">
+            <ArrowUpRight
+              aria-hidden="true"
+              size={16}
+              className="text-[var(--color-app-text-muted)] opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
+            />
+          </div>
         </a>
       ) : ingestError ? (
         <a href={url} target="_blank" rel="noopener noreferrer nofollow" onClick={(e) => e.stopPropagation()} className="min-w-0 no-underline">

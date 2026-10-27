@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { NoteContent as NoteContentValue } from "@/lib/api/types";
 import LinkPreviewCard from "@/app/components/shared/LinkPreviewCard";
 import VoiceNoteView from "./VoiceNoteView";
 import { truncateQuote } from "./HighlightCard";
-import { LINK_URL_PATTERN, extractLinks, normalizeLinkUrl } from "@/lib/community/links";
+import { LINK_URL_PATTERN, extractLinks, inAppPath, normalizeLinkUrl } from "@/lib/community/links";
 import { splitMentions } from "@/lib/community/mentionText";
 
 // Same idea as HighlightCard's own preview budget — a note's own body is
@@ -54,6 +55,7 @@ export default function NoteContent({
   mentions?: string[];
   variant?: "card" | "bubble" | "thread";
 }) {
+  const router = useRouter();
   const bubble = variant !== "card";
   const [expanded, setExpanded] = useState(false);
 
@@ -104,7 +106,13 @@ export default function NoteContent({
                 href={part.url}
                 target="_blank"
                 rel="noopener noreferrer nofollow"
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const path = inAppPath(part.url);
+                  if (!path) return;
+                  e.preventDefault();
+                  router.push(path);
+                }}
                 title={part.url}
                 className="text-[var(--color-app-text-secondary)] underline decoration-1 underline-offset-2 decoration-[var(--color-app-border)] hover:text-[var(--reader-accent)]"
               >

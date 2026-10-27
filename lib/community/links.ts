@@ -39,6 +39,28 @@ export function extractLinks(text: string): string[] {
   return urls;
 }
 
+/** projectominira.org or any of its subdomains — our own pages, which open
+ * directly rather than being ingested into the reader. */
+export function isOwnSiteUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return host === "projectominira.org" || host.endsWith(".projectominira.org");
+  } catch {
+    return false;
+  }
+}
+
+/** The path to soft-navigate to when `url` is on the origin the app is
+ * running on, else null (client-only). */
+export function inAppPath(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    return parsed.origin === window.location.origin ? parsed.pathname + parsed.search + parsed.hash : null;
+  } catch {
+    return null;
+  }
+}
+
 // Mirrors app/api/link-preview/route.ts's own youtubeVideoId — that one
 // decides server-side whether to hit YouTube's oEmbed endpoint, this one
 // lets LinkPreviewCard know whether to render the actual embed client-side.
