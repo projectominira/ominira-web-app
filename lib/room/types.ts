@@ -90,7 +90,21 @@ export type NextSession = { groupSlug: string; groupName: string; session: Group
 /** One beacon per visit, with the leave (spec §8.10). */
 export type RoomLeaveStats = {
   peakMics: number;
-  peakPeers: number;
-  iceRestarts: number;
+  /** Voices pulled at once. */
+  peakStreams: number;
+  /** Times the audio connection was rebuilt. */
+  reconnects: number;
   usedTurn: boolean;
+};
+
+export type SessionDescription = { type: "offer" | "answer"; sdp: string };
+
+/** What POST /api/rooms/{roomId}/audio returns: Cloudflare Realtime's own
+ * result, passed through (lib/room/realtime.ts). */
+export type SfuResult = {
+  sessionDescription?: SessionDescription;
+  requiresImmediateRenegotiation?: boolean;
+  tracks?: { mid?: string; sessionId?: string; trackName?: string; errorCode?: string; errorDescription?: string }[];
+  errorCode?: string;
+  errorDescription?: string;
 };

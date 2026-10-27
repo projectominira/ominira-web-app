@@ -1,17 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { RoomChannel } from "./channel";
 import type { RoomPresence } from "./events";
-import { desiredPeers } from "./mesh";
-import type { PeerOptions } from "./peer";
 import { selectRoster } from "./presence";
 import { RoomSession, type SessionDeps } from "./session";
 import type { RoomJoinPayload } from "./types";
 
 // RoomSession's core in Node (spec §8.10): several sessions on a fake
 // Realtime hub that shuffles, duplicates, delays and drops presence syncs
-// and broadcasts, with fake peers, mic and playback. However the events
-// arrive, every session ends up with exactly the peers desiredPeers asks
-// for, sending what it should.
+// and broadcasts, with a fake audio connection, mic and playback. However the
+// events arrive, every session ends up pulling exactly the published mics of
+// the others, and publishing what it should.
 
 /** Small seeded PRNG, so a failing seed can be replayed. */
 function prng(seed: number) {
@@ -96,9 +94,9 @@ function createHub(random: () => number) {
   };
 }
 
-type FakePeer = { remote: string; sends: boolean; track: unknown; closed: boolean };
+type FakeSfu = { published: boolean; pulls: string[]; track: unknown; closed: boolean };
 
-function fakeDeps(hub: ReturnType<typeof createHub>, peers: FakePeer[]): SessionDeps {
+function fakeDeps(hub: ReturnType<typeof createHub>, sfus: FakeSfu[]): SessionDeps {
   const payload = (roomId: string, readerId: string): RoomJoinPayload => ({
     room: {
       id: roomId,
@@ -127,16 +125,24 @@ function fakeDeps(hub: ReturnType<typeof createHub>, peers: FakePeer[]): Session
       endRoom: async () => {},
     },
     openRoomChannel: hub.open,
-    createPeer: (options: PeerOptions) => {
-      const peer: FakePeer = { remote: options.remote, sends: options.sends, track: options.track, closed: false };
-      peers.push(peer);
-      queueMicrotask(() => options.onHealth("connected"));
+    createSfu: (options) => {
+      const sfu: FakeSfu = { published: false, pulls: [], track: null, closed: false };
+      sfus.push(sfu);
       return {
-        iceRestarts: 0,
-        setSends: () => void (peer.sends = true),
-        setTrack: (track) => void (peer.track = track),
-        close: () => void (peer.closed = true),
-        stats: async () => ({ state: "connected", rttMs: 1, jitterMs: 1, packetsLost: 0, relayed: false }),
+        publish() {
+          if (sfu.published) return;
+          sfu.published = true;
+          queueMicrotask(() => options.onPublished(`cf-${Math.random()}`));
+        },
+        setTrack: (track) => void (sfu.track = track),
+        setPulls(pulls) {
+          sfu.pulls = [...pulls.keys()];
+          options.onHealth(new Map(sfu.pulls.map((id) => [id, "connected"])));
+        },
+        check() {},
+        stats: async () => ({ state: "connected", rttMs: 1, jitterMs: 1, packetsLost: 0, relayed: false, streams: 0 }),
+        reconnects: 0,
+        close: () => void (sfu.closed = true),
       };
     },
     createMic: ({ onChange }) => {
@@ -183,14 +189,14 @@ afterAll(() => {
 
 describe("RoomSession on a chaotic channel", () => {
   for (const seed of [1, 7, 42, 99, 2026]) {
-    test(`converges to desiredPeers (seed ${seed})`, async () => {
+    test(`pulls every published mic (seed ${seed})`, async () => {
       const random = prng(seed);
       const hub = createHub(random);
-      const peers: FakePeer[][] = [];
+      const sfus: FakeSfu[][] = [];
       const sessions: RoomSession[] = [];
       const open = (readerId: string) => {
-        const created: FakePeer[] = [];
-        peers.push(created);
+        const created: FakeSfu[] = [];
+        sfus.push(created);
         const session = new RoomSession(readerId, async () => "token", {} as AudioContext, fakeDeps(hub, created));
         sessions.push(session);
         return session;
@@ -229,23 +235,23 @@ describe("RoomSession on a chaotic channel", () => {
         const snap = snapshots[i];
         if (!snap || snap.elsewhere) {
           // Gone or yielded: nothing left open.
-          expect(peers[i].filter((p) => !p.closed)).toEqual([]);
+          expect(sfus[i].filter((p) => !p.closed)).toEqual([]);
           return;
         }
         const me = roster.find((p) => p.sessionId === snap.sessionId)!;
         expect(me).toBeDefined();
         expect(snap.roster.map((p) => p.sessionId).sort()).toEqual(roster.map((p) => p.sessionId).sort());
-        const open = peers[i].filter((p) => !p.closed);
-        expect(open.map((p) => p.remote).sort()).toEqual(desiredPeers(me, roster).map((p) => p.sessionId).sort());
-        // One open peer per remote, sending iff this session has had its mic on.
-        expect(new Set(open.map((p) => p.remote)).size).toBe(open.length);
-        for (const p of open) expect(p.sends).toBe(me.sends);
-        for (const p of open) expect(p.track !== null).toBe(me.micOnAt !== null);
+        const [sfu, ...more] = sfus[i].filter((p) => !p.closed);
+        expect(more).toEqual([]);
+        const published = roster.filter((p) => p.audio !== null && p.sessionId !== me.sessionId);
+        expect(sfu.pulls.sort()).toEqual(published.map((p) => p.sessionId).sort());
+        // Published iff this session has had its mic on; the track only while it's on.
+        expect(sfu.published).toBe(me.audio !== null);
+        expect(sfu.track !== null).toBe(me.micOnAt !== null);
       });
 
-      // b, c and d have had their mic on; a listener pair (a's tab, e2) has no peer.
-      const listeners = roster.filter((p) => !p.sends).map((p) => p.sessionId);
-      expect(listeners.length).toBe(2);
+      // b, c and d have had their mic on; a's tab and e2 haven't.
+      expect(roster.filter((p) => p.audio === null).length).toBe(2);
 
       await Promise.all(sessions.map((s) => s.leave()));
       snapshots = [];
@@ -256,9 +262,9 @@ describe("RoomSession on a chaotic channel", () => {
 describe("Reading aloud", () => {
   test("narration replaces the mic while it plays, and its word reaches listeners", async () => {
     const hub = createHub(() => 0.5); // no drops or duplicates
-    const peers: FakePeer[] = [];
+    const sfus: FakeSfu[] = [];
     const a = new RoomSession("r0", async () => "token", {} as AudioContext, fakeDeps(hub, []));
-    const b = new RoomSession("r1", async () => "token", {} as AudioContext, fakeDeps(hub, peers));
+    const b = new RoomSession("r1", async () => "token", {} as AudioContext, fakeDeps(hub, sfus));
     const latest = (s: RoomSession) => {
       let snap: Parameters<Parameters<RoomSession["subscribe"]>[0]>[0] = null;
       s.subscribe((x) => (snap = x))();
@@ -268,7 +274,7 @@ describe("Reading aloud", () => {
     await b.join("room");
     await b.setMic(true);
     await hub.settle();
-    const sent = () => peers.filter((p) => !p.closed).map((p) => p.track);
+    const sent = () => sfus.filter((p) => !p.closed).map((p) => p.track);
     const mic = sent()[0];
     expect(mic).toBeTruthy();
 

@@ -20,7 +20,7 @@ const member = (readerId: string, extra: Partial<RoomPresence> = {}): RoomPresen
   name: readerId,
   avatar: { color: null, url: null },
   isModerator: false,
-  sends: false,
+  audio: null,
   micOnAt: null,
   handRaisedAt: null,
   readingAloud: null,

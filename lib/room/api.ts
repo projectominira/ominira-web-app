@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api/client";
-import type { RoomJoinPayload, RoomLeaveStats, RoomStartHost, RoomSummary } from "@/lib/room/types";
+import type { RoomJoinPayload, RoomLeaveStats, RoomStartHost, RoomSummary, SessionDescription, SfuResult } from "@/lib/room/types";
 import { useSessionStore } from "@/stores/session-store";
 
 // Client side of the room lifecycle routes (spec §8.1). Refusals arrive as
@@ -29,6 +29,23 @@ export function leaveRoomOnUnload(roomId: string, stats: RoomLeaveStats): void {
     body: JSON.stringify(stats),
     keepalive: true,
   }).catch(() => {});
+}
+
+/** Room audio (sfu.ts → lib/room/realtime.ts): `session` opens the reader's
+ * Cloudflare session; the rest carry it and its token. */
+export type RoomAudioOp =
+  | { op: "session" }
+  | ({ session: string; token: string } & (
+      | { op: "push"; offer: SessionDescription; mid: string }
+      | { op: "pull"; publishers: string[] }
+      | { op: "answer"; answer: SessionDescription }
+      | { op: "close"; mids: string[]; offer: SessionDescription }
+    ));
+
+export function roomAudio(roomId: string, body: { op: "session" }): Promise<{ session: string; token: string }>;
+export function roomAudio(roomId: string, body: RoomAudioOp): Promise<SfuResult>;
+export function roomAudio(roomId: string, body: RoomAudioOp): Promise<unknown> {
+  return apiFetch(`/rooms/${roomId}/audio`, { json: body });
 }
 
 export function endRoom(roomId: string): Promise<void> {

@@ -69,8 +69,10 @@ export const PresenceSchema = z.object({
   }),
   /** From room-join, display only. */
   isModerator: z.boolean(),
-  /** Has had the mic on this session; drives topology (spec §8.3). */
-  sends: z.boolean(),
+  /** The Cloudflare session this member's mic is published on, from their
+   * first mic-on; everyone else pulls it from there (spec §8.3). Defaulted,
+   * so presence from a client that predates it still parses. */
+  audio: z.string().max(100).nullable().default(null),
   /** Epoch ms the mic went on, null when off; orders Speaking now. */
   micOnAt: z.number().nullable(),
   /** Epoch ms; orders hands first come. */
@@ -88,23 +90,15 @@ export const PresenceSchema = z.object({
 
 export type RoomPresence = z.infer<typeof PresenceSchema>;
 
-/** Broadcast payloads by event. `from` is the sender's sessionId on `signal`
- * (peers are per session) and readerId everywhere else. Supabase doesn't
- * authenticate it per message; spec §8.9 accepts that for v1. */
+/** Broadcast payloads by event. `from` is the sender's readerId. Supabase
+ * doesn't authenticate it per message; spec §8.9 accepts that for v1. */
 export const EVENT_SCHEMAS = {
-  /** Addressed offer/answer; one of each per pair (non-trickle ICE, spec §8.4). */
-  signal: z.object({
-    from: id,
-    to: id,
-    kind: z.enum(["description", "restart"]),
-    sdp: z.object({ type: z.enum(["offer", "answer"]), sdp: z.string().max(100_000) }),
-  }),
   pos: PlaceSchema.extend({ from: id }),
   /** The speaker's selection; null clears it. */
   highlight: z.object({ from: id, ranges: z.array(RangeSchema).max(50).nullable() }),
   /** The word a speaker's read-aloud narration is on (KaraokeWord.index in
    * that passage), for listeners' word highlight; null when it stops. The
-   * audio itself goes over the speaker's peer connections, in place of the mic. */
+   * audio itself is published in place of the mic (sfu.ts). */
   narration: z.object({
     from: id,
     word: z.object({ passageId: z.string().max(200), index: z.int().nonnegative() }).nullable(),
@@ -164,7 +158,7 @@ export type RateLimit<P> =
   | { intervalMs: number; overflow: "drop" | "latest" }
   | { intervalMs: number; overflow: "merge"; merge: (held: P, next: P) => P };
 
-/** Events not listed here (`signal`, `summon`) send as they come. */
+/** Events not listed here (`summon`) send as they come. */
 export const RATE_LIMITS: { [E in ClientEventName]?: RateLimit<RoomEvent<E>> } = {
   pos: { intervalMs: 1000, overflow: "latest" },
   highlight: { intervalMs: 1000, overflow: "latest" },

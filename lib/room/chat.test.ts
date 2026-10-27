@@ -12,7 +12,7 @@ const member = (readerId: string, name = readerId): RoomPresence => ({
   name,
   avatar: { color: null, url: null },
   isModerator: false,
-  sends: false,
+  audio: null,
   micOnAt: null,
   handRaisedAt: null,
   readingAloud: null,

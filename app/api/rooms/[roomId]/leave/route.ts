@@ -7,8 +7,8 @@ import { leaveRoom } from "@/lib/room/server";
 // The visit's one stats beacon rides on the leave (spec §8.10): logged, not stored.
 const LeaveStats = z.object({
   peakMics: z.int().nonnegative().max(100),
-  peakPeers: z.int().nonnegative().max(100),
-  iceRestarts: z.int().nonnegative().max(10_000),
+  peakStreams: z.int().nonnegative().max(100),
+  reconnects: z.int().nonnegative().max(10_000),
   usedTurn: z.boolean(),
 });
 

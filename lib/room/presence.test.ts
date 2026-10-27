@@ -9,7 +9,7 @@ const member = (readerId: string, joinedAt: number, extra: Partial<RoomPresence>
   name: readerId,
   avatar: { color: null, url: null },
   isModerator: false,
-  sends: false,
+  audio: null,
   micOnAt: null,
   handRaisedAt: null,
   readingAloud: null,

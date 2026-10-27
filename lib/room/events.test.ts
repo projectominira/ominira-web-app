@@ -27,12 +27,6 @@ describe("parseEvent", () => {
     expect(parseEvent("pos", null)).toBeNull();
   });
 
-  test("signal carries an addressed offer or answer", () => {
-    const signal: RoomEvent<"signal"> = { from: ADA, to: SEKOU, kind: "description", sdp: { type: "offer", sdp: "v=0" } };
-    expect(parseEvent("signal", signal)).toEqual(signal);
-    expect(parseEvent("signal", { ...signal, sdp: { type: "pranswer", sdp: "v=0" } })).toBeNull();
-  });
-
   test("chat is trimmed, non-empty and capped", () => {
     expect(parseEvent("chat", { from: ADA, text: "  hello  " })).toEqual({ from: ADA, text: "hello" });
     expect(parseEvent("chat", { from: ADA, text: "   " })).toBeNull();
@@ -63,7 +57,7 @@ describe("parsePresence", () => {
     name: "Ada",
     avatar: { color: null, url: "https://example.supabase.co/storage/v1/object/public/profile-pics/a.webp" },
     isModerator: false,
-    sends: false,
+    audio: null,
     micOnAt: null,
     handRaisedAt: null,
     readingAloud: null,

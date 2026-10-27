@@ -5,22 +5,21 @@ import { openRoomChannel, type ChannelStatus, type RoomChannel } from "@/lib/roo
 import { CHAT_EMPTY, createChat, type Chat, type ChatSnapshot, type SharedPassage } from "@/lib/room/chat";
 import { confirmEnded, type RoomPresence, type RoomReaction } from "@/lib/room/events";
 import { createFollow, FOLLOW_IDLE, type Follow, type FollowSnapshot } from "@/lib/room/follow";
-import { createMesh, type Mesh } from "@/lib/room/mesh";
 import { createMic, type Mic, type MicState } from "@/lib/room/mic";
-import { Peer, type PeerHealth, type PeerOptions, type PeerStats } from "@/lib/room/peer";
 import { createPlayback, type Playback } from "@/lib/room/playback";
 import { isSuperseded, selectRoster, selectSpeaking } from "@/lib/room/presence";
 import { createReactions, type Reactions, type RisingReaction } from "@/lib/room/reactions";
-import { createSignalling, type Signalling } from "@/lib/room/signalling";
+import { createSfu, type AudioHealth, type AudioStats, type Sfu } from "@/lib/room/sfu";
 import { startSpeakingDetector } from "@/lib/room/speaking";
 import type { RoomInfo, RoomJoinPayload, RoomLeaveStats, RoomStartHost } from "@/lib/room/types";
 import type { ReaderView } from "@/lib/room/view";
 
 // RoomSession: the room's one orchestrator (spec §8.1). Framework-free: it
 // pushes immutable snapshots to subscribers (stores/room-store.ts) and no
-// component touches the channel, a peer or the AudioContext. Presence drives
-// the mesh (who connects to whom); the mic feeds every peer; playback plays
-// and measures what arrives; speaking detection reads those levels.
+// component touches the channel, the audio connection or the AudioContext.
+// Presence says whose mic to pull (sfu.ts, one connection to Cloudflare); the
+// mic is published there; playback plays and measures what arrives; speaking
+// detection reads those levels.
 
 const HEARTBEAT_MS = 30_000;
 /** events.ts caps `highlight` at 50 ranges (blocks). */
@@ -41,8 +40,8 @@ export type RoomSnapshot = {
   handRaised: boolean;
   /** readerIds whose voice is detected now (speaking.ts), you included. */
   speakingIds: string[];
-  /** Audio link per remote readerId, while one is wanted (spec §10: speaker dropped). */
-  peerHealth: Record<string, PeerHealth>;
+  /** Each published voice's state, by readerId (spec §10: speaker dropped). */
+  peerHealth: Record<string, AudioHealth>;
   /** Playback is held up: "Tap to resume audio" (spec §8.6). */
   audioSuspended: boolean;
   connection: ChannelStatus;
@@ -76,15 +75,13 @@ export type LocalNarration = {
 
 export type SpeakerHighlight = { ranges: AnnotationRange[]; at: number };
 
-/** What the session uses of a Peer. */
-type PeerLike = Pick<Peer, "setSends" | "setTrack" | "close" | "stats" | "iceRestarts">;
 
 /** What a session is built from: the real modules, or fakes in the Node
  * integration test (session.test.ts, spec §8.10). */
 export type SessionDeps = {
   api: Pick<typeof api, "startRoom" | "joinRoom" | "leaveRoom" | "leaveRoomOnUnload" | "endRoom">;
   openRoomChannel: typeof openRoomChannel;
-  createPeer: (options: PeerOptions) => PeerLike;
+  createSfu: typeof createSfu;
   createMic: typeof createMic;
   createPlayback: typeof createPlayback;
 };
@@ -92,32 +89,26 @@ export type SessionDeps = {
 const REAL_DEPS: SessionDeps = {
   api,
   openRoomChannel,
-  createPeer: (options) => new Peer(options),
+  createSfu,
   createMic,
   createPlayback,
 };
-
-/** A mesh entry: the peer and its playback, closed together. */
-type MeshEntry = { peer: PeerLike; close(): void };
 
 /** Everything that lives for one visit to one room. */
 type Engine = {
   roomId: string;
   channel: RoomChannel;
-  signalling: Signalling;
-  mesh: Mesh<MeshEntry>;
+  sfu: Sfu;
   mic: Mic;
   playback: Playback;
-  /** What peers are sent, handed to new ones: the narration while it plays
-   * with the mic on, else the mic track while on. */
+  /** What the mic publishes: the narration while it plays with the mic on,
+   * else the mic track while on. */
   track: MediaStreamTrack | null;
   micTrack: MediaStreamTrack | null;
   narrationTrack: MediaStreamTrack | null;
   /** The last `narration` word sent, so an unchanged one isn't sent again. */
   narrationKey: string;
   roster: RoomPresence[];
-  /** Sessions that sent us an offer: they send, before presence says so. */
-  offered: Set<string>;
   follow: Follow;
   chat: Chat;
   reactions: Reactions;
@@ -190,12 +181,8 @@ export class RoomSession {
     }
     await engine.mic.on();
     if (engine !== this.engine || engine.mic.state !== "on" || !this.presence) return;
-    if (!this.presence.sends) {
-      // The first mic-on: listeners now want a peer with us (spec §8.3).
-      this.presence = { ...this.presence, sends: true };
-      for (const { peer } of engine.mesh.peers.values()) peer.setSends();
-      this.reconcile();
-    }
+    // Published once, from the first mic-on; presence gets its id (onPublished).
+    engine.sfu.publish();
     if (this.presence.micOnAt === null) this.updatePresence({ micOnAt: Date.now(), handRaisedAt: null });
     this.textChanged();
   }
@@ -284,18 +271,9 @@ export class RoomSession {
     await this.engine?.playback.resume();
   }
 
-  /** The dev overlay (spec §8.10): asks each peer's getStats once. */
-  async peerStats(): Promise<(PeerStats & { readerId: string; name: string })[]> {
-    const engine = this.engine;
-    if (!engine) return [];
-    const bySession = new Map(engine.roster.map((p) => [p.sessionId, p]));
-    return Promise.all(
-      [...engine.mesh.peers].map(async ([sessionId, { peer }]) => ({
-        readerId: bySession.get(sessionId)?.readerId ?? sessionId,
-        name: bySession.get(sessionId)?.name ?? "?",
-        ...(await peer.stats()),
-      })),
-    );
+  /** The dev overlay (spec §8.10): the audio connection's getStats, once. */
+  async audioStats(): Promise<AudioStats | null> {
+    return (await this.engine?.sfu.stats()) ?? null;
   }
 
   /** Called at once with the current snapshot; returns the unsubscribe. */
@@ -317,7 +295,7 @@ export class RoomSession {
       name: join.me.name,
       avatar: join.me.avatar,
       isModerator: join.isModerator,
-      sends: false,
+      audio: null,
       micOnAt: null,
       handRaisedAt: null,
       readingAloud: null,
@@ -360,7 +338,6 @@ export class RoomSession {
         const roster = selectRoster(entries);
         engine.roster = roster;
         engine.stats.peakMics = Math.max(engine.stats.peakMics, roster.filter((p) => p.micOnAt !== null).length);
-        engine.signalling.setRoster(roster);
         this.reconcile();
         engine.follow.setRoster(roster);
         engine.chat.setRoster(roster);
@@ -392,54 +369,24 @@ export class RoomSession {
       context: this.audio,
       onSuspended: (audioSuspended) => this.patch({ audioSuspended }),
     });
-    const signalling = createSignalling({
-      channel,
-      sessionId,
-      onOffer: (from) => {
-        engine.offered.add(from);
-        this.reconcile();
-      },
-    });
-
-    const mesh = createMesh<MeshEntry>({
-      create: (remote) => {
-        const setHealth = (health: PeerHealth | null) => {
-          const peerHealth = { ...this.snapshot?.peerHealth };
-          if (health) peerHealth[remote.readerId] = health;
-          else delete peerHealth[remote.readerId];
-          this.patch({ peerHealth });
-          if (health !== "connected") return;
-          const connected = Object.values(peerHealth).filter((h) => h === "connected").length;
-          engine.stats.peakPeers = Math.max(engine.stats.peakPeers, connected);
-          if (!engine.stats.usedTurn) void entry.peer.stats().then((s) => (engine.stats.usedTurn ||= s.relayed));
-        };
-        const entry: MeshEntry = {
-          peer: this.deps.createPeer({
-            sessionId,
-            remote: remote.sessionId,
-            remoteSends: remote.sends,
-            sends: this.presence?.sends ?? false,
-            track: engine.track,
-            iceServers: join.iceServers,
-            forceRelay,
-            signalling,
-            onStream: (stream) => playback.add(remote.sessionId, stream),
-            onHealth: setHealth,
-            // Failed for good: the next pass builds a fresh one if still wanted.
-            onClosed: () => {
-              engine.stats.iceRestarts += entry.peer.iceRestarts;
-              playback.remove(remote.sessionId);
-              mesh.forget(remote.sessionId, entry);
-            },
-          }),
-          close: () => {
-            engine.stats.iceRestarts += entry.peer.iceRestarts;
-            entry.peer.close();
-            playback.remove(remote.sessionId);
-            setHealth(null);
-          },
-        };
-        return entry;
+    const sfu = this.deps.createSfu({
+      roomId,
+      iceServers: join.iceServers,
+      forceRelay,
+      onPublished: (audio) => this.updatePresence({ audio }),
+      onStream: (remote, stream) => playback.add(remote, stream),
+      onDrop: (remote) => playback.remove(remote),
+      onHealth: (health) => {
+        const readerOf = new Map(engine.roster.map((p) => [p.sessionId, p.readerId]));
+        const peerHealth: Record<string, AudioHealth> = {};
+        for (const [remote, h] of health) {
+          const readerId = readerOf.get(remote);
+          if (readerId) peerHealth[readerId] = h;
+        }
+        const connected = Object.values(peerHealth).filter((h) => h === "connected").length;
+        engine.stats.peakStreams = Math.max(engine.stats.peakStreams, connected);
+        if (connected && !engine.stats.usedTurn) void sfu.stats().then((s) => (engine.stats.usedTurn ||= s.relayed));
+        this.patch({ peerHealth });
       },
     });
 
@@ -482,8 +429,7 @@ export class RoomSession {
     const engine: Engine = {
       roomId,
       channel,
-      signalling,
-      mesh,
+      sfu,
       mic,
       playback,
       track: null,
@@ -491,13 +437,12 @@ export class RoomSession {
       narrationTrack: null,
       narrationKey: "null",
       roster: [],
-      offered: new Set(),
       follow,
       chat,
       reactions,
       highlightKey: "null",
       followerKey: "",
-      stats: { peakMics: 0, peakPeers: 0, iceRestarts: 0, usedTurn: false },
+      stats: { peakMics: 0, peakStreams: 0, reconnects: 0, usedTurn: false },
     };
     this.engine = engine;
     channel.track(this.presence);
@@ -544,14 +489,14 @@ export class RoomSession {
     }, HEARTBEAT_MS);
     signal.addEventListener("abort", () => clearInterval(beat));
 
-    // Back from a hidden tab or a locked phone: audio first, then any peer
-    // that broke meanwhile (spec §8.8).
+    // Back from a hidden tab or a locked phone: audio first, then the
+    // connection, if it broke meanwhile (spec §8.8).
     document.addEventListener(
       "visibilitychange",
       () => {
         if (document.visibilityState !== "visible") return;
         void playback.resume();
-        this.reconcile();
+        sfu.check();
       },
       { signal },
     );
@@ -568,24 +513,19 @@ export class RoomSession {
     });
   }
 
-  /** Restarts by peers still open are added to those of closed ones. */
   private leaveStats(): RoomLeaveStats | undefined {
     const engine = this.engine;
     if (!engine) return undefined;
-    let open = 0;
-    for (const { peer } of engine.mesh.peers.values()) open += peer.iceRestarts;
-    return { ...engine.stats, iceRestarts: engine.stats.iceRestarts + open };
+    return { ...engine.stats, reconnects: engine.sfu.reconnects };
   }
 
-  /** The mesh from presence, with anyone who has offered counted as sending
-   * (`sends` never turns back off within a session). */
+  /** Pull every other member whose mic is published (spec §8.3). Kept
+   * while muted, so on again is instant; muted mics send nothing. */
   private reconcile(): void {
     const engine = this.engine;
     if (!engine || !this.presence) return;
-    const roster = engine.offered.size
-      ? engine.roster.map((p) => (!p.sends && engine.offered.has(p.sessionId) ? { ...p, sends: true } : p))
-      : engine.roster;
-    engine.mesh.update(this.presence, roster);
+    const me = this.presence.sessionId;
+    engine.sfu.setPulls(new Map(engine.roster.flatMap((p) => (p.audio && p.sessionId !== me ? [[p.sessionId, p.audio]] : []))));
   }
 
   /** The room is over: stop everything, keep the snapshot for the ended screen. */
@@ -622,21 +562,20 @@ export class RoomSession {
     const engine = this.engine;
     this.engine = null;
     if (!engine) return;
-    engine.mesh.close();
-    engine.signalling.close();
+    engine.sfu.close();
     engine.mic.close();
     engine.playback.close();
     await engine.channel.close();
   }
 
-  /** Sends peers the narration while it plays with the mic on, else the mic. */
+  /** Publishes the narration while it plays with the mic on, else the mic. */
   private sendTrack(): void {
     const engine = this.engine;
     if (!engine || !this.snapshot) return;
     const track = engine.micTrack && engine.narrationTrack ? engine.narrationTrack : engine.micTrack;
     if (track === engine.track) return;
     engine.track = track;
-    for (const { peer } of engine.mesh.peers.values()) peer.setTrack(track);
+    engine.sfu.setTrack(track);
     engine.playback.setLocal(this.snapshot.sessionId, track);
     this.patch({ readingAloud: track !== null && track === engine.narrationTrack });
   }
