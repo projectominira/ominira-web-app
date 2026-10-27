@@ -129,10 +129,10 @@ function fakeDeps(hub: ReturnType<typeof createHub>, sfus: FakeSfu[]): SessionDe
       const sfu: FakeSfu = { published: false, pulls: [], track: null, closed: false };
       sfus.push(sfu);
       return {
-        publish() {
-          if (sfu.published) return;
-          sfu.published = true;
-          queueMicrotask(() => options.onPublished(`cf-${Math.random()}`));
+        setPublishing(on) {
+          if (sfu.published === on) return;
+          sfu.published = on;
+          queueMicrotask(() => options.onPublished(on ? `cf-${Math.random()}/mic-1` : null));
         },
         setTrack: (track) => void (sfu.track = track),
         setPulls(pulls) {
@@ -245,13 +245,14 @@ describe("RoomSession on a chaotic channel", () => {
         expect(more).toEqual([]);
         const published = roster.filter((p) => p.audio !== null && p.sessionId !== me.sessionId);
         expect(sfu.pulls.sort()).toEqual(published.map((p) => p.sessionId).sort());
-        // Published iff this session has had its mic on; the track only while it's on.
+        // Published, with a track, iff the mic is on.
         expect(sfu.published).toBe(me.audio !== null);
+        expect(me.audio !== null).toBe(me.micOnAt !== null);
         expect(sfu.track !== null).toBe(me.micOnAt !== null);
       });
 
-      // b, c and d have had their mic on; a's tab and e2 haven't.
-      expect(roster.filter((p) => p.audio === null).length).toBe(2);
+      // b and d have their mic on; c turned theirs off.
+      expect(roster.filter((p) => p.audio !== null).map((p) => p.readerId).sort()).toEqual(["r1", "r3"]);
 
       await Promise.all(sessions.map((s) => s.leave()));
       snapshots = [];

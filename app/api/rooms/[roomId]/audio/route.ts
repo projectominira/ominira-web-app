@@ -16,12 +16,15 @@ import {
 } from "@/lib/room/realtime";
 
 const Sdp = <T extends string>(type: T) => z.object({ type: z.literal(type), sdp: z.string().max(100_000) });
+/** A published mic: "<session>/<track>". */
+const Address = z.string().max(100).regex(/^[\w-]+\/[\w-]+$/);
+const Track = z.string().min(1).max(40).regex(/^[\w-]+$/);
 const Owned = { session: z.string().min(1).max(100), token: z.string().min(1).max(100) };
 
 const Body = z.discriminatedUnion("op", [
   z.object({ op: z.literal("session") }),
-  z.object({ op: z.literal("push"), ...Owned, offer: Sdp("offer"), mid: z.string().min(1).max(20) }),
-  z.object({ op: z.literal("pull"), ...Owned, publishers: z.array(z.string().min(1).max(100)).min(1).max(25) }),
+  z.object({ op: z.literal("push"), ...Owned, offer: Sdp("offer"), mid: z.string().min(1).max(20), track: Track }),
+  z.object({ op: z.literal("pull"), ...Owned, publishers: z.array(Address).min(1).max(25) }),
   z.object({ op: z.literal("answer"), ...Owned, answer: Sdp("answer") }),
   z.object({ op: z.literal("close"), ...Owned, mids: z.array(z.string().min(1).max(20)).min(1).max(25), offer: Sdp("offer") }),
 ]);
@@ -55,7 +58,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ roo
   if (!isSessionToken(reader.readerId, roomId, body.session, body.token)) return forbidden("Not your audio session.");
   switch (body.op) {
     case "push":
-      return NextResponse.json(await pushMic(body.session, body.offer, body.mid));
+      return NextResponse.json(await pushMic(body.session, body.offer, body.mid, body.track));
     case "pull":
       return NextResponse.json(await pullMics(body.session, body.publishers));
     case "answer":

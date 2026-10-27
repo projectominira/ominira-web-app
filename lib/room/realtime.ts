@@ -5,13 +5,12 @@ import type { SessionDescription, SfuResult } from "@/lib/room/types";
 
 // Cloudflare Realtime SFU for room audio (reading-room-spec.md §8.4), behind
 // app/api/rooms/[roomId]/audio. Each member's browser holds one connection to
-// Cloudflare: a speaker publishes their mic once, listeners pull it. The app
+// Cloudflare: a speaker publishes their mic while it's on, listeners pull it.
+// A published mic is named by its address, "<session>/<track>". The app
 // secret stays here; the browser gets its session id with a token that ties
 // it to the reader and the room, so nobody can touch another's session.
 
 const API = "https://rtc.live.cloudflare.com/v1/apps";
-/** The one track a member publishes. */
-export const MIC_TRACK = "mic";
 
 export const sfuConfigured = () => !!process.env.CLOUDFLARE_REALTIME_APP_ID && !!process.env.CLOUDFLARE_REALTIME_APP_SECRET;
 
@@ -33,17 +32,20 @@ export async function newSession(): Promise<string | null> {
   return data.sessionId ?? null;
 }
 
-/** Publishes the mic on the transceiver `mid`; the answer comes back. */
-export const pushMic = (session: string, offer: SessionDescription, mid: string) =>
+/** Publishes the mic on the transceiver `mid` as `track`; the answer comes back. */
+export const pushMic = (session: string, offer: SessionDescription, mid: string, track: string) =>
   call("POST", `/sessions/${session}/tracks/new`, {
     sessionDescription: offer,
-    tracks: [{ location: "local", mid, trackName: MIC_TRACK }],
+    tracks: [{ location: "local", mid, trackName: track }],
   });
 
-/** Pulls these publishers' mics; Cloudflare offers, the browser answers. */
-export const pullMics = (session: string, publishers: string[]) =>
+/** Pulls the mics at these addresses; Cloudflare offers, the browser answers. */
+export const pullMics = (session: string, addresses: string[]) =>
   call("POST", `/sessions/${session}/tracks/new`, {
-    tracks: publishers.map((sessionId) => ({ location: "remote", sessionId, trackName: MIC_TRACK })),
+    tracks: addresses.map((address) => {
+      const [sessionId, trackName] = address.split("/");
+      return { location: "remote", sessionId, trackName };
+    }),
   });
 
 export const renegotiate = (session: string, answer: SessionDescription) =>

@@ -92,6 +92,11 @@ describe("sections", () => {
     expect(ids(selectSpeaking(roster, ["tunde"]))).toEqual(["tunde", "sekou", "ada"]);
   });
 
+  test("a heard voice is in Speaking only, not Listening or Hands", () => {
+    expect(ids(selectListening(roster, ["tunde"]))).toEqual([]);
+    expect(ids(selectHands(roster, ["amara"]))).toEqual(["kofi"]);
+  });
+
   test("nobody speaking", () => {
     expect(selectSpeaking([member("tunde", 1)])).toEqual([]);
   });

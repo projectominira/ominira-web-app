@@ -69,8 +69,8 @@ export const PresenceSchema = z.object({
   }),
   /** From room-join, display only. */
   isModerator: z.boolean(),
-  /** The Cloudflare session this member's mic is published on, from their
-   * first mic-on; everyone else pulls it from there (spec §8.3). Defaulted,
+  /** Where this member's mic is published on Cloudflare, "<session>/<track>",
+   * while it's on; everyone else pulls it from there (spec §8.3). Defaulted,
    * so presence from a client that predates it still parses. */
   audio: z.string().max(100).nullable().default(null),
   /** Epoch ms the mic went on, null when off; orders Speaking now. */

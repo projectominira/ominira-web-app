@@ -19,8 +19,8 @@ export const useInRoom = () => useRoomStore((s) => s.snapshot !== null);
 export const useRoster = () => useRoom((s) => s.roster);
 /** Mic on, newest first: the panel's Speaking now. */
 export const useSpeaking = () => useRoom((s) => selectSpeaking(s.roster, s.speakingIds));
-export const useHands = () => useRoom((s) => selectHands(s.roster));
-export const useListening = () => useRoom((s) => selectListening(s.roster));
+export const useHands = () => useRoom((s) => selectHands(s.roster, s.speakingIds));
+export const useListening = () => useRoom((s) => selectListening(s.roster, s.speakingIds));
 
 /** Voices heard now, in Speaking now's order: the status line and the player's
  * face. A speaker reading aloud counts throughout, quiet gaps between

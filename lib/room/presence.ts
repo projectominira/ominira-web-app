@@ -35,15 +35,18 @@ export function selectSpeaking(roster: readonly RoomPresence[], heard: readonly 
   return roster.filter((p) => onAt(p) !== null).sort((a, b) => onAt(b)! - onAt(a)! || 0);
 }
 
-/** Raised hands, first come first. */
-export function selectHands(roster: readonly RoomPresence[]): RoomPresence[] {
-  return roster.filter((p) => p.handRaisedAt !== null).sort((a, b) => a.handRaisedAt! - b.handRaisedAt!);
+/** Raised hands, first come first; not whoever selectSpeaking counts. */
+export function selectHands(roster: readonly RoomPresence[], heard: readonly string[] = []): RoomPresence[] {
+  return roster
+    .filter((p) => p.handRaisedAt !== null && p.micOnAt === null && !heard.includes(p.readerId))
+    .sort((a, b) => a.handRaisedAt! - b.handRaisedAt!);
 }
 
-/** Everyone with their mic off and no hand up (Hands raised shows those),
- * in join order. */
-export function selectListening(roster: readonly RoomPresence[]): RoomPresence[] {
-  return roster.filter((p) => p.micOnAt === null && p.handRaisedAt === null);
+/** Everyone with their mic off, no hand up (Hands raised shows those) and
+ * not heard (Speaking, as a voice can outlast the presence that says mic
+ * off), in join order. */
+export function selectListening(roster: readonly RoomPresence[], heard: readonly string[] = []): RoomPresence[] {
+  return roster.filter((p) => p.micOnAt === null && p.handRaisedAt === null && !heard.includes(p.readerId));
 }
 
 /** Their role, as the stage shows it under their name and their card beside it. */

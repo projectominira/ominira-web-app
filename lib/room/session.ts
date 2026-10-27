@@ -175,14 +175,16 @@ export class RoomSession {
     if (!engine || !this.presence) return;
     if (!on) {
       engine.mic.off();
+      // Closed, not muted: a muted speaker is a listener (sfu.ts).
+      engine.sfu.setPublishing(false);
       if (this.presence.micOnAt !== null) this.updatePresence({ micOnAt: null });
       this.textChanged();
       return;
     }
     await engine.mic.on();
     if (engine !== this.engine || engine.mic.state !== "on" || !this.presence) return;
-    // Published once, from the first mic-on; presence gets its id (onPublished).
-    engine.sfu.publish();
+    // Presence gets its address once published (onPublished).
+    engine.sfu.setPublishing(true);
     if (this.presence.micOnAt === null) this.updatePresence({ micOnAt: Date.now(), handRaisedAt: null });
     this.textChanged();
   }
@@ -520,8 +522,7 @@ export class RoomSession {
     return { ...engine.stats, reconnects: engine.sfu.reconnects };
   }
 
-  /** Pull every other member whose mic is published (spec §8.3). Kept
-   * while muted, so on again is instant; muted mics send nothing. */
+  /** Pull every other member whose mic is published (spec §8.3). */
   private reconcile(): void {
     const engine = this.engine;
     if (!engine || !this.presence) return;

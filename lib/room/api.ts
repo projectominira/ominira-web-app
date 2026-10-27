@@ -36,7 +36,8 @@ export function leaveRoomOnUnload(roomId: string, stats: RoomLeaveStats): void {
 export type RoomAudioOp =
   | { op: "session" }
   | ({ session: string; token: string } & (
-      | { op: "push"; offer: SessionDescription; mid: string }
+      | { op: "push"; offer: SessionDescription; mid: string; track: string }
+      /** Mic addresses, "<session>/<track>". */
       | { op: "pull"; publishers: string[] }
       | { op: "answer"; answer: SessionDescription }
       | { op: "close"; mids: string[]; offer: SessionDescription }

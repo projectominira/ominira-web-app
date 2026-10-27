@@ -3,15 +3,18 @@ import type { SessionDescription } from "@/lib/room/types";
 
 // Room audio through Cloudflare Realtime (spec §8.3, §8.4, §8.8): each member
 // holds one RTCPeerConnection, to Cloudflare, never to another member. A
-// speaker publishes their mic once (the first mic-on) and presence carries the
-// Cloudflare session it's on; everyone else pulls it from there. Nobody has to
-// agree on who calls whom: each member only follows presence.
+// speaker publishes their mic while it's on and presence carries its address
+// ("<session>/<track>"); everyone else pulls it from there. Mic off closes it,
+// and presence says so: a muted speaker is a listener. (Cloudflare drops a
+// track that gets no packets for 30 s, so a muted one kept published went
+// silent for good.) Nobody has to agree on who calls whom: each member only
+// follows presence.
 //
 // - Every change is one call to /api/rooms/{id}/audio that answers or fails,
 //   run one at a time (Cloudflare wants a renegotiation done before the next).
-// - Muting is replaceTrack: no renegotiation, no call.
+// - The mic's own device changes are replaceTrack: no renegotiation, no call.
 // - A connection that fails, or stays disconnected past a grace, is rebuilt
-//   whole: a new session, the mic published again (a new id in presence), and
+//   whole: a new session, the mic published again (a new address), and
 //   every pull redone. A failed call rebuilds too, backing off.
 // - A pull Cloudflare refuses (the speaker is mid-rebuild, their presence
 //   still names the old session) is only asked again: rebuilding for it would
@@ -47,8 +50,8 @@ export type SfuOptions = {
   iceServers: RTCIceServer[];
   /** Dev: TURN only, to test the relay (spec §8.4). */
   forceRelay: boolean;
-  /** The mic is published on this Cloudflare session (again, after a rebuild): presence says so. */
-  onPublished: (session: string) => void;
+  /** The mic's address now (another after a rebuild), or null: presence says so. */
+  onPublished: (address: string | null) => void;
   /** A member's voice, by their room sessionId. */
   onStream: (sessionId: string, stream: MediaStream) => void;
   onDrop: (sessionId: string) => void;
@@ -57,11 +60,11 @@ export type SfuOptions = {
 };
 
 export type Sfu = {
-  /** From the first mic-on: publish the mic, and keep it published. */
-  publish(): void;
-  /** Mic on (the track) or off (null). */
+  /** Mic on: publish it. Off: close it. */
+  setPublishing(on: boolean): void;
+  /** What the published mic sends: the mic or the narration. */
   setTrack(track: MediaStreamTrack | null): void;
-  /** Pull exactly these: room sessionId → the Cloudflare session their mic is on. */
+  /** Pull exactly these: room sessionId → their mic's address. */
   setPulls(pulls: ReadonlyMap<string, string>): void;
   /** Back from a hidden tab: rebuild now if the connection broke meanwhile. */
   check(): void;
@@ -71,7 +74,7 @@ export type Sfu = {
   close(): void;
 };
 
-type Pulled = { publisher: string; mid: string };
+type Pulled = { address: string; mid: string };
 
 export function createSfu(options: SfuOptions): Sfu {
   const { roomId } = options;
@@ -80,7 +83,10 @@ export function createSfu(options: SfuOptions): Sfu {
   let generation = 0;
   let owned: { session: string; token: string } | null = null;
   let publishing = false;
-  let micSender: RTCRtpSender | null = null;
+  /** The published mic, once pushed; its mid is set by the offer. */
+  let mic: { sender: RTCRtpSender; transceiver: RTCRtpTransceiver } | null = null;
+  /** Each push takes a new track name, so a pull never finds a closed one. */
+  let pushes = 0;
   let track: MediaStreamTrack | null = null;
   let wanted: ReadonlyMap<string, string> = new Map();
   const pulled = new Map<string, Pulled>();
@@ -158,34 +164,47 @@ export function createSfu(options: SfuOptions): Sfu {
   async function sync(g: number): Promise<void> {
     const stale = () => closed || g !== generation;
     try {
-      if (!publishing && wanted.size === 0 && pulled.size === 0) return;
+      if (!publishing && !mic && wanted.size === 0 && pulled.size === 0) return;
       owned ??= await api.roomAudio(roomId, { op: "session" });
       if (stale()) return;
       const own = owned;
 
-      if (publishing && !micSender) {
-        const transceiver = pc.addTransceiver(track ?? "audio", { direction: "sendonly" });
-        micSender = transceiver.sender;
+      // Closed in one call: pulls no longer wanted, and the mic once off.
+      const closing: string[] = [];
+      for (const [sessionId, p] of pulled) {
+        if (wanted.get(sessionId) === p.address) continue;
+        pc.getTransceivers().find((t) => t.mid === p.mid)?.stop();
+        closing.push(p.mid);
+        drop(sessionId);
+      }
+      if (!publishing && mic) {
+        // Presence first, so listeners stop pulling it.
+        options.onPublished(null);
+        if (mic.transceiver.mid) closing.push(mic.transceiver.mid);
+        mic.transceiver.stop();
+        mic = null;
+      }
+      if (closing.length) {
         await pc.setLocalDescription(await pc.createOffer());
-        const result = await call({ op: "push", ...own, offer: local(pc), mid: transceiver.mid! });
+        const result = await call({ op: "close", ...own, mids: closing, offer: local(pc) });
+        if (stale()) return;
+        await pc.setRemoteDescription(result.sessionDescription!);
+      }
+
+      if (publishing && !mic) {
+        const transceiver = pc.addTransceiver(track ?? "audio", { direction: "sendonly" });
+        mic = { sender: transceiver.sender, transceiver };
+        const name = `mic-${++pushes}`;
+        await pc.setLocalDescription(await pc.createOffer());
+        const result = await call({ op: "push", ...own, offer: local(pc), mid: transceiver.mid!, track: name });
         if (stale()) return;
         await pc.setRemoteDescription(result.sessionDescription!);
         await capBitrate(transceiver.sender);
         if (stale()) return;
-        options.onPublished(own.session);
+        // Turned off meanwhile: the next pass closes it, unannounced.
+        if (publishing) options.onPublished(`${own.session}/${name}`);
+        else kick();
         watchConnect(g);
-      }
-
-      const gone = [...pulled].filter(([sessionId, p]) => wanted.get(sessionId) !== p.publisher);
-      if (gone.length) {
-        for (const [sessionId, p] of gone) {
-          pc.getTransceivers().find((t) => t.mid === p.mid)?.stop();
-          drop(sessionId);
-        }
-        await pc.setLocalDescription(await pc.createOffer());
-        const result = await call({ op: "close", ...own, mids: gone.map(([, p]) => p.mid), offer: local(pc) });
-        if (stale()) return;
-        await pc.setRemoteDescription(result.sessionDescription!);
       }
 
       const add = [...wanted].filter(([sessionId]) => !pulled.has(sessionId));
@@ -195,12 +214,12 @@ export function createSfu(options: SfuOptions): Sfu {
         // Failed whole, before looking at a track: our session is the trouble.
         if (result.errorCode && !result.tracks?.length) throw new Error(`pull: ${result.errorCode} ${result.errorDescription ?? ""}`);
         let refused = false;
-        add.forEach(([sessionId, publisher], i) => {
+        add.forEach(([sessionId, address], i) => {
           // In the order asked for.
           const t = result.tracks?.[i];
-          if (!t?.mid || t.errorCode || (t.sessionId && t.sessionId !== publisher)) refused = true;
+          if (!t?.mid || t.errorCode || (t.sessionId && t.sessionId !== address.split("/")[0])) refused = true;
           else {
-            pulled.set(sessionId, { publisher, mid: t.mid });
+            pulled.set(sessionId, { address, mid: t.mid });
             byMid.set(t.mid, sessionId);
           }
         });
@@ -251,22 +270,24 @@ export function createSfu(options: SfuOptions): Sfu {
     pc.close();
     for (const sessionId of [...pulled.keys()]) drop(sessionId);
     owned = null;
-    micSender = null;
+    // Its address is dead; a new one follows if the mic is still on.
+    if (mic) options.onPublished(null);
+    mic = null;
     pc = createPc();
     report();
     kick();
   }
 
   return {
-    publish() {
-      if (publishing) return;
-      publishing = true;
+    setPublishing(on) {
+      if (publishing === on) return;
+      publishing = on;
       kick();
     },
 
     setTrack(next) {
       track = next;
-      if (micSender && micSender.track !== next) void micSender.replaceTrack(next).catch(() => {});
+      if (mic && mic.sender.track !== next) void mic.sender.replaceTrack(next).catch(() => {});
     },
 
     setPulls(next) {
