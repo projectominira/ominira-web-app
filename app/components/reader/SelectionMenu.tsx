@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { X } from "lucide-react";
 import type { Theme } from "@/stores/reader-store";
 import type { SelectionAnchor } from "@/lib/reader/useTextAnnotations";
 import { SELECTION_SURFACE_ATTR } from "@/lib/annotations/useTextSelection";
@@ -133,6 +134,16 @@ export default function SelectionMenu({ anchor, isMobile, bottomOffsetPx, theme,
             : "reader-menu-in fixed inset-x-0 z-30 flex flex-col max-h-[60vh] overflow-y-auto py-1 select-none no-callout"
         }
       >
+        {!override && (
+          <button
+            onClick={onDismiss}
+            aria-label="Close"
+            style={{ color: fg }}
+            className="absolute top-1 right-2 z-10 flex items-center justify-center bg-transparent border-none p-3 cursor-pointer opacity-70"
+          >
+            <X size={18} />
+          </button>
+        )}
         {override ??
           items.map((item, i) => (
             <button
@@ -187,6 +198,19 @@ export default function SelectionMenu({ anchor, isMobile, bottomOffsetPx, theme,
             </button>
           </div>
         ))}
+      {!override && (
+        <div className="flex items-center">
+          <div style={{ background: divider }} className="w-px h-4 mx-0.5 flex-none" />
+          <button
+            onClick={onDismiss}
+            aria-label="Close"
+            style={{ color: fg }}
+            className="flex items-center bg-transparent border-none py-1.75 px-2 rounded-full cursor-pointer opacity-70"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
