@@ -19,7 +19,9 @@ class FakeTrack {
   }
 }
 
-function fakeMedia(options: { deny?: boolean } = {}) {
+type Fail = "NotAllowedError" | "NotReadableError" | "NotFoundError";
+
+function fakeMedia(options: { fail?: Fail } = {}) {
   const tracks: FakeTrack[] = [];
   let deviceChange: (() => void) | null = null;
   let held: Promise<void> | null = null;
@@ -38,7 +40,7 @@ function fakeMedia(options: { deny?: boolean } = {}) {
     media: {
       async getUserMedia() {
         if (held) await held;
-        if (options.deny) throw new DOMException("denied", "NotAllowedError");
+        if (options.fail) throw new DOMException("failed", options.fail);
         const track = new FakeTrack(tracks.length + 1);
         tracks.push(track);
         return { getAudioTracks: () => [track] };
@@ -49,15 +51,30 @@ function fakeMedia(options: { deny?: boolean } = {}) {
   };
 }
 
-function setup(options: { deny?: boolean; releaseAfterMs?: number } = {}) {
+/** The site's mic permission; `set` changes it as the browser's settings would. */
+function fakePermission(initial: PermissionState) {
+  const status = Object.assign(new EventTarget(), { state: initial });
+  return {
+    permissions: { query: async () => status as unknown as PermissionStatus },
+    set(state: PermissionState) {
+      status.state = state;
+      status.dispatchEvent(new Event("change"));
+    },
+  };
+}
+
+function setup(options: { fail?: Fail; site?: PermissionState } = {}) {
   const fake = fakeMedia(options);
+  const permission = fakePermission(options.site ?? "granted");
   const changes: [MicState, number | null][] = [];
+  let allowed = 0;
   const mic = createMic({
     media: fake.media as never,
-    releaseAfterMs: options.releaseAfterMs ?? 20,
+    permissions: permission.permissions,
+    onAllowed: () => allowed++,
     onChange: (state, track) => changes.push([state, track ? (track as unknown as FakeTrack).id : null]),
   });
-  return { fake, mic, changes, last: () => changes[changes.length - 1] };
+  return { fake, mic, changes, permission, allowed: () => allowed, last: () => changes[changes.length - 1] };
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -73,36 +90,63 @@ describe("createMic", () => {
     expect(fake.tracks[0].contentHint).toBe("speech");
   });
 
-  test("off hands over null and keeps the track; on again within the window reuses it", async () => {
-    const { fake, mic, last } = setup({ releaseAfterMs: 50 });
+  test("off hands over null and keeps the track, however long; on again reuses it", async () => {
+    const { fake, mic, last } = setup();
     await mic.on();
     mic.off();
     expect(last()).toEqual(["off", null]);
+    await wait(30);
     expect(fake.tracks[0].readyState).toBe("live");
     await mic.on();
     expect(last()).toEqual(["on", 1]);
     expect(fake.tracks.length).toBe(1);
   });
 
-  test("the device is released after the window, and reacquired on the next on", async () => {
-    const { fake, mic, last } = setup({ releaseAfterMs: 10 });
-    await mic.on();
-    mic.off();
-    await wait(30);
-    expect(fake.tracks[0].readyState).toBe("ended");
-    await mic.on();
-    expect(last()).toEqual(["on", 2]);
+  test("denied, busy or no mic: blocked, no track", async () => {
+    for (const fail of ["NotAllowedError", "NotReadableError", "NotFoundError"] as const) {
+      const { mic, last } = setup({ fail });
+      await mic.on();
+      expect(last()).toEqual(["blocked", null]);
+      expect(mic.state).toBe("blocked");
+    }
   });
 
-  test("denied: blocked, no track", async () => {
-    const { mic, last } = setup({ deny: true });
+  test("while the browser asks: asking, then on", async () => {
+    const { mic, changes } = setup({ site: "prompt" });
+    await wait(0);
     await mic.on();
-    expect(last()).toEqual(["blocked", null]);
-    expect(mic.state).toBe("blocked");
+    expect(changes).toEqual([
+      ["asking", null],
+      ["on", 1],
+    ]);
   });
 
-  test("off while still asking ends off, and the late track is released", async () => {
-    const { fake, mic, last } = setup({ releaseAfterMs: 10 });
+  test("blocked, then allowed in settings: onAllowed", async () => {
+    const { mic, permission, allowed } = setup({ fail: "NotAllowedError", site: "denied" });
+    await wait(0);
+    await mic.on();
+    permission.set("granted");
+    expect(allowed()).toBe(1);
+  });
+
+  test("a permission change while not blocked does nothing", async () => {
+    const { mic, permission, allowed } = setup();
+    await wait(0);
+    await mic.on();
+    permission.set("prompt");
+    expect(allowed()).toBe(0);
+  });
+
+  test("no getUserMedia: blocked", async () => {
+    const changes: MicState[] = [];
+    const media = { addEventListener: () => {}, removeEventListener: () => {} };
+    const mic = createMic({ media: media as never, onChange: (state) => changes.push(state) });
+    await mic.on();
+    expect(changes[changes.length - 1]).toBe("blocked");
+  });
+
+  test("off while still asking ends off, and the late track is kept for the next on", async () => {
+    const { fake, mic, last } = setup();
     fake.pause();
     const pending = mic.on();
     mic.off();
@@ -110,8 +154,9 @@ describe("createMic", () => {
     fake.resume();
     await pending;
     expect(mic.state).toBe("off");
-    await wait(30);
-    expect(fake.tracks[0].readyState).toBe("ended");
+    await mic.on();
+    expect(last()).toEqual(["on", 1]);
+    expect(fake.tracks.length).toBe(1);
   });
 
   test("a device change while on swaps in a new track, then stops the old", async () => {
@@ -123,13 +168,15 @@ describe("createMic", () => {
     expect(fake.tracks[0].readyState).toBe("ended");
   });
 
-  test("a device change while off just releases the held track", async () => {
-    const { fake, mic } = setup({ releaseAfterMs: 10_000 });
+  test("a device change while off swaps the held track, still off", async () => {
+    const { fake, mic, last } = setup();
     await mic.on();
     mic.off();
     fake.changeDevice();
+    await wait(0);
+    expect(last()).toEqual(["off", null]);
     expect(fake.tracks[0].readyState).toBe("ended");
-    expect(fake.tracks.length).toBe(1);
+    expect(fake.tracks[1].readyState).toBe("live");
   });
 
   test("an unplugged mic while on is reacquired", async () => {
@@ -156,11 +203,13 @@ describe("micBlockedHelp", () => {
   const chrome = "Mozilla/5.0 (Macintosh) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36";
   const safari = "Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15";
   const firefox = "Mozilla/5.0 (Macintosh; rv:131.0) Gecko/20100101 Firefox/131.0";
+  const android = "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36";
 
-  test("per browser", () => {
-    expect(micBlockedHelp(chrome, false)).toContain("address bar");
+  test("per device", () => {
+    expect(micBlockedHelp(android, false)).toContain("Site settings › Microphone");
+    expect(micBlockedHelp(safari, true)).toContain("open it again");
+    expect(micBlockedHelp(chrome, false)).toContain("left of the address");
     expect(micBlockedHelp(safari, false)).toContain("Settings for This Website");
     expect(micBlockedHelp(firefox, false)).toContain("crossed-out mic");
-    expect(micBlockedHelp(safari, true)).toContain("Settings app");
   });
 });

@@ -396,6 +396,7 @@ export class RoomSession {
         this.sendTrack();
         this.patch({ micState });
       },
+      onAllowed: () => void this.setMic(true),
     });
 
     const follow = createFollow({

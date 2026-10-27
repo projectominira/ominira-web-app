@@ -21,17 +21,20 @@ export default function MicToggle({ className, iconOnly = false }: { className: 
   const narrator = useAudioStore((s) => voiceById(s.voice)?.name ?? "Narrator");
   if (!controls || !session) return null;
   const { micOn, micState, readingAloud, connection } = controls;
-  const acquiring = micState === "acquiring";
+  const acquiring = micState === "acquiring" || micState === "asking";
   const blocked = micState === "blocked" && !micOn;
-  const label = acquiring
-    ? "Turning on…"
-    : blocked
-      ? "Mic blocked"
-      : readingAloud
-        ? `${narrator} narrating`
-        : micOn
-          ? "Mic on"
-          : "Turn on mic";
+  const label =
+    micState === "asking"
+      ? "Choose Allow…"
+      : acquiring
+        ? "Turning on…"
+        : blocked
+          ? "Mic blocked"
+          : readingAloud
+            ? `${narrator} narrating`
+            : micOn
+              ? "Mic on"
+              : "Turn on mic";
   const Icon = acquiring ? Loader2 : micOn ? Mic : MicOff;
 
   return (

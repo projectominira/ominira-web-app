@@ -1,17 +1,17 @@
 // The room's one local mic track (spec §8.5). Asked for on the first mic-on,
 // never at join. Off hands peers null (replaceTrack, zero packets) but keeps
-// the track for 60 s, so on again is instant; then the device is released
-// (the OS mic indicator goes off) and the next on reacquires it silently.
-// Not on iOS: WebKit asks for permission again on every getUserMedia once
-// the last track has stopped, so there the track is kept for the whole room
-// and the prompt comes once per room.
+// the track until the room closes, so on again is instant and never asks
+// again: Safari, Firefox and Chrome's "Allow this time" all ask once more
+// on the next getUserMedia after the last track has stopped. The OS mic
+// indicator stays on while in the room, as on a call.
+// Best practice (web.dev, permissions): say "Choose Allow" while the browser
+// asks ("asking"), since a block is remembered and rejoining won't ask again;
+// and when the reader allows it in settings, the mic comes on by itself.
 
 import { setAudioSessionType } from "@/lib/room/audioSession"; // REVERT: remove with the two calls below
-import { isIOSDevice } from "@/lib/pwa/platform";
 
-export type MicState = "off" | "acquiring" | "on" | "blocked";
-
-const RELEASE_AFTER_MS = 60_000;
+/** asking: the browser's permission prompt is up. */
+export type MicState = "off" | "acquiring" | "asking" | "on" | "blocked";
 
 const CONSTRAINTS: MediaStreamConstraints = {
   // autoGainControl off: it dipped speakers' volume now and then.
@@ -30,45 +30,43 @@ export type Mic = {
 type Options = {
   /** The track to send: live while on, null while off. */
   onChange: (state: MicState, track: MediaStreamTrack | null) => void;
+  /** Blocked, then allowed in the browser's settings: turn it on. */
+  onAllowed?: () => void;
   media?: Pick<MediaDevices, "getUserMedia" | "addEventListener" | "removeEventListener">;
-  /** null: keep the track until close. */
-  releaseAfterMs?: number | null;
+  permissions?: Pick<Permissions, "query">;
 };
 
 export function createMic(options: Options): Mic {
-  const media = options.media ?? navigator.mediaDevices;
-  const releaseAfterMs =
-    options.releaseAfterMs !== undefined
-      ? options.releaseAfterMs
-      : typeof navigator !== "undefined" && isIOSDevice()
-        ? null
-        : RELEASE_AFTER_MS;
+  const media = options.media ?? (typeof navigator !== "undefined" ? navigator.mediaDevices : undefined);
   let state: MicState = "off";
   let track: MediaStreamTrack | null = null;
   let wanted = false;
   let closed = false;
-  let releaseTimer: ReturnType<typeof setTimeout> | null = null;
   let acquiring: Promise<MediaStreamTrack | null> | null = null;
+  // The site's mic permission, kept current; null where it can't be read.
+  let permission: PermissionStatus | null = null;
+  const onPermission = () => {
+    if (state === "blocked" && permission?.state !== "denied") options.onAllowed?.();
+  };
+  const permissions = options.permissions ?? (typeof navigator !== "undefined" ? navigator.permissions : undefined);
+  void permissions
+    ?.query({ name: "microphone" as PermissionName })
+    .then((status) => {
+      if (closed) return;
+      permission = status;
+      status.addEventListener("change", onPermission);
+    })
+    .catch(() => {});
 
   const set = (next: MicState) => {
     state = next;
     options.onChange(state, state === "on" ? track : null);
   };
 
-  const release = () => {
-    if (releaseTimer) clearTimeout(releaseTimer);
-    releaseTimer = null;
-    track?.stop();
-    track = null;
-    setAudioSessionType("playback"); // REVERT: remove this line (iOS audio session)
-  };
-
-  const scheduleRelease = () => {
-    if (track && !releaseTimer && releaseAfterMs !== null) releaseTimer = setTimeout(release, releaseAfterMs);
-  };
-
   // One getUserMedia at a time; a second caller waits on the same one.
   const acquire = () => {
+    // No mediaDevices: an insecure page or an in-app browser without the mic.
+    if (!media?.getUserMedia) return Promise.resolve(null);
     setAudioSessionType("play-and-record"); // REVERT: remove this line (iOS audio session)
     return (acquiring ??= media
       .getUserMedia(CONSTRAINTS)
@@ -89,35 +87,33 @@ export function createMic(options: Options): Mic {
       }));
   };
 
-  /** A device change while on: the new track first, then the old one goes. */
+  /** A device change: the new default device's track first, then the old
+   * one goes. Asked while the old one is live, so no prompt, on or off. */
   async function replace() {
     const next = await acquire();
-    if (closed || !next) return;
+    if (closed) return next?.stop();
+    if (!next) return;
     const old = track;
     track = next;
     if (old !== next) old?.stop();
     if (wanted) set("on");
-    else release();
   }
 
   const onDeviceChange = () => {
-    if (state === "on") void replace();
-    else if (track) release(); // the next on picks up the new default device
+    if (track) void replace();
   };
-  media.addEventListener("devicechange", onDeviceChange);
+  media?.addEventListener("devicechange", onDeviceChange);
 
   return {
     async on() {
       if (closed) return;
       wanted = true;
-      if (releaseTimer) clearTimeout(releaseTimer);
-      releaseTimer = null;
       if (track?.readyState === "live") return set("on");
-      set("acquiring");
+      set(permission?.state === "prompt" ? "asking" : "acquiring");
       const next = await acquire();
       if (closed) return next?.stop();
       if (next) track = next;
-      if (!wanted) return scheduleRelease(); // turned off while asking
+      if (!wanted) return; // turned off while asking; the track is kept
       set(next ? "on" : "blocked");
     },
 
@@ -125,7 +121,6 @@ export function createMic(options: Options): Mic {
       if (closed) return;
       wanted = false;
       if (state !== "off") set("off");
-      scheduleRelease();
     },
 
     get state() {
@@ -135,18 +130,25 @@ export function createMic(options: Options): Mic {
     close() {
       closed = true;
       wanted = false;
-      media.removeEventListener("devicechange", onDeviceChange);
-      release();
+      media?.removeEventListener("devicechange", onDeviceChange);
+      permission?.removeEventListener("change", onPermission);
+      track?.stop();
+      track = null;
+      setAudioSessionType("playback"); // REVERT: remove this line (iOS audio session)
     },
   };
 }
 
-/** "How to allow it" for a blocked mic (spec §10), by browser. */
+/** "How to fix it" for a blocked mic (spec §10), for this device. An
+ * installed app on Android keeps its permissions in Chrome (web.dev, WebAPKs);
+ * on iPhone a fresh start asks again. */
 export function micBlockedHelp(userAgent: string, ios: boolean): string {
-  if (ios) return "Open the Settings app, then Safari › Microphone, choose Allow, and turn your mic on again.";
+  if (ios) return "Close Ominira and open it again, then choose Allow when asked.";
+  if (/Android/.test(userAgent))
+    return "Open Chrome › ⋮ › Settings › Site settings › Microphone, tap projectominira.org and choose Allow.";
   if (/Firefox\//.test(userAgent))
-    return "Click the crossed-out mic by the address bar, clear the block, then turn your mic on again.";
+    return "Click the crossed-out mic by the address bar and clear the block.";
   if (/Safari\//.test(userAgent) && !/Chrome\/|Chromium\//.test(userAgent))
-    return "In Safari's menu, open Settings for This Website, set Microphone to Allow, then turn your mic on again.";
-  return "Click the mic or settings icon in the address bar, allow the microphone for this site, then turn your mic on again.";
+    return "In Safari's menu, open Settings for This Website and set Microphone to Allow.";
+  return "Click the icon left of the address and set Microphone to Allow.";
 }

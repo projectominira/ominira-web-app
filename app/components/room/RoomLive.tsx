@@ -43,11 +43,13 @@ export function useRoomStatus(): string {
       ? "This room is open in another tab"
       : controls.connection === "connecting"
         ? "Connecting…"
-        : controls.micState === "blocked" && !controls.micOn
-          ? "Mic blocked"
-          : controls.reconnecting
-            ? "Reconnecting…"
-            : (speakingLine(voices ?? []) ?? "Nobody's speaking");
+        : controls.micState === "asking"
+          ? "Choose Allow so others can hear you"
+          : controls.micState === "blocked" && !controls.micOn
+            ? "Mic blocked"
+            : controls.reconnecting
+              ? "Reconnecting…"
+              : (speakingLine(voices ?? []) ?? "Nobody's speaking");
 }
 
 /** `lead`: the head's first button on the stage; in the guests and chat
@@ -67,7 +69,8 @@ export default function RoomLive({ lead }: { lead: ReactNode }) {
   if (!room || !session || !controls) return null;
   const { elsewhere, audioSuspended } = controls;
   const blocked = status === "Mic blocked";
-  const notice = elsewhere || status === "Connecting…" || status === "Reconnecting…" ? status : null;
+  const notice =
+    elsewhere || controls.micState === "asking" || status === "Connecting…" || status === "Reconnecting…" ? status : null;
 
   return (
     <>
@@ -114,7 +117,7 @@ export default function RoomLive({ lead }: { lead: ReactNode }) {
                 onClick={() => showToast(micBlockedHelp(navigator.userAgent, isIOSDevice()))}
                 className="cursor-pointer underline underline-offset-2 hover:text-[var(--reader-text)]"
               >
-                How to allow it
+                How to fix it
               </button>
             </span>
           )}
