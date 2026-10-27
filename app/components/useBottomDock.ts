@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { useAudioStore } from "@/stores/audio-store";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -62,6 +63,23 @@ export function useBottomDock() {
  * above it starts. */
 export function useNarrationBarHeight(): number {
   return useAudioStore((s) => (s.book !== null ? s.playerHeight : 0));
+}
+
+/** Reports the ref'd element's height to `set` while `active` (0 otherwise)
+ * — how the reader's footers tell RoomMiniPlayer what to float above. */
+export function useReportHeight<T extends HTMLElement>(set: (px: number) => void, active: boolean) {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !active) return set(0);
+    const ro = new ResizeObserver((entries) => set(entries[0].borderBoxSize[0].blockSize));
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      set(0);
+    };
+  }, [set, active]);
+  return ref;
 }
 
 /** Everything docked at the bottom above the nav (the narration bar and the

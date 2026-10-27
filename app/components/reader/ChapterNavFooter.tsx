@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useReportHeight } from "@/app/components/useBottomDock";
 import { useLayoutStore } from "@/stores/layout-store";
 import type { Section } from "@/lib/book/schema";
 
@@ -57,18 +57,7 @@ export default function ChapterNavFooter({
 }: Props) {
   const hasContent = Boolean(prevSection || nextSection);
   const setFooterHeight = useLayoutStore((s) => s.setReaderFooterHeight);
-  const ref = useRef<HTMLDivElement>(null);
-  const shown = hasContent && visible;
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || !shown) return setFooterHeight(0);
-    const ro = new ResizeObserver((entries) => setFooterHeight(entries[0].borderBoxSize[0].blockSize));
-    ro.observe(el);
-    return () => {
-      ro.disconnect();
-      setFooterHeight(0);
-    };
-  }, [shown, setFooterHeight]);
+  const ref = useReportHeight<HTMLDivElement>(setFooterHeight, hasContent && visible);
 
   if (!hasContent) return null;
 

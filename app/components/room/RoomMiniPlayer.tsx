@@ -17,7 +17,8 @@ import { useRoomStore } from "@/stores/room-store";
 
 // The room's mini-player (spec §1.2), in the app shell so it survives
 // leaving the reader, clear of everything docked below it — the narration
-// bar and, in the reader, the chapter footer. Expanded, it's the room as a
+// bar and, in the reader, the footer (chapter footer, PDF pager) or the
+// phone selection menu. Expanded, it's the room as a
 // floating card (RoomLive) at the bottom right on desktop (across the bottom
 // on phones); minimised, a pill — who's heard, chat and your mic — to give
 // the page back. Opening the book's notes folds it to the pill, the notes
@@ -29,7 +30,9 @@ const pillButton =
 export default function RoomMiniPlayer() {
   const dock = useBottomDock();
   const narrationHeight = useNarrationBarHeight();
-  const footerHeight = useLayoutStore((s) => s.readerFooterHeight);
+  // Above the reader's footer (chapter footer, PDF pager) or, on phones, the
+  // selection menu covering it — whichever is taller.
+  const footerHeight = useLayoutStore((s) => Math.max(s.readerFooterHeight, s.selectionMenuHeight));
   const below = dock.bottom + narrationHeight + footerHeight;
   const setRoomPlayerHeight = useLayoutStore((s) => s.setRoomPlayerHeight);
   const minimised = useLayoutStore((s) => s.roomPlayerMinimised);

@@ -43,10 +43,15 @@ type LayoutState = {
   roomPlayerView: RoomPlayerView;
   /** Expands the room panel on `view`. */
   openRoomPlayer: (view?: RoomPlayerView) => void;
-  /** The reader's chapter footer's height while it's showing (0 otherwise),
-   * so RoomMiniPlayer floats above it rather than under it. */
+  /** The reader's footer's height while it's showing (0 otherwise) — the
+   * EPUB chapter footer or the PDF pager — so RoomMiniPlayer floats above it
+   * rather than under it. */
   readerFooterHeight: number;
   setReaderFooterHeight: (px: number) => void;
+  /** The phone selection menu's height while it's open (0 otherwise) — it
+   * covers the footer, and RoomMiniPlayer floats above it too. */
+  selectionMenuHeight: number;
+  setSelectionMenuHeight: (px: number) => void;
 };
 
 export const useLayoutStore = create<LayoutState>((set) => ({
@@ -64,6 +69,8 @@ export const useLayoutStore = create<LayoutState>((set) => ({
   openRoomPlayer: (roomPlayerView = "stage") => set({ roomPlayerMinimised: false, roomPlayerView }),
   readerFooterHeight: 0,
   setReaderFooterHeight: (readerFooterHeight) => set({ readerFooterHeight }),
+  selectionMenuHeight: 0,
+  setSelectionMenuHeight: (selectionMenuHeight) => set({ selectionMenuHeight }),
 }));
 
 /** Expands the room's panel on `view`. On phones the book's notes sheet

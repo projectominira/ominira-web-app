@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
+import { useReportHeight } from "@/app/components/useBottomDock";
+import { useLayoutStore } from "@/stores/layout-store";
 import type { Theme } from "@/stores/reader-store";
 import type { SelectionAnchor } from "@/lib/reader/useTextAnnotations";
 import { SELECTION_SURFACE_ATTR } from "@/lib/annotations/useTextSelection";
@@ -69,7 +71,8 @@ const VIEWPORT_MARGIN = 8;
  * vertical list fixed to the bottom, position independent of the selection.
  */
 export default function SelectionMenu({ anchor, isMobile, bottomOffsetPx, theme, items, override, onDismiss }: Props) {
-  const rootRef = useRef<HTMLDivElement>(null);
+  // On phones the room's mini-player floats above this menu.
+  const rootRef = useReportHeight<HTMLDivElement>(useLayoutStore((s) => s.setSelectionMenuHeight), isMobile);
   const [pos, setPos] = useState<{ top: number; left: number; flipped: boolean } | null>(null);
   // Re-measure when the actions change (Share… swaps the list in place).
   const itemKeys = items.map((item) => item.key).join(",");
@@ -96,7 +99,7 @@ export default function SelectionMenu({ anchor, isMobile, bottomOffsetPx, theme,
     top = Math.max(top, VIEWPORT_MARGIN);
 
     setPos({ top, left, flipped });
-  }, [isMobile, anchor, itemKeys]);
+  }, [isMobile, anchor, itemKeys, rootRef]);
 
   // Tapping anywhere that isn't the pill itself and isn't inside a reading
   // section dismisses it — content-area taps already end the selection via
@@ -115,7 +118,7 @@ export default function SelectionMenu({ anchor, isMobile, bottomOffsetPx, theme,
     };
     document.addEventListener("pointerdown", handler);
     return () => document.removeEventListener("pointerdown", handler);
-  }, [onDismiss]);
+  }, [onDismiss, rootRef]);
 
   const inverted = theme === "light";
   const bg = inverted ? "#0a0a0a" : "#fdfbf8";

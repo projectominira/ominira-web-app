@@ -33,7 +33,7 @@ import { useAudioStore } from "@/stores/audio-store";
 import { useNarrationStore } from "@/stores/narration-store";
 import { wordIndexAt } from "@/lib/audio/narrationText";
 import { pdfNarrationDocument, pdfPageHasText, pdfWordRects } from "@/lib/audio/pdfNarration";
-import { useDockedHeight } from "@/app/components/useBottomDock";
+import { useNarrationBarHeight } from "@/app/components/useBottomDock";
 
 type ListenProps = { canListen: boolean; isListen: boolean; onListen: () => void };
 
@@ -152,8 +152,9 @@ export default function PdfDocumentView({
   // The header's Play button, reported up by PdfReaderBody once it knows
   // whether the PDF has text to read.
   const [listen, setListen] = useState<ListenProps | undefined>(undefined);
-  // Keeps the pager footer clear of the narration bar / room player.
-  const dockedHeight = useDockedHeight();
+  // Keeps the pager footer clear of the narration bar; the room's
+  // mini-player floats above the pager (it reports its height).
+  const narrationHeight = useNarrationBarHeight();
   const { buffer, error: fetchError, progress } = download;
 
   // Retry refetches the document and, if the engine was what failed, starts a
@@ -218,7 +219,7 @@ export default function PdfDocumentView({
         title={title}
         {...listen}
       />
-      <div className="absolute inset-x-0" style={{ top: TOP_BAR_HEIGHT_PX, bottom: dockedHeight }}>
+      <div className="absolute inset-x-0" style={{ top: TOP_BAR_HEIGHT_PX, bottom: narrationHeight }}>
         {body}
       </div>
     </div>

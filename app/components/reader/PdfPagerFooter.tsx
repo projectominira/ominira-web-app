@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Minus, Plus } from "lucide-react";
+import { useReportHeight } from "@/app/components/useBottomDock";
+import { useLayoutStore } from "@/stores/layout-store";
 
 const iconButtonClass =
   "flex h-9 w-9 flex-none items-center justify-center rounded-md border-none bg-transparent cursor-pointer text-[var(--reader-text-muted)] transition-colors hover:bg-[var(--reader-surface-hover)] hover:text-[var(--reader-text)] disabled:opacity-40 disabled:pointer-events-none";
@@ -49,6 +51,8 @@ export default function PdfPagerFooter({
   // a draft for a page the reader has since moved off is simply stale, and the
   // live page number shows instead.
   const [typed, setTyped] = useState<{ basePage: number; text: string } | null>(null);
+  // The room's mini-player floats above this bar, as over EPUB's footer.
+  const ref = useReportHeight<HTMLDivElement>(useLayoutStore((s) => s.setReaderFooterHeight), true);
   const draft = typed?.basePage === pageNumber ? typed.text : null;
   const setDraft = (text: string | null) => setTyped(text === null ? null : { basePage: pageNumber, text });
 
@@ -68,6 +72,7 @@ export default function PdfPagerFooter({
 
   return (
     <div
+      ref={ref}
       // min-h-16 matches PdfDocumentView's BOTTOM_BAR_HEIGHT_PX, which is what
       // the scroll container reserves for this bar — the controls inside are all
       // shorter than that, so without it the reserved space would exceed the bar

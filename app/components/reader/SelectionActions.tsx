@@ -2,7 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { ArrowLeft, Copy, Eye, Headphones, Image as ImageIcon, Highlighter, MessageCircle, MessageSquareQuote, Share, Trash2 } from "lucide-react";
-import { useDockedHeight } from "@/app/components/useBottomDock";
+import { useNarrationBarHeight } from "@/app/components/useBottomDock";
 import { quoteForRanges } from "@/lib/reader/annotationSelection";
 import type { SelectionOverlay, SelectionState } from "@/lib/reader/useTextAnnotations";
 import { useShareToRoom } from "@/lib/room/sharePassage";
@@ -29,8 +29,8 @@ export function useNarrowViewport() {
 /**
  * The selection menu for every reader (EPUB, PDF, DOCX, web article) — the
  * one place its actions are defined: Highlight (private), Add note, Copy,
- * Listen, Share…, Delete. Share… swaps the list in place for Share publicly,
- * Share in live room and Share as image, with a Back row. Also the
+ * Listen, Share…, Delete. Share… swaps the list in place for Share as image,
+ * Share publicly and Share in live room, with a Back row. Also the
  * signed-out / couldn't-save prompts that replace it in place.
  *
  * Listen shows only when the reader passes `onListenFrom`; Share in live room
@@ -78,8 +78,9 @@ export default function SelectionActions({
   /** After a share to the room — the reader opens its room feed. */
   onSharedToRoom: () => void;
 }) {
-  // The mobile bar sits above the narration bar / room player.
-  const dockedHeight = useDockedHeight();
+  // The mobile list sits on the narration bar; the room's mini-player
+  // floats above it.
+  const narrationHeight = useNarrationBarHeight();
   const theme = useReaderStore((s) => s.theme);
   const isMobile = useNarrowViewport();
   const shareToRoom = useShareToRoom(materialId);
@@ -96,6 +97,15 @@ export default function SelectionActions({
     if (sharingFor === selection) {
       return [
         { key: "back", icon: <ArrowLeft size={iconSize} />, label: "Back", onClick: () => setSharingFor(null) },
+        {
+          key: "image",
+          icon: <ImageIcon size={iconSize} />,
+          label: "Share as image",
+          onClick: () => {
+            onShare(quote());
+            onDismiss();
+          },
+        },
         ...(canSharePublicly
           ? [{ key: "public", icon: <Eye size={iconSize} />, label: "Share publicly", onClick: onSharePublicly }]
           : []),
@@ -113,15 +123,6 @@ export default function SelectionActions({
               },
             ]
           : []),
-        {
-          key: "image",
-          icon: <ImageIcon size={iconSize} />,
-          label: "Share as image",
-          onClick: () => {
-            onShare(quote());
-            onDismiss();
-          },
-        },
       ];
     }
     return [
@@ -168,7 +169,7 @@ export default function SelectionActions({
         <SelectionMenu
           anchor={selection.anchor}
           isMobile={isMobile}
-          bottomOffsetPx={dockedHeight}
+          bottomOffsetPx={narrationHeight}
           theme={theme}
           items={items()}
           onDismiss={onDismiss}
@@ -181,7 +182,7 @@ export default function SelectionActions({
         <SelectionMenu
           anchor={overlay.anchor}
           isMobile={isMobile}
-          bottomOffsetPx={dockedHeight}
+          bottomOffsetPx={narrationHeight}
           theme={theme}
           items={[]}
           override={
