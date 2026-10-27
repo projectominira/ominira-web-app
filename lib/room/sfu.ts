@@ -13,6 +13,9 @@ import type { SessionDescription } from "@/lib/room/types";
 // - A connection that fails, or stays disconnected past a grace, is rebuilt
 //   whole: a new session, the mic published again (a new id in presence), and
 //   every pull redone. A failed call rebuilds too, backing off.
+// - A pull Cloudflare refuses (the speaker is mid-rebuild, their presence
+//   still names the old session) is only asked again: rebuilding for it would
+//   give our own mic a new session too, and every listener would re-pull us.
 
 const DISCONNECTED_GRACE_MS = 4_000;
 /** A negotiated connection not up by then is rebuilt. */
@@ -89,7 +92,10 @@ export function createSfu(options: SfuOptions): Sfu {
   let closed = false;
   let queue: Promise<void> = Promise.resolve();
   let queued = false;
+  /** The connection's grace or connect timeout. */
   let timer: ReturnType<typeof setTimeout> | null = null;
+  /** The backed-off rebuild after a failed call; the connection coming up doesn't cancel it. */
+  let retry: ReturnType<typeof setTimeout> | null = null;
 
   function createPc(): RTCPeerConnection {
     const next = new RTCPeerConnection({
@@ -184,8 +190,10 @@ export function createSfu(options: SfuOptions): Sfu {
 
       const add = [...wanted].filter(([sessionId]) => !pulled.has(sessionId));
       if (add.length) {
-        const result = await call({ op: "pull", ...own, publishers: add.map(([, publisher]) => publisher) });
+        const result = await api.roomAudio(roomId, { op: "pull", ...own, publishers: add.map(([, publisher]) => publisher) });
         if (stale()) return;
+        // Failed whole, before looking at a track: our session is the trouble.
+        if (result.errorCode && !result.tracks?.length) throw new Error(`pull: ${result.errorCode} ${result.errorDescription ?? ""}`);
         let refused = false;
         add.forEach(([sessionId, publisher], i) => {
           // In the order asked for.
@@ -212,7 +220,8 @@ export function createSfu(options: SfuOptions): Sfu {
       const wait = RETRY_MS[Math.min(failures++, RETRY_MS.length - 1)];
       rebuilding = true;
       report();
-      setTimer(wait, rebuild);
+      if (retry) clearTimeout(retry);
+      retry = setTimeout(() => ((retry = null), g === generation && rebuild()), wait);
     }
   }
 
@@ -237,6 +246,8 @@ export function createSfu(options: SfuOptions): Sfu {
     reconnects++;
     rebuilding = true;
     setTimer(null);
+    if (retry) clearTimeout(retry);
+    retry = null;
     pc.close();
     for (const sessionId of [...pulled.keys()]) drop(sessionId);
     owned = null;
@@ -300,6 +311,7 @@ export function createSfu(options: SfuOptions): Sfu {
       if (closed) return;
       closed = true;
       setTimer(null);
+      if (retry) clearTimeout(retry);
       pc.close();
     },
   };
