@@ -20,9 +20,9 @@ const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
  * filled light when read under it, an empty ring for today until it's met. */
 type MarkKind = "met" | "under" | "today" | "none";
 const MARK: Record<MarkKind, string> = {
-  met: "bg-brand-500 text-sand-25",
+  met: "bg-brand-500 font-bold text-sand-25",
   under: "bg-brand-100 text-sand-900",
-  today: "border-[1.5px] border-brand-500 text-[var(--color-app-brand)]",
+  today: "border-[1.5px] border-brand-500 font-bold text-[var(--color-app-brand)]",
   none: "text-[var(--color-app-text)]",
 };
 
@@ -98,10 +98,10 @@ function Month({ history, at, loading, onGo }: { history: ReadingHistory; at: nu
         </div>
 
         <dl className="m-0 mt-6 flex flex-col divide-y divide-[var(--color-app-border)] border-t border-[var(--color-app-border)]">
-          <Stat label="Your daily goal" value={goalLabel(history.goal)} />
-          <Stat label="Days you met your goal" value={`${summary.goalDays} of ${pastDays}`} />
-          <Stat label="Your longest streak" value={summary.longestRun ? days(summary.longestRun) : "—"} />
-          <Stat label="Your longest reading day" value={summary.longestDay ? timeLabel(summary.longestDay.seconds) : "—"} sub={summary.longestDay ? dayLabel(summary.longestDay.day) : undefined} />
+          <Stat label="Daily goal" value={goalLabel(history.goal)} />
+          <Stat label="Goal met" value={`${summary.goalDays} of ${days(pastDays)}`} />
+          <Stat label="Longest streak" value={summary.longestRun ? days(summary.longestRun) : "—"} />
+          <Stat label="Longest day" value={summary.longestDay ? timeLabel(summary.longestDay.seconds) : "—"} sub={summary.longestDay ? dayLabel(summary.longestDay.day) : undefined} />
         </dl>
       </div>
 
@@ -183,7 +183,7 @@ function Mark({ kind, small, children }: { kind: MarkKind; small?: boolean; chil
   return (
     <span
       className={`flex flex-none items-center justify-center rounded-full tabular-nums transition-colors ${
-        small ? "size-2.5" : `size-10 text-ui-sm font-bold md:size-11 ${kind === "none" ? "group-enabled:group-hover:bg-sand-75" : ""}`
+        small ? "size-2.5" : `size-10 text-ui-sm md:size-11 ${kind === "none" ? "group-enabled:group-hover:bg-sand-75" : ""}`
       } ${MARK[kind]}`}
     >
       {children}
