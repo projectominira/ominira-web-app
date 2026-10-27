@@ -111,17 +111,6 @@ export type Note = {
 
 export type NoteThread = { note: Note; replies: Note[] };
 
-export type Highlight = {
-  id: string;
-  materialId: string;
-  readerId: string;
-  ranges: AnnotationRange[];
-  /** Public shows in the book's room with your name; private, to you only. */
-  visibility: NoteVisibility;
-  createdAt: string;
-  updatedAt: string;
-};
-
 /**
  * One `reader_activities` row — a reader's position in one material, in any
  * format (`locator`, see lib/reader/locator.ts) and either mode. Not embedded

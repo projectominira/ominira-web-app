@@ -3,13 +3,8 @@
 import { useState } from "react";
 import type { AnnotationRange } from "@/lib/api/types";
 import { sameRanges } from "@/stores/library-store";
-import { useSessionStore } from "@/stores/session-store";
 import { useAnnotations } from "@/lib/reader/useAnnotations";
-import { useDeleteHighlight, useSetHighlightVisibility } from "@/lib/materials/useHighlightMutations";
-import { useHighlights } from "@/lib/materials/useHighlights";
-import { useProfile } from "@/lib/auth/useProfile";
-import { useNow } from "@/lib/time/useNow";
-import { useCreateNote } from "@/lib/community/useNoteMutations";
+import { useCreateNote, useUpdateNote } from "@/lib/community/useNoteMutations";
 import { quoteForRanges } from "@/lib/reader/annotationSelection";
 import { topLevelNotes, repliesFor, sortNotes, type NoteSortMode } from "@/lib/reader/noteThread";
 import { useThreadInteraction } from "@/lib/reader/useThreadInteraction";
@@ -17,7 +12,6 @@ import NoteThreadCard from "./notes/NoteThreadCard";
 import NoteComposer from "./notes/NoteComposer";
 import PanelShell from "./notes/PanelShell";
 import HighlightCard from "./notes/HighlightCard";
-import { HighlightCard as RoomHighlightCard } from "@/app/components/rooms/Highlights";
 // import SortToggle from "./notes/SortToggle";
 
 type Props = {
@@ -28,8 +22,6 @@ type Props = {
   /** Resolves any passage's full plain text by id, so a cross-passage
    * annotation's quote can be assembled from more than one passage. */
   getPassageText: (passageId: string) => string;
-  /** The run (chapter) a passage sits in, for the highlight card's cite. */
-  locationLabel: (passageId: string) => string;
   /** An existing annotation (thread) being viewed/added to. */
   annotationId?: string;
   /** A brand-new thread with no annotation yet — one range per passage the
@@ -51,7 +43,6 @@ function EditPanel({
   materialId,
   passageId,
   getPassageText,
-  locationLabel,
   annotationId,
   pendingRanges,
   editingNoteId,
@@ -63,12 +54,7 @@ function EditPanel({
   const { annotationsByPassage } = useAnnotations(materialId);
   const annotations = annotationsByPassage[passageId] ?? [];
   const createNote = useCreateNote(materialId);
-  const deleteHighlight = useDeleteHighlight(materialId);
-  const readerId = useSessionStore((s) => s.readerId);
-  const { data: highlights } = useHighlights(materialId);
-  const { data: profile } = useProfile();
-  const setVisibility = useSetHighlightVisibility(materialId);
-  const now = useNow();
+  const updateNote = useUpdateNote(materialId);
 
   // A brand-new thread has no annotationId yet — after its first note is
   // saved, the server creates one, but this component only has the ranges
@@ -97,37 +83,12 @@ function EditPanel({
     initialEditingId: editingNoteId,
   });
 
-  // The card asks first. Its notes stay (each has its own ⋯); a bare
-  // highlight's panel has nothing left to show, so it closes.
-  const handleDeleteHighlight = (id: string) => {
-    deleteHighlight.mutate(id);
-    if (roots.length === 0) onClose();
-  };
-
   const sortedRoots = sortNotes(roots, sortMode);
 
-  // Your own highlight shows as the book room's card — your name, when, and
-  // its public/private switch — with the notes under it, unquoted.
-  const highlight = existing?.highlightId ? highlights?.find((h) => h.id === existing.highlightId) : undefined;
-  const highlightCard = highlight && profile && (
-    <RoomHighlightCard
-      item={{
-        t: "highlight",
-        id: highlight.id,
-        author: { readerId: highlight.readerId, pseudonym: profile.pseudonym, city: profile.city, avatar: profile.avatar },
-        visibility: highlight.visibility,
-        excerpt: quoteText,
-        label: ranges[0] ? locationLabel(ranges[0].passageId) : "",
-        ranges,
-        href: null,
-        at: highlight.createdAt,
-      }}
-      viewerId={readerId}
-      now={now}
-      onVisibility={(visibility) => setVisibility.mutate({ id: highlight.id, visibility })}
-      onDelete={() => handleDeleteHighlight(highlight.id)}
-    />
-  );
+  // Your highlight is your empty note here: your first words fill it in
+  // rather than starting a second note on the same line.
+  const highlightId = existing?.highlightId;
+  const onError = () => ui.reportError("Couldn't save your note — check your connection and try again.");
 
   return (
     <PanelShell
@@ -146,22 +107,20 @@ function EditPanel({
             action="note"
             draftKey={`highlight-${materialId}-${JSON.stringify(ranges)}`}
             onSave={(content, visibility) =>
-              createNote.mutate(
-                { ranges, content, visibility },
-                { onError: () => ui.reportError("Couldn't save your note — check your connection and try again.") }
-              )
+              highlightId
+                ? updateNote.mutate({ noteId: highlightId, content, visibility }, { onError })
+                : createNote.mutate({ ranges, content, visibility }, { onError })
             }
           />
       }
     >
-      {/* Your highlight's room card heads the panel when there is one.
-          Otherwise the bare quote is only shown here, above the thread list, when there's no note yet
+      {/* The bare quote is only shown here, above the thread list, when there's no note yet
           to attach it to (a fresh thread) — once a root note exists, its
           own NoteThreadCard renders this same quote itself, positioned
           after that note's AuthorRow rather than before it (see the
           `quote` prop passed below). Showing it in both places at once
           would repeat it once per root note. */}
-      {highlightCard || (sortedRoots.length === 0 && <HighlightCard text={quoteText} />)}
+      {sortedRoots.length === 0 && <HighlightCard text={quoteText} />}
       <>
           {/* {roots.length > 0 && <SortToggle mode={sortMode} onChange={setSortMode} />} */}
 
@@ -170,7 +129,7 @@ function EditPanel({
               {sortedRoots.map((note) => (
                 <NoteThreadCard
                   key={note.id}
-                  quote={highlightCard ? undefined : quoteText}
+                  quote={quoteText}
                   note={note}
                   replies={repliesFor(allNotes, note.id)}
                   expanded={expandedIds.has(note.id)}

@@ -5,7 +5,7 @@ import { CircleAlert, Ellipsis, RotateCcw } from "lucide-react";
 import NoteContent from "@/app/components/reader/notes/NoteContent";
 import OverflowMenu, { type OverflowMenuItem } from "@/app/components/reader/notes/OverflowMenu";
 import PulseDot from "@/app/components/shared/PulseDot";
-import type { Note } from "@/lib/api/types";
+import type { Note, NoteVisibility } from "@/lib/api/types";
 import { isTempId } from "@/lib/api/optimisticId";
 import { noteMentionNames } from "@/lib/community/mentionNames";
 import { chapterLabel } from "@/lib/groups/copy";
@@ -70,6 +70,8 @@ export type NoteHandlers = {
   onDelete?: (replyId?: string) => void;
   /** Pinning the note to the room's strip, or unpinning it. */
   onPin?: (pin: boolean) => void;
+  /** Your note made public or private. */
+  onVisibility?: (visibility: NoteVisibility) => void;
 };
 
 /**
@@ -117,7 +119,7 @@ export default function NoteBubble({
   allReplies?: boolean;
 }) {
   const { note } = n;
-  const { onReact, onReply, onDelete, onPin } = handlers;
+  const { onReact, onReply, onDelete, onPin, onVisibility } = handlers;
   const [all, setAll] = useState(allReplies);
   // Replying: to the note (its id) or to one reply; null while closed.
   const [replyTo, setReplyTo] = useState<string | null>(null);
@@ -172,7 +174,7 @@ export default function NoteBubble({
             !pending &&
             onDelete && (
               <Menu
-                items={noteMenu(note, viewerId, moderator, replies.length, () => onDelete(), moderator && onPin && !priv ? { pinned: n.pinned === NOTE_PIN, onToggle: onPin } : undefined)}
+                items={noteMenu(note, viewerId, moderator, replies.length, () => onDelete(), moderator && onPin && !priv ? { pinned: n.pinned === NOTE_PIN, onToggle: onPin } : undefined, onVisibility)}
               />
             )
           }

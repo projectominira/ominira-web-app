@@ -2,18 +2,15 @@ import "server-only";
 
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { encodeCursor, keysetBeforeFilter, type Keyset } from "@/lib/api/cursor";
-import { resolveExcerpt } from "@/lib/community/excerpt";
 import { enrichFeedItems } from "@/lib/community/feed";
 import type { NoteRow } from "@/lib/community/notes";
 import { loadPostViewer } from "@/lib/community/viewer";
 import { visiblePostsFilter, type PostViewer } from "@/lib/community/visibility";
 import { toMilestone } from "@/lib/groups/milestones";
-import { loadSectionLabels } from "@/lib/materials/sectionLabels";
-import type { AnnotationRange, Note } from "@/lib/api/types";
 import type { Group } from "@/lib/groups/membership";
 import type { Database } from "@/lib/supabase/database.types";
 import { comradesById } from "./comrades";
-import { previewText } from "./home";
+import { noteWords } from "./home";
 import { officialReaderIds, pagePassages } from "./passage";
 import { lastReadAt } from "./reads";
 import {
@@ -50,14 +47,13 @@ type Tables = Database["public"]["Tables"];
 type EventRow = Tables["group_events"]["Row"];
 type MilestoneRow = Tables["group_milestones"]["Row"];
 type RoomRow = Pick<Tables["rooms"]["Row"], "id" | "started_by" | "started_at" | "ended_at">;
-type HighlightRow = Tables["highlights"]["Row"];
 
 type GroupRow =
   | { t: "post"; row: NoteRow }
   | { t: "event"; row: EventRow }
   | { t: "milestone"; row: MilestoneRow };
 
-type BookRow = { t: "post"; row: NoteRow } | { t: "start" | "end"; row: RoomRow } | { t: "highlight"; row: HighlightRow };
+type BookRow = { t: "post"; row: NoteRow } | { t: "start" | "end"; row: RoomRow };
 
 const newestFirst = <Q extends { order: (c: string, o: { ascending: boolean }) => Q }>(q: Q, column = "created_at") =>
   q.order(column, { ascending: false }).order("id", { ascending: false });
@@ -155,21 +151,18 @@ export async function groupStreamPage(group: Group, readerId: string | null, { c
 }
 
 /** A book's room: its notes the viewer can read (public, plus their own and
- * those shared with them, through visiblePostsFilter), its highlights
- * (public, plus the viewer's own private ones), and its reading rooms as
- * they start and end. A group's rooms show to its members only. No events. */
+ * those shared with them, through visiblePostsFilter), and its reading
+ * rooms as they start and end. A group's rooms show to its members only. No events. */
 export async function bookStreamPage(materialId: string, viewer: PostViewer, { cursor, limit }: Page): Promise<RoomStreamPage> {
   const admin = getSupabaseAdminClient();
   const before = <Q extends { or: (f: string) => Q }>(q: Q, column?: string) => (cursor ? q.or(keysetBeforeFilter(cursor, column)) : q);
   const roomScope = viewer?.groupIds.length ? `group_id.is.null,group_id.in.(${viewer.groupIds.join(",")})` : "group_id.is.null";
   const rooms = () => admin.from("rooms").select("id, started_by, started_at, ended_at").eq("material_id", materialId).or(roomScope);
-  const highlightScope = viewer ? `visibility.eq.public,reader_id.eq.${viewer.readerId}` : "visibility.eq.public";
   const lastReadP = cursor ? Promise.resolve(null) : lastReadAt(viewer?.readerId, "book", materialId);
-  const [posts, highlights, starts, ends, lastRead, replied, officialIds] = await Promise.all([
+  const [posts, starts, ends, lastRead, replied, officialIds] = await Promise.all([
     newestFirst(before(admin.from("posts").select("*").eq("material_id", materialId).is("parent_id", null).or(visiblePostsFilter(viewer)))).limit(
       limit + 1
     ),
-    newestFirst(before(admin.from("highlights").select("*").eq("material_id", materialId).or(highlightScope))).limit(limit + 1),
     newestFirst(before(rooms(), "started_at"), "started_at").limit(limit + 1),
     newestFirst(before(rooms().eq("status", "ended"), "ended_at"), "ended_at").limit(limit + 1),
     lastReadP,
@@ -177,14 +170,12 @@ export async function bookStreamPage(materialId: string, viewer: PostViewer, { c
     officialReaderIds(),
   ]);
   if (posts.error) throw posts.error;
-  if (highlights.error) throw highlights.error;
   if (starts.error) throw starts.error;
   if (ends.error) throw ends.error;
 
   const page = mergePage<BookRow>(
     [
       (posts.data as NoteRow[]).map((row) => ({ at: row.created_at, id: row.id, item: { t: "post", row } })),
-      highlights.data.map((row) => ({ at: row.created_at, id: row.id, item: { t: "highlight", row } })),
       starts.data.map((row) => ({ at: row.started_at, id: row.id, item: { t: "start", row } })),
       ends.data.map((row) => ({ at: row.ended_at!, id: row.id, item: { t: "end", row } })),
     ] satisfies Stamped<BookRow>[][],
@@ -192,15 +183,13 @@ export async function bookStreamPage(materialId: string, viewer: PostViewer, { c
   );
   const pagePosts = rowsOf(page.items, "post").map((r) => r.row);
   const pageRooms = page.items.flatMap((r) => (r.t === "start" || r.t === "end" ? [r] : []));
-  const pageHighlights = rowsOf(page.items, "highlight").map((r) => r.row);
 
   const now = Date.now();
-  const [feed, people, joined, passages, book] = await Promise.all([
+  const [feed, people, joined, passages] = await Promise.all([
     enrichFeedItems(pagePosts, viewer),
-    comradesById([...pageRooms.filter((r) => r.t === "start").map((r) => r.row.started_by), ...pageHighlights.map((h) => h.reader_id)]),
+    comradesById(pageRooms.filter((r) => r.t === "start").map((r) => r.row.started_by)),
     joinedCounts(pageRooms.filter((r) => r.t === "end").map((r) => r.row.id)),
     pagePassages(pagePosts, now),
-    pageHighlights.length ? highlightBook(materialId) : null,
   ]);
   const ctx: NoteContext = { now, pinnedId: null, teamIds: new Set(), officialIds, passages, alsoIn: true };
   const notes = new Map(feed.map((it) => [it.note.id, it]));
@@ -214,10 +203,6 @@ export async function bookStreamPage(materialId: string, viewer: PostViewer, { c
   const items = page.items.flatMap((r): RoomItem[] => {
     if (r.t === "start") return [roomStartItem(run(r.row))];
     if (r.t === "end") return [roomEndItem({ ...run(r.row), endedAt: r.row.ended_at! })];
-    if (r.t === "highlight") {
-      const author = people.get(r.row.reader_id);
-      return author && book ? [highlightItem(r.row, author, book)] : [];
-    }
     const it = notes.get(r.row.id);
     return it ? [{ t: "note", note: toRoomNote(it, ctx) }] : [];
   });
@@ -268,28 +253,8 @@ async function repliedSince(scope: string, viewer: PostViewer, since: string | n
   const comrade = (id: string): Comrade => people.get(id) ?? { readerId: id, pseudonym: "", avatar: { color: null, url: null } };
   return shown.reverse().map(([id, t]) => {
     const note = byId.get(id)!;
-    return { id, author: comrade(note.reader_id), text: previewText(note), repliers: t.repliers.slice(0, 2).map(comrade), replierCount: t.repliers.length, count: t.count, at: t.at };
+    return { id, author: comrade(note.reader_id), text: noteWords(note), repliers: t.repliers.slice(0, 2).map(comrade), replierCount: t.repliers.length, count: t.count, at: t.at };
   });
-}
-
-type HighlightBook = { slug: string; labels: Map<string, string> | undefined };
-
-/** What a highlight needs from its book: where the reader opens, and its
- * section labels. */
-async function highlightBook(materialId: string): Promise<HighlightBook | null> {
-  const { data, error } = await getSupabaseAdminClient().from("materials").select("id, slug, json_storage_path").eq("id", materialId).maybeSingle();
-  if (error) throw error;
-  if (!data) return null;
-  return { slug: data.slug, labels: (await loadSectionLabels([data])).get(data.id) };
-}
-
-/** A highlight as the room shows it: the line, where it is, who marked it. */
-function highlightItem(row: HighlightRow, author: Note["author"], book: HighlightBook): RoomItem {
-  const ranges = row.ranges as AnnotationRange[];
-  const { sectionId, label, excerpt } = resolveExcerpt(ranges, book.labels);
-  const passage = ranges[0]?.passageId;
-  const href = `/read/${book.slug}${sectionId ? `?${new URLSearchParams({ section: sectionId, ...(passage ? { passage } : {}) })}` : ""}`;
-  return { t: "highlight", id: row.id, author, visibility: row.visibility, excerpt, label, ranges, href, at: row.created_at };
 }
 
 /** Everyone who came to each room (room_members keeps leavers). */

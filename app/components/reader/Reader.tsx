@@ -1160,7 +1160,6 @@ export default function Reader({
                 materialId={materialId}
                 passageId={notesPanel.passageId}
                 getPassageText={getPassageText}
-                locationLabel={(passageId) => locateFeedEntry(passageId)?.label ?? ""}
                 annotationId={notesPanel.annotationId}
                 pendingRanges={notesPanel.ranges}
                 editingNoteId={notesPanel.editingNoteId}

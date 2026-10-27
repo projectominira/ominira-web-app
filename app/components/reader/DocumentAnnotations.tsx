@@ -152,7 +152,6 @@ export function useDocumentAnnotations({
                 materialId={materialId}
                 passageId={notesPanel.passageId}
                 getPassageText={getPassageText}
-                locationLabel={(block) => locate(block)?.label ?? ""}
                 annotationId={notesPanel.annotationId}
                 pendingRanges={notesPanel.ranges}
                 editingNoteId={notesPanel.editingNoteId}

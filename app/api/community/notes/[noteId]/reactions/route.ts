@@ -59,10 +59,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ not
         // naming the book.
         const noteText = (note.content as { text?: string } | null)?.text ?? null;
         const quoted = notificationSnippet(noteText);
+        const book = material.title ?? material.slug;
         await notifyReader(note.reader_id, {
           kind: "reaction",
           title: `✊🏾 ${actorName} reacted to your note`,
-          body: quoted ? `“${quoted}”` : `Your voice note on ${material.title ?? material.slug}`,
+          // A voice note has no words, nor does a highlight (an empty note).
+          body: quoted ? `“${quoted}”` : noteText === "" ? `Your highlight in ${book}` : `Your voice note on ${book}`,
           url,
           // The full text, frozen at fire time, so the in-app row can show
           // more of it than a push body has room for.

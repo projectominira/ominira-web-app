@@ -12,10 +12,10 @@ import type { RoomNote } from "@/lib/rooms/types";
 import { resolveReaderBySlug } from "./profileSlug";
 import { listReaderActivities } from "./activity";
 import type { AnnotationRange, MaterialSummary } from "@/lib/api/types";
-import type { Database } from "@/lib/supabase/database.types";
 import { toAvatar, type Avatar } from "@/lib/avatar/avatar";
 
-type HighlightRow = Database["public"]["Tables"]["highlights"]["Row"];
+/** A highlight: the reader's own note with no words. */
+type HighlightRow = Pick<NoteRow, "id" | "reader_id" | "material_id" | "ranges" | "visibility" | "created_at" | "updated_at">;
 
 export class ReaderNotFoundError extends Error {
   constructor(slug: string) {
@@ -81,13 +81,13 @@ export type ReaderProfilePage = {
   contributions: MaterialSummary[];
 };
 
-/** highlights rows -> quote-only cards (no note content — a bare highlight
+/** Highlights -> quote-only cards (no note content — a bare highlight
  * has none), same excerpt-resolution step enrichFeedItems uses for notes.
  * Rows with nothing to quote (an old range saved without its text) are
  * dropped rather than shown as an empty card. */
 async function enrichHighlights(rows: HighlightRow[]): Promise<ReaderProfileHighlight[]> {
   if (rows.length === 0) return [];
-  const materialIds = Array.from(new Set(rows.map((r) => r.material_id)));
+  const materialIds = Array.from(new Set(rows.flatMap((r) => (r.material_id ? [r.material_id] : []))));
   const { data: materials } = await getSupabaseAdminClient()
     .from("materials")
     .select("id, slug, title, author")
@@ -96,7 +96,7 @@ async function enrichHighlights(rows: HighlightRow[]): Promise<ReaderProfileHigh
 
   return rows
     .map((row) => {
-      const material = materialsById.get(row.material_id);
+      const material = row.material_id ? materialsById.get(row.material_id) : undefined;
       if (!material) return null;
       const { excerpt } = resolveExcerpt(row.ranges as AnnotationRange[]);
       if (!excerpt) return null;
@@ -197,12 +197,14 @@ export async function getReaderProfilePage(slug: string, viewerId: string | unde
   let highlights: ReaderProfileHighlight[] | null = null;
   if (isSelf) {
     const { data: highlightRows } = await admin
-      .from("highlights")
-      .select("*")
+      .from("posts")
+      .select("id, reader_id, material_id, ranges, visibility, created_at, updated_at")
       .eq("reader_id", readerRow.id)
+      .is("parent_id", null)
+      .eq("content->>text", "")
       .order("created_at", { ascending: false })
       .limit(PROFILE_HIGHLIGHTS_CAP);
-    highlights = await enrichHighlights((highlightRows ?? []) as HighlightRow[]);
+    highlights = await enrichHighlights(highlightRows ?? []);
   }
 
   return {

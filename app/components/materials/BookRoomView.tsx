@@ -49,7 +49,7 @@ export default function BookRoomView({ material, initialInfo }: { material: Mate
     const href = quoteReaderHref(n);
     if (href) router.push(href);
   };
-  const { viewerId, stream, send, heart, reply, del, highlightVisibility, highlightDelete, markRead, live, liveRoom, canStart, card, tz, today } = useBookRoom(material.id);
+  const { viewerId, stream, send, heart, reply, del, visibility, markRead, live, liveRoom, canStart, card, tz, today } = useBookRoom(material.id);
   const position = useReadingPositionStore((s) => s.positions[material.id]);
   const isSaved = useBookmarkedMaterialIds().has(material.id);
 
@@ -169,8 +169,7 @@ export default function BookRoomView({ material, initialInfo }: { material: Mate
           onDelete: viewerId ? (n, replyId) => del.mutate({ noteId: replyId ?? n.note.id, rootId: n.note.id }) : undefined,
           onRetry: (n) => send.retry(n.note.id),
           onPassage: openPassage,
-          onHighlightVisibility: (id, visibility) => highlightVisibility.mutate({ id, visibility }),
-          onHighlightDelete: (id) => highlightDelete.mutate(id),
+          onVisibility: viewerId ? (n, v) => visibility.mutate({ noteId: n.note.id, visibility: v }) : undefined,
         }}
         input={
           viewerId ? (

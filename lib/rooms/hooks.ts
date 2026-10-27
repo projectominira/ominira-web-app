@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData, type QueryClient, type QueryKey } from "@tanstack/react-query";
-import type { AnnotationRange, Note } from "@/lib/api/types";
+import type { AnnotationRange, Note, NoteVisibility } from "@/lib/api/types";
 import { apiFetch } from "@/lib/api/client";
 import { makeTempId } from "@/lib/api/optimisticId";
 import { useProfile } from "@/lib/auth/useProfile";
@@ -115,14 +115,35 @@ export function useRoomHeart(key: QueryKey, patcher: NotePatcher = inStream(key)
 
 /** Deletes a note from a room (with its replies, the server's cascade),
  * or one reply (`rootId`, its note): out of the stream at once, back if
- * the delete fails. */
-export function useRoomDelete(key: QueryKey) {
+ * the delete fails. `notes`: the book's notes in the reader, whose marks
+ * follow. */
+export function useRoomDelete(key: QueryKey, notes?: QueryKey) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ noteId }: { noteId: string; rootId?: string }) => apiFetch<void>(`/community/notes/${noteId}`, { method: "DELETE" }),
     onMutate: ({ noteId, rootId = noteId }) => patchStreamNote(queryClient, key, rootId, noteId, () => null),
     onError: () => showToast("Couldn’t delete it. Try again."),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: key });
+      if (notes) void queryClient.invalidateQueries({ queryKey: notes });
+    },
+  });
+}
+
+/** Your note made public or private from a room: flipped at once, back if
+ * the write fails; `notes` as useRoomDelete's. */
+export function useRoomVisibility(key: QueryKey, notes?: QueryKey) {
+  const queryClient = useQueryClient();
+  const set = (noteId: string, visibility: NoteVisibility) => patchStreamNote(queryClient, key, noteId, noteId, (n) => ({ ...n, visibility }));
+  return useMutation({
+    mutationFn: ({ noteId, visibility }: { noteId: string; visibility: NoteVisibility }) =>
+      apiFetch<void>(`/community/notes/${noteId}`, { method: "PATCH", json: { visibility } }),
+    onMutate: ({ noteId, visibility }) => set(noteId, visibility),
+    onError: (_err, { noteId, visibility }) => {
+      set(noteId, visibility === "public" ? "private" : "public");
+      showToast("Couldn’t change it. Try again.");
+    },
+    onSettled: () => notes && queryClient.invalidateQueries({ queryKey: notes }),
   });
 }
 

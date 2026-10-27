@@ -3,14 +3,15 @@ import { useFeedStore } from "@/stores/feed-store";
 import { openRoomPlayer, type RoomPlayerView } from "@/stores/layout-store";
 import type { Note } from "@/lib/api/types";
 import { useSessionStore } from "@/stores/session-store";
+import { isEmptyNote } from "@/stores/library-store";
 import { useAnnotations } from "./useAnnotations";
 import { topLevelNotes } from "./noteThread";
 import { annotationSortKey, generalNoteSortKey, type FeedSort } from "./feedSort";
 import { buildAnnotationFeedEntries, type FeedEntry, type FeedLocator } from "./annotationFeed";
 
-/** Which entries the panel renders — "notes" narrows down to entries with
- * at least one note, "highlights" is the complement, bare highlights only,
- * nothing discussed yet. Every entry is exactly one or the other, so these
+/** Which entries the panel renders — "highlights" is the lines with only
+ * highlights on them (empty notes, no replies), nothing discussed yet;
+ * "notes" is the complement, every line with words on it. Every entry is exactly one or the other, so these
  * two exhaust the feed on their own. Purely a display filter — totals below
  * are always computed from the full, unfiltered set, so the header badge
  * never appears to shrink just because the reader narrowed their own view. */
@@ -82,7 +83,7 @@ export function useFeed({
   const items: FeedItem[] = useMemo(() => {
     const byAuthor = (n: Note) => n.author.readerId === authorId;
     const highlightItems: FeedItem[] = flatEntries
-      .filter((e) => (filter === "notes" ? e.annotation.notes.length > 0 : e.annotation.notes.length === 0))
+      .filter((e) => (filter === "notes") !== e.annotation.notes.every((n) => !n.parentId && isEmptyNote(n)))
       .filter((e) => !authorId || e.annotation.notes.some(byAuthor))
       .map((entry) => ({ kind: "highlight", entry }));
 

@@ -1,6 +1,6 @@
 // Highlight counts (rooms-spec §5.4): how many people marked a line, never
 // who (public highlights name their reader in the book's room). Pure: the counts are
-// worked out from the highlights table's ranges (lib/rooms/highlights).
+// worked out from the lines its notes are on (lib/rooms/highlights).
 
 import type { AnnotationRange } from "@/lib/api/types";
 

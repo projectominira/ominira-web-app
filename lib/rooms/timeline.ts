@@ -118,34 +118,12 @@ export function itemAt(it: RoomItem): string | null {
       return it.note.note.createdAt;
     case "system":
     case "joins":
-    case "highlight":
       return it.at;
     case "milestone":
       return it.milestone.createdAt;
     default:
       return null;
   }
-}
-
-/** `extra` merged into `items` (oldest first) by time. With older pages
- * still to load, only what's no older than the oldest item loaded, so
- * nothing lands above the history that hasn't arrived yet. */
-export function mergeByTime(items: RoomItem[], extra: RoomItem[], olderToLoad = false): RoomItem[] {
-  const time = (it: RoomItem) => {
-    const at = itemAt(it);
-    return at === null ? null : Date.parse(at);
-  };
-  const first = items.map(time).find((t) => t !== null) ?? null;
-  const add = extra.filter((x) => !olderToLoad || first === null || time(x)! >= first).sort((a, b) => time(a)! - time(b)!);
-  if (add.length === 0) return items;
-  const out: RoomItem[] = [];
-  let j = 0;
-  for (const it of items) {
-    const t = time(it);
-    while (t !== null && j < add.length && time(add[j])! < t) out.push(add[j++]);
-    out.push(it);
-  }
-  return [...out, ...add.slice(j)];
 }
 
 /** Consecutive joins on the same day become one line, in the order they
@@ -258,14 +236,10 @@ export function roomItems(
     viewerId: string | null;
     cards?: { ref: string; item: RoomItem }[];
     pending?: RoomItem[];
-    /** What only the viewer has, merged in by time (the reader's own
-     * highlights): only as far back as the pages loaded so far. */
-    mine?: RoomItem[];
   }
 ): RoomItem[] {
   const items = [...pages].reverse().flatMap((p) => p.items);
-  const older = pages.length > 0 && pages[pages.length - 1].nextCursor !== null;
-  const placed = mergeByTime(placeCards(collapseJoins(items, o.tz), o.cards ?? []), o.mine ?? [], older);
+  const placed = placeCards(collapseJoins(items, o.tz), o.cards ?? []);
   // A sent note the room already has is shown there, not twice.
   const loaded = new Set(items.flatMap((it) => (it.t === "note" ? [it.note.note.id] : [])));
   const pending = (o.pending ?? []).filter((it) => it.t !== "note" || !loaded.has(it.note.note.id));

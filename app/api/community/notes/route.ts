@@ -150,6 +150,10 @@ export async function POST(request: Request) {
 
   const isReply = !!body.parentId;
   const isDiscussion = !isReply && body.threadType === "discussion";
+  // Only a note on a line can go without words: that's a highlight.
+  if (body.content.kind === "text" && !body.content.text.trim() && (isReply || isDiscussion || !body.ranges?.length)) {
+    return validationError("Write something first.", "content");
+  }
 
   if (!isReply && !isDiscussion) {
     // Book-anchored thread root — existing "note" behavior, unchanged.

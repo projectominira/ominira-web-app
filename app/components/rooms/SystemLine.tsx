@@ -129,7 +129,8 @@ export function RepliedLine({ replied: r, viewerId, onOpen }: { replied: Replied
           ))}
         </span>
         <span className="min-w-0 truncate">
-          <b className={WHO}>{who}</b> replied to {r.author.readerId === viewerId ? "your note" : `${shortName(r.author.pseudonym)}’s note`} “{r.text}”
+          <b className={WHO}>{who}</b> replied to {r.author.readerId === viewerId ? "your note" : `${shortName(r.author.pseudonym)}’s note`}
+          {r.text && ` “${r.text}”`}
         </span>
         <span className="flex-none pr-1.5 font-bold text-[var(--color-app-brand)]">{r.count} new</span>
       </button>

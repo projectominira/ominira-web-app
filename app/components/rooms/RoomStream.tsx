@@ -9,7 +9,6 @@ import { useNow } from "@/lib/time/useNow";
 import type { LocalDay } from "@/lib/time/zone";
 import { NOTE_PIN, PASSAGE_PIN } from "@/lib/rooms/timeline";
 import { MilestoneCard, SessionCard, TargetCard } from "./ActionCards";
-import { HighlightCard } from "./Highlights";
 import NoteBubble, { type BubbleState } from "./NoteBubble";
 import Loader from "@/app/components/Loader";
 import SystemLine, { DayDivider, RepliedLine, UnreadDivider } from "./SystemLine";
@@ -55,16 +54,12 @@ export type StreamHandlers = {
   onJoin?: () => void;
   /** The target card's foot: your progress and the book's resume buttons. */
   resume?: ReactNode;
-  /** Your highlight made public or private. */
-  onHighlightVisibility?: (id: string, visibility: NoteVisibility) => void;
-  /** Your highlight deleted (after asking). */
-  onHighlightDelete?: (id: string) => void;
-  /** A highlight's line opened; absent, it's a link to the reader. */
-  onHighlight?: (item: Extract<RoomItem, { t: "highlight" }>) => void;
+  /** Your note made public or private. */
+  onVisibility?: (n: RoomNote, visibility: NoteVisibility) => void;
 };
 
 const itemKey = (it: RoomItem, i: number) =>
-  it.t === "note" ? it.note.note.id : it.t === "replied" ? `replied-${it.replied.id}` : it.t === "system" || it.t === "joins" || it.t === "highlight" ? it.id : it.t === "session" ? it.card.session.id : it.t === "day" ? `day-${it.day}` : `${it.t}-${i}`;
+  it.t === "note" ? it.note.note.id : it.t === "replied" ? `replied-${it.replied.id}` : it.t === "system" || it.t === "joins" ? it.id : it.t === "session" ? it.card.session.id : it.t === "day" ? `day-${it.day}` : `${it.t}-${i}`;
 
 export default function RoomStream({
   ref,
@@ -272,6 +267,7 @@ export default function RoomStream({
                 onReply: h.onReply && ((reply, to) => h.onReply!(n, reply, to)),
                 onDelete: h.onDelete && ((replyId) => h.onDelete!(n, replyId)),
                 onPin: h.onPin && ((pin) => h.onPin!(n, pin)),
+                onVisibility: h.onVisibility && ((v) => h.onVisibility!(n, v)),
               }}
               onPassage={() => h.onPassage?.(n)}
               onRetry={() => h.onRetry?.(n)}
@@ -284,20 +280,6 @@ export default function RoomStream({
           <div key="empty" className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-12 text-center">
             <span className="font-serif text-[17px]/[1.35] font-semibold text-balance">No one’s here yet — start the thread.</span>
             <span className="max-w-75 text-ui-body-regular text-pretty text-[var(--color-app-text-secondary)]">{empty}</span>
-          </div>
-        );
-      case "highlight":
-        return (
-          <div key={it.id} data-anchor={it.id} className="mx-auto w-full shell:max-w-[560px]">
-            <HighlightCard
-              item={it}
-              viewerId={viewerId}
-              now={now}
-              flash={flash === it.id}
-              onVisibility={h.onHighlightVisibility && ((v) => h.onHighlightVisibility!(it.id, v))}
-              onDelete={h.onHighlightDelete && (() => h.onHighlightDelete!(it.id))}
-              onOpen={h.onHighlight && (() => h.onHighlight!(it))}
-            />
           </div>
         );
     }

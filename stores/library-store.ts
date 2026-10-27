@@ -1,16 +1,19 @@
-import type { AnnotationRange, Highlight, Note, NoteContent } from "@/lib/api/types";
+import type { AnnotationRange, Note, NoteContent } from "@/lib/api/types";
 
 // Re-exported so every existing call site (~15 files) keeps importing these
 // three from "@/stores/library-store" rather than churning every import
 // path in the same pass that already renames NoteEntry -> Note everywhere
 // (api-spec.md: "converge on the API's names instead of keeping two
-// client-side vocabularies" — plan.md's Phase 6). `Highlight` likewise.
-export type { AnnotationRange, NoteContent, Note, Highlight };
+// client-side vocabularies" — plan.md's Phase 6).
+export type { AnnotationRange, NoteContent, Note };
+
+/** A note with no words: a highlight. */
+export const isEmptyNote = (n: Note) => n.content.kind === "text" && n.content.text.trim() === "";
 
 /**
- * Read-only, *computed* view combining whatever Highlight and/or Note rows
- * (both real server rows now, api-spec.md's shapes — never itself the unit
- * of storage or mutation) share one exact set of ranges — the shape the
+ * Read-only, *computed* view combining whatever Note rows (real server
+ * rows, api-spec.md's shape — never itself the unit of storage or
+ * mutation) share one exact set of ranges — the shape the
  * reading UI actually wants (one marked span, one note thread underneath
  * it). `id` is deterministic (derived from `ranges`, see `rangesKey`), not
  * a persisted uuid — every mutation (create/delete highlight, create/edit/
@@ -38,12 +41,11 @@ export type Annotation = {
   id: string;
   ranges: AnnotationRange[];
   highlighted: boolean;
-  /** The underlying Highlight row's own id — only what removeHighlight
-   * actually needs; absent when this group has no highlight, only notes. */
+  /** The viewer's own empty note here (their highlight), which the
+   * selection's Highlight removes and their first words fill in. */
   highlightId?: string;
   notes: Note[];
-  // Last activity in this group (ms epoch) — a highlight or any note
-  // created/edited, derived from the max `updatedAt` among every
+  // Last activity in this group (ms epoch) — any note created/edited, derived from the max `updatedAt` among every
   // constituent row. Individual notes also carry their own `updatedAt`.
   savedAt: number;
 };
@@ -56,25 +58,20 @@ export function sameRanges(a: AnnotationRange[], b: AnnotationRange[]): boolean 
   return a.length === b.length && a.every((r, i) => r.passageId === b[i].passageId && r.start === b[i].start && r.end === b[i].end);
 }
 
-/** Groups whichever Highlight/Note rows touch one shared passage (see
+/** Groups whichever notes touch one shared passage (see
  * lib/reader/useAnnotations.ts, which buckets by passageId before calling
  * this) by their exact shared `ranges` into the Annotation[] view
  * PassageText/NotesSidebar actually read. A row's own `ranges` may reach
  * into neighboring passages too — irrelevant here, beyond being part of
- * the grouping key. */
-export function buildAnnotationsForPassage(highlights: Highlight[], notes: Note[]): Annotation[] {
+ * the grouping key. It's `highlighted` where the viewer has an empty
+ * note of their own. */
+export function buildAnnotationsForPassage(notes: Note[], viewerId: string | null): Annotation[] {
   const groups = new Map<string, { ranges: AnnotationRange[]; highlightId?: string; notes: Note[]; savedAt: number }>();
-  for (const h of highlights) {
-    const key = rangesKey(h.ranges);
-    const g = groups.get(key) ?? { ranges: h.ranges, notes: [], savedAt: 0 };
-    g.highlightId = h.id;
-    g.savedAt = Math.max(g.savedAt, Date.parse(h.updatedAt));
-    groups.set(key, g);
-  }
   for (const n of notes) {
     const key = rangesKey(n.ranges);
     const g = groups.get(key) ?? { ranges: n.ranges, notes: [], savedAt: 0 };
     g.notes.push(n);
+    if (!n.parentId && viewerId && n.author.readerId === viewerId && isEmptyNote(n)) g.highlightId = n.id;
     g.savedAt = Math.max(g.savedAt, Date.parse(n.updatedAt));
     groups.set(key, g);
   }

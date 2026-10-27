@@ -1,4 +1,4 @@
-import type { AnnotationRange, MaterialSummary, Note } from "@/lib/api/types";
+import type { MaterialSummary, Note } from "@/lib/api/types";
 import type { FeedItem } from "@/lib/community/feed";
 import type { GroupBookStatus, GroupMilestone, GroupSession, TargetView } from "@/lib/groups/types";
 import type { StreakView } from "@/lib/streaks/types";
@@ -100,21 +100,10 @@ export type RoomItem =
   | { t: "replied"; replied: RepliedNote }
   /** A highlight in a book's room: a public one, or your own private one.
    * `href` opens the reader at its line. */
-  | {
-      t: "highlight";
-      id: string;
-      author: Note["author"];
-      visibility: Note["visibility"];
-      excerpt: string;
-      label: string;
-      ranges: AnnotationRange[];
-      href: string | null;
-      at: string;
-    }
   | { t: "empty" };
 
-/** A note with comrades' replies since you last read the room: `count`
- * of them, by `repliers` (latest first), the last `at`. */
+/** A note with comrades' replies since you last read the room (`text`, its
+ * words; empty for a highlight): `count` of them, by `repliers` (latest first), the last `at`. */
 export type RepliedNote = { id: string; author: Comrade; text: string; repliers: Comrade[]; replierCount: number; count: number; at: string };
 
 /** `GET /api/groups/{slug}/stream`, `GET /api/materials/{id}/stream`: one

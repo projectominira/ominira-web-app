@@ -149,6 +149,10 @@ export function previewName(pseudonym: string): string {
   return name.length > 18 ? name.split(/\s+/)[0] : name;
 }
 
+/** A note's own words; "Voice note" for one, empty for a highlight. */
+export const noteWords = (row: { content: unknown; kind: string }) =>
+  (row.content as { text?: string } | null)?.text || (row.kind === "voice" ? "Voice note" : "");
+
 /** A row's preview of a note: its words, or what it is when it has none. */
 export const previewText = (row: { content: unknown; kind: string }) =>
   (row.content as { text?: string } | null)?.text || (row.kind === "voice" ? "Voice note" : "Shared a passage");

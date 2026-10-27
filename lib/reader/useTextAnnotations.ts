@@ -4,8 +4,7 @@ import { sameRanges, type Annotation } from "@/stores/library-store";
 import { useSessionStore } from "@/stores/session-store";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useAnnotations } from "./useAnnotations";
-import { useCreateHighlight, useDeleteHighlight } from "@/lib/materials/useHighlightMutations";
-import { useDeleteNote } from "@/lib/community/useNoteMutations";
+import { useCreateNote, useDeleteNote } from "@/lib/community/useNoteMutations";
 import { topLevelNotes } from "./noteThread";
 import type { SelectionAnchor, TextSelection } from "@/lib/annotations/useTextSelection";
 
@@ -65,8 +64,7 @@ export type NotesPanelState = {
  */
 export function useTextAnnotations(materialId: string) {
   const { annotationsByPassage, allAnnotations } = useAnnotations(materialId);
-  const createHighlight = useCreateHighlight(materialId);
-  const deleteHighlight = useDeleteHighlight(materialId);
+  const createNote = useCreateNote(materialId);
   const deleteNote = useDeleteNote(materialId);
   const isAuthenticated = useIsAuthenticated();
   const readerId = useSessionStore((s) => s.readerId);
@@ -96,27 +94,29 @@ export function useTextAnnotations(materialId: string) {
 
   const dismissSelection = useCallback(() => setSelection(null), []);
 
-  // Re-selecting an already-highlighted span toggles it off instead of
-  // stacking a duplicate — the tooltip's Highlight button is the only
-  // affordance for removing a highlight, matching "selection is the only
-  // mechanism" (no separate click-to-cancel menu on marked text).
-  // existing.highlightId (the underlying Highlight row's own id) is what
-  // deleteHighlight actually needs — existing.id is the grouped view's
+  // A highlight is an empty note of your own on the span. Re-selecting an
+  // already-highlighted span toggles it off instead of stacking a duplicate
+  // — the tooltip's Highlight button is the only affordance for removing a
+  // highlight, matching "selection is the only mechanism" (no separate
+  // click-to-cancel menu on marked text). A span you've already written on
+  // is already yours, so there's nothing to add. existing.highlightId is
+  // that empty note's own id — existing.id is the grouped view's
   // deterministic range-derived key, not a real row id.
   const highlightSelection = useCallback(() => {
     if (!selection) return;
     const { ranges, anchor } = selection;
-    const existing = getForPassage(ranges[0].passageId).find((a) => a.highlighted && sameRanges(a.ranges, ranges));
+    const existing = getForPassage(ranges[0].passageId).find((a) => sameRanges(a.ranges, ranges));
     if (!isAuthenticated) {
       setOverlay({ anchor, kind: "auth" });
       setSelection(null);
       return;
     }
     const onError = () => setOverlay({ anchor, kind: "error" });
-    if (existing?.highlightId) deleteHighlight.mutate(existing.highlightId, { onError });
-    else createHighlight.mutate(ranges, { onError });
+    if (existing?.highlightId) deleteNote.mutate(existing.highlightId, { onError });
+    else if (!existing?.notes.some((n) => !n.parentId && n.author.readerId === readerId))
+      createNote.mutate({ ranges, content: { kind: "text", text: "" } }, { onError });
     setSelection(null);
-  }, [selection, getForPassage, deleteHighlight, createHighlight, isAuthenticated]);
+  }, [selection, getForPassage, deleteNote, createNote, isAuthenticated, readerId]);
 
   // Adding a note always inserts a brand-new, independent note row — there
   // is no shared parent object to find-or-create, so a re-selection of an
@@ -142,8 +142,7 @@ export function useTextAnnotations(materialId: string) {
     : undefined;
 
   // Removes everything *this reader owns* at this selection in one action —
-  // their own highlight (if any) and every root note they themselves
-  // authored (if any), never another reader's public note that just
+  // every root note they themselves authored, their highlight among them, never another reader's public note that just
   // happens to share this exact selection's ranges (deleting a highlight/
   // note is always own-content-only — the server enforces this too, a 403
   // for anything else, but filtering here avoids firing doomed requests).
@@ -154,16 +153,11 @@ export function useTextAnnotations(materialId: string) {
   const deleteSelection = useCallback(() => {
     if (!selection || !existingForSelection) return;
     const { anchor } = selection;
-    if (existingForSelection.highlightId) {
-      deleteHighlight.mutate(existingForSelection.highlightId, {
-        onError: () => setOverlay({ anchor, kind: "error" }),
-      });
-    }
     for (const note of topLevelNotes(existingForSelection.notes)) {
-      if (note.author.readerId === readerId) deleteNote.mutate(note.id);
+      if (note.author.readerId === readerId) deleteNote.mutate(note.id, { onError: () => setOverlay({ anchor, kind: "error" }) });
     }
     setSelection(null);
-  }, [selection, existingForSelection, deleteHighlight, deleteNote, readerId]);
+  }, [selection, existingForSelection, deleteNote, readerId]);
 
   // Clicking any existing mark (highlight-only or noted) — opens its thread
   // directly, no intermediate menu. Removing a highlight or deleting a note

@@ -265,7 +265,7 @@ export default function FeedPanel({
       divided
     >
       {onNotes ? (
-        <BookRoomPane materialId={materialId} authorId={focusedAuthor?.author.readerId} targetNoteId={targetNoteId ?? targetThreadId} onPassage={onPassage} locate={locate} getPassageText={getPassageText} />
+        <BookRoomPane materialId={materialId} authorId={focusedAuthor?.author.readerId} targetNoteId={targetNoteId ?? targetThreadId} onPassage={onPassage} />
       ) : (
         <>
           {focusedAuthor && (
