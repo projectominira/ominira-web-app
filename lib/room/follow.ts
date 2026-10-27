@@ -99,7 +99,7 @@ export function resolvePlace(view: ReaderView, place: RoomPlace): ViewPlace | un
   return view.fraction(place) !== null ? place : view.placeAt(place.pct / 100);
 }
 
-/** "p. 4" for a member (spec §3.3): from their exact place when they send
+/** "On page 4" for a member (spec §3.3): from their exact place when they send
  * one, else from presence progress, which is approximate. Null when there's
  * nothing to go on. */
 export function positionLabel(

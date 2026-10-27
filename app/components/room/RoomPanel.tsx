@@ -15,7 +15,8 @@ import { useRoomStore } from "@/stores/room-store";
 // a grid (hosts, then speakers, hands raised and listeners), each with
 // their role under their name, as a Space shows it; and the guest list
 // it opens, the same people under Host, Speakers, Hands raised and
-// Listeners, each row with where they are and Read along (spec §1.6).
+// Listeners, each row with where they are; a tap on a face opens their card,
+// with Read along (spec §1.6).
 
 /** Faces on the stage before "N other listeners". */
 const STAGE_FACES = 16;
@@ -152,10 +153,10 @@ function Section({ title, count, children }: { title: string; count: number; chi
   );
 }
 
-/** Someone in the room, the same row in every section: their face, their
- * name, and a line under it — "Speaking" while they talk, else where they
- * are ("p. 4", "Chapter 9"; spec §3.3) or `fallback`, before `after` (how
- * long a hand's been up) — then Read along. */
+/** Someone in the room, the same row in every section: their face (a tap
+ * opens their card), their name, and a line under it — "Speaking" while they
+ * talk, else where they are ("On page 4", "On Chapter 9"; spec §3.3) or
+ * `fallback`, before `after` (how long a hand's been up). */
 function Member({
   member,
   pressed,
@@ -180,10 +181,12 @@ function Member({
       : (positionLabel(member, place, view)?.text ?? fallback);
   const line = [status, after].filter(Boolean).join(" · ");
   return (
-    <div className="flex items-center gap-3 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] py-2.5 pr-2 pl-3">
+    <div className="flex items-center gap-3 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] px-3 py-2.5">
       <RoomAvatar member={member} size={40} card readAlong={readAlong} />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-[13px] text-[var(--reader-text)] font-semibold">{member.name}</span>
+        <span className={`truncate text-[13px] font-semibold ${pressed ? "text-[var(--reader-accent)]" : "text-[var(--reader-text)]"}`}>
+          {member.name}
+        </span>
         <span
           className={`truncate text-xs ${
             speaking || narrator ? "font-bold text-[var(--reader-accent)]" : "font-medium text-[var(--reader-text-muted)]"
@@ -192,21 +195,6 @@ function Member({
           {line}
         </span>
       </div>
-      {readAlong && (
-        <button
-          type="button"
-          onClick={readAlong}
-          aria-pressed={pressed}
-          aria-label={`${pressed ? "Stop reading along with" : "Read along with"} ${member.name}`}
-          className={`flex-none cursor-pointer rounded-sm px-1.5 text-xs font-bold whitespace-nowrap ${
-            pressed
-              ? "text-[var(--reader-accent)] hover:opacity-80"
-              : "text-[var(--reader-text-muted)] hover:text-[var(--reader-text)]"
-          }`}
-        >
-          {pressed ? "Stop reading along" : "Read along"}
-        </button>
-      )}
     </div>
   );
 }

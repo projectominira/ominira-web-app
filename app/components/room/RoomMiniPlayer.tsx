@@ -137,7 +137,7 @@ export default function RoomMiniPlayer() {
         <section
           aria-label="Reading room"
           style={{ "--below": `${below}px` } as CSSProperties}
-          className="pointer-events-auto relative flex h-[min(78dvh,calc(100dvh-var(--below)-1.5rem))] w-full flex-col rounded-lg border border-[var(--reader-border)] bg-[var(--reader-surface)] shadow-lg shell:h-[min(640px,calc(100dvh-var(--below)-2rem))] shell:w-[400px]"
+          className="pointer-events-auto relative flex h-[calc(100dvh-var(--below)-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1.5rem)] w-full flex-col rounded-lg border border-[var(--reader-border)] bg-[var(--reader-surface)] shadow-lg shell:h-[min(880px,calc(100dvh-var(--below)-2rem))] shell:w-[400px]"
         >
           <RoomLive
             lead={
