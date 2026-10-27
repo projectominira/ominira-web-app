@@ -45,18 +45,18 @@ test("the longest run crosses months; a gap starts over", () => {
 });
 
 test("a month at a glance: days under the goal are read, not streak days", () => {
-  expect(monthSummary(history, 11)).toEqual({ seconds: 8700, daysRead: 4, goalDays: 3, longestRun: 3, bestDay: { day: "2026-11-01", seconds: 3600 } });
+  expect(monthSummary(history, 11)).toEqual({ seconds: 8700, daysRead: 4, goalDays: 3, longestRun: 3, longestDay: { day: "2026-11-01", seconds: 3600 } });
   expect(monthSummary(history, 10)).toMatchObject({ seconds: 600, daysRead: 2, goalDays: 1, longestRun: 1 });
-  expect(monthSummary(history, 3)).toEqual({ seconds: 0, daysRead: 0, goalDays: 0, longestRun: 0, bestDay: null });
+  expect(monthSummary(history, 3)).toEqual({ seconds: 0, daysRead: 0, goalDays: 0, longestRun: 0, longestDay: null });
 });
 
 test("a picked day against its goal", () => {
   const note = (day: string) => dayNote(day, history.days.find((d) => d.day === day), history.today);
-  expect(note("2026-11-01")).toBe("You read 1 hour, meeting your goal of 30 minutes.");
-  expect(note("2026-11-04")).toBe("You read 15 minutes. Your goal was 30 minutes.");
+  expect(note("2026-11-01")).toBe("You read for 1 hour.");
+  expect(note("2026-11-04")).toBe("You read for 15 minutes.");
   expect(note("2026-10-31")).toBe("You read and kept your streak.");
   expect(note("2026-11-03")).toBe("You didn’t read, but Restore kept your streak.");
   expect(note("2026-11-10")).toBe("You didn’t read.");
   expect(note(history.today)).toBe("You haven’t read yet today.");
-  expect(dayNote(history.today, { day: history.today, seconds: 1440, goal: 60, streak: null }, history.today)).toBe("You’ve read 24 minutes so far. Your goal is 1 hour.");
+  expect(dayNote(history.today, { day: history.today, seconds: 1440, goal: 60, streak: null }, history.today)).toBe("You’ve read for 24 minutes so far.");
 });

@@ -39,7 +39,7 @@ export type StreakState =
   | { kind: "open"; days: number }
   /** Missed yesterday, and the run can come back ("Keep your 12 days?"). */
   | { kind: "restore"; days: number }
-  /** "Day one, again · You read 12 days in a row. Your best is 23." */
+  /** "Day one, again · You read 12 days in a row. Your longest is 23 days." */
   | { kind: "ended"; days: number; best: number };
 
 const monthOf = (day: LocalDay) => `${day.slice(0, 7)}-01`;

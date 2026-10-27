@@ -32,17 +32,13 @@ export type HistoryDay = ReadingHistory["days"][number];
 /** Read that day: time kept, or a streak day from before time was. */
 export const wasRead = (d: HistoryDay) => d.seconds > 0 || d.streak === "met";
 
-/** A picked day in a sentence: its time against its goal, and the streak. */
+/** A picked day in a sentence: its time, and the streak when Restore kept it. */
 export function dayNote(day: LocalDay, d: HistoryDay | undefined, today: LocalDay): string {
   const time = d?.seconds ? timeLong(d.seconds) : null;
-  const goal = d?.goal ? goalLabel(d.goal) : null;
-  if (d?.streak === "met") {
-    if (!time) return "You read and kept your streak.";
-    return goal ? `You read ${time}, meeting your goal of ${goal}.` : `You read ${time} and kept your streak.`;
-  }
-  if (d?.streak === "restored") return time ? `You read ${time}, short of your goal, but Restore kept your streak.` : "You didn’t read, but Restore kept your streak.";
-  if (day === today) return time ? `You’ve read ${time} so far.${goal ? ` Your goal is ${goal}.` : ""}` : "You haven’t read yet today.";
-  return time ? `You read ${time}.${goal ? ` Your goal was ${goal}.` : ""}` : "You didn’t read.";
+  if (d?.streak === "restored") return time ? `You read for ${time}, short of your goal, but Restore kept your streak.` : "You didn’t read, but Restore kept your streak.";
+  if (day === today) return time ? `You’ve read for ${time} so far.` : "You haven’t read yet today.";
+  if (time) return `You read for ${time}.`;
+  return d?.streak === "met" ? "You read and kept your streak." : "You didn’t read.";
 }
 
 /** The longest run of consecutive days in ascending `days`. */
@@ -64,18 +60,18 @@ export type MonthSummary = {
   /** The longest streak inside the month. */
   longestRun: number;
   /** The day read longest, null when no time was kept. */
-  bestDay: { day: LocalDay; seconds: number } | null;
+  longestDay: { day: LocalDay; seconds: number } | null;
 };
 
 /** `month` (1–12) of `history.year` at a glance. */
 export function monthSummary(history: ReadingHistory, month: number): MonthSummary {
   const days = history.days.filter((d) => +d.day.slice(5, 7) === month);
-  const bestDay = days.reduce<MonthSummary["bestDay"]>((b, d) => (d.seconds > (b?.seconds ?? 0) ? { day: d.day, seconds: d.seconds } : b), null);
+  const longestDay = days.reduce<MonthSummary["longestDay"]>((b, d) => (d.seconds > (b?.seconds ?? 0) ? { day: d.day, seconds: d.seconds } : b), null);
   return {
     seconds: days.reduce((s, d) => s + d.seconds, 0),
     daysRead: days.filter(wasRead).length,
     goalDays: days.filter((d) => d.streak === "met").length,
     longestRun: longestRun(days.filter((d) => d.streak).map((d) => d.day)),
-    bestDay,
+    longestDay,
   };
 }

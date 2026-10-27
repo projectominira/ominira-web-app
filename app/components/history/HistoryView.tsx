@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import DetailHeader from "@/app/components/shared/DetailHeader";
 import SearchableAppPage from "@/app/components/shell/SearchableAppPage";
 import NoResults from "@/app/components/shared/NoResults";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
@@ -18,9 +20,9 @@ const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
  * filled light when read under it, an empty ring for today until it's met. */
 type MarkKind = "met" | "under" | "today" | "none";
 const MARK: Record<MarkKind, string> = {
-  met: "bg-brand-500 font-bold text-sand-25",
+  met: "bg-brand-500 text-sand-25",
   under: "bg-brand-100 text-sand-900",
-  today: "border-[1.5px] border-brand-500 font-bold text-[var(--color-app-brand)]",
+  today: "border-[1.5px] border-brand-500 text-[var(--color-app-brand)]",
   none: "text-[var(--color-app-text)]",
 };
 
@@ -29,9 +31,10 @@ const days = (n: number) => `${n} ${n === 1 ? "day" : "days"}`;
 const monthIndex = (day: string) => +day.slice(0, 4) * 12 + +day.slice(5, 7) - 1;
 
 /** /history: the reading habit, a month at a time (this one first): its
- * numbers beside its calendar; a day picked tells its time. */
+ * numbers beside its calendar; a day picked (today, to start) tells its time. */
 export default function HistoryView() {
   const isAuthenticated = useIsAuthenticated();
+  const router = useRouter();
   const [at, setAt] = useState(() => {
     const now = new Date();
     return now.getFullYear() * 12 + now.getMonth();
@@ -40,7 +43,9 @@ export default function HistoryView() {
 
   return (
     <SearchableAppPage>
-      <h1 className="font-serif type-3 text-balance mt-1 mb-6 text-[var(--reader-text)]">Reading history</h1>
+      <div className="mb-3">
+        <DetailHeader title="Reading history" onBack={() => (window.history.length > 1 ? router.back() : router.push("/home"))} />
+      </div>
       {!isAuthenticated ? (
         <NoResults message="Sign in to see how you’ve been reading." />
       ) : !data ? (
@@ -55,14 +60,14 @@ export default function HistoryView() {
   );
 }
 
-/** One month: its time, days, longest streak and best day, and beside them
+/** One month: its time, days, longest streak and longest reading day, and beside them
  * every day of it, marked by whether its goal was met. */
 function Month({ history, at, loading, onGo }: { history: ReadingHistory; at: number; loading: boolean; onGo: (at: number) => void }) {
   const month = (at % 12) + 1;
   const year = Math.floor(at / 12);
   const name = MONTH_NAMES[month - 1];
   const thisMonth = at === monthIndex(history.today);
-  const [picked, setPicked] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(thisMonth ? history.today : null);
   const byDay = useMemo(() => new Map(loading ? [] : history.days.map((d) => [d.day, d])), [history, loading]);
   const summary = useMemo(() => monthSummary(loading ? { ...history, days: [] } : history, month), [history, loading, month]);
   const cells = monthGrid(year, month);
@@ -96,7 +101,7 @@ function Month({ history, at, loading, onGo }: { history: ReadingHistory; at: nu
           <Stat label="Your daily goal" value={goalLabel(history.goal)} />
           <Stat label="Days you met your goal" value={`${summary.goalDays} of ${pastDays}`} />
           <Stat label="Your longest streak" value={summary.longestRun ? days(summary.longestRun) : "—"} />
-          <Stat label="Your best day" value={summary.bestDay ? timeLabel(summary.bestDay.seconds) : "—"} sub={summary.bestDay ? dayLabel(summary.bestDay.day) : undefined} />
+          <Stat label="Your longest reading day" value={summary.longestDay ? timeLabel(summary.longestDay.seconds) : "—"} sub={summary.longestDay ? dayLabel(summary.longestDay.day) : undefined} />
         </dl>
       </div>
 
@@ -119,34 +124,29 @@ function Month({ history, at, loading, onGo }: { history: ReadingHistory; at: nu
                 aria-pressed={picked === day}
                 aria-label={`${dayLabel(day, true)}: ${note(day)}`}
                 onClick={() => setPicked(picked === day ? null : day)}
-                className="group flex cursor-pointer justify-center disabled:cursor-default disabled:opacity-35"
+                className="group relative flex cursor-pointer justify-center disabled:cursor-default disabled:opacity-35"
               >
-                <Mark kind={kind} picked={picked === day}>
-                  {+day.slice(8)}
-                </Mark>
+                <Mark kind={kind}>{+day.slice(8)}</Mark>
+                {/* The picked day: a dot under its circle, whatever its fill. */}
+                {picked === day && <span className="absolute -bottom-1.5 size-1 rounded-full bg-[var(--color-app-text)]" />}
               </button>
             );
           })}
         </div>
 
-        {/* The picked day, the legend under it on mobile, beside it (stacked, so the sentence keeps its width) when wide. */}
-        <div className="mx-auto mt-5 flex w-full max-w-lg flex-col gap-4 md:mt-auto md:flex-row md:items-end md:justify-between md:pt-5">
-          {/* Room for the longest sentence, so picking a day never moves the page. */}
-          <p className="m-0 min-h-16 text-ui-sm text-pretty text-[var(--color-app-text-secondary)]" aria-live="polite">
-            {picked ? (
-              <>
-                <span className="mb-1 block font-bold text-[var(--color-app-text)]">{dayLabel(picked, true)}</span>
-                {note(picked)}
-              </>
-            ) : (
-              <span className="text-[var(--color-app-text-muted)]">Pick a day to see its reading against your goal</span>
-            )}
-          </p>
-          <div className="flex flex-none flex-wrap gap-x-3 gap-y-1.5 text-[10px] text-[var(--color-app-text-muted)] md:flex-col">
-            <Key kind="met">Goal met</Key>
-            <Key kind="under">Under goal</Key>
-            <Key kind="today">Today</Key>
+        {/* The picked day with the legend on its right, its sentence under both. */}
+        <div className="mx-auto mt-8 w-full max-w-lg md:mt-auto md:pt-8">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+            <span className="text-ui-sm font-bold">{picked && dayLabel(picked, true)}</span>
+            <div className="flex flex-none gap-x-3 text-[10px] text-[var(--color-app-text-muted)]">
+              <Key kind="met">Goal met</Key>
+              <Key kind="under">Under goal</Key>
+            </div>
           </div>
+          {/* Room for the longest sentence, so picking a day never moves the page. */}
+          <p className="m-0 mt-1 min-h-10 text-ui-sm text-pretty text-[var(--color-app-text-secondary)]" aria-live="polite">
+            {picked ? note(picked) : <span className="text-[var(--color-app-text-muted)]">Pick a day to see its reading</span>}
+          </p>
         </div>
       </div>
     </section>
@@ -179,12 +179,12 @@ function IconButton({ label, disabled, onClick, children }: { label: string; dis
   );
 }
 
-function Mark({ kind, picked, small, children }: { kind: MarkKind; picked?: boolean; small?: boolean; children?: ReactNode }) {
+function Mark({ kind, small, children }: { kind: MarkKind; small?: boolean; children?: ReactNode }) {
   return (
     <span
       className={`flex flex-none items-center justify-center rounded-full tabular-nums transition-colors ${
-        small ? "size-2.5" : `size-10 text-ui-sm md:size-11 ${kind === "none" ? "group-enabled:group-hover:bg-sand-75" : ""}`
-      } ${MARK[kind]} ${picked ? "ring-2 ring-[var(--color-app-text)] ring-offset-2 ring-offset-[var(--reader-bg)]" : ""}`}
+        small ? "size-2.5" : `size-10 text-ui-sm font-bold md:size-11 ${kind === "none" ? "group-enabled:group-hover:bg-sand-75" : ""}`
+      } ${MARK[kind]}`}
     >
       {children}
     </span>
