@@ -37,7 +37,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
   const [cover, wordmark] = await Promise.all([
     // Same pick as the page's hero cover: our upload, else OpenLibrary/Google.
     loadCover(book ? resolveBookCoverSrc(book) : null),
-    brandImage("wordmark-light.png"),
+    brandImage("wordmark-2.png"),
   ]);
 
   return new ImageResponse(
@@ -69,9 +69,8 @@ export default async function Image({ params }: { params: Promise<{ slug: string
           </div>
           {book?.author ? <div style={{ fontSize: 34, color: "#57534e" }}>{book.author as string}</div> : null}
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <img src={wordmark} width={300} height={119} alt="" style={{ marginLeft: -30 }} />
-            {/* The wordmark PNG has ~40px of padding below the letters. */}
-            <div style={{ marginTop: -36, fontSize: 30, fontWeight: 700, color: OG_ACCENT }}>{PLATFORM_HOST}</div>
+            <img src={wordmark} width={240} height={40} alt="" />
+            <div style={{ marginTop: 10, fontSize: 30, fontWeight: 700, color: OG_ACCENT }}>{PLATFORM_HOST}</div>
           </div>
         </div>
       </div>

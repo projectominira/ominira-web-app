@@ -1,4 +1,4 @@
-import { SPLASH_MARK } from "@/lib/config/brand-assets";
+import { SPLASH_MARK, WORDMARK } from "@/lib/config/brand-assets";
 
 type Props = {
   className?: string;
@@ -31,7 +31,14 @@ export default function BrandMark({ className, withMark = false, stacked = false
       {/* Side by side it's bottom-anchored, not centered: the mark is
           optically bottom-heavy (thin rays above, the book below), so the
           wordmark sits level with the book. */}
-      <span className={`${withMark && !stacked ? "mb-1.5" : ""} text-[15px] font-bold uppercase tracking-[0.08em] text-[var(--reader-accent)]`}>Ominira</span>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={WORDMARK}
+        alt="Ominira"
+        width={108}
+        height={18}
+        className={`${withMark && !stacked ? "mb-1.5" : ""} h-[18px] w-auto flex-none`}
+      />
     </span>
   );
 }

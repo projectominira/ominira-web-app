@@ -1,6 +1,6 @@
 // Bumped whenever a precached file changes — activate() then drops every
 // older cache, so installed apps pick up the new icon set / splash marks.
-const CACHE_NAME = "ominira-shell-v13";
+const CACHE_NAME = "ominira-shell-v14";
 // Offline reading. None of these are cleared on activate — an app update
 // shouldn't make readers redownload what they've already opened.
 //  - documents: PDF/DOCX source files, written by the page itself
@@ -45,8 +45,7 @@ const APP_SHELL = [
   "/icons/badge-96.png",
   "/icons/mark-light.webp",
   "/icons/mark-dark.webp",
-  "/icons/wordmark-light.webp",
-  "/icons/wordmark-dark.webp",
+  "/icons/wordmark-2.webp",
 ];
 
 self.addEventListener("install", (event) => {

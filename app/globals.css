@@ -943,11 +943,8 @@ html[data-reader-theme="dark"] .app-splash-mark {
    custom display face, not a web font). */
 .app-splash-wordmark {
   width: 180px;
-  aspect-ratio: 540 / 81;
-  background: var(--splash-wordmark-light) center / contain no-repeat;
-}
-html[data-reader-theme="dark"] .app-splash-wordmark {
-  background-image: var(--splash-wordmark-dark);
+  aspect-ratio: 6 / 1;
+  background: var(--splash-wordmark) center / contain no-repeat;
 }
 .app-splash-tagline {
   margin: 0;

@@ -251,7 +251,7 @@ export default function ShareQuoteModal({ quote, author, bookTitle, onClose }: P
                 <div className="mt-7 flex flex-none flex-col items-start gap-2.5">
                   <div className="flex items-center gap-3">
                     <img src={SPLASH_MARK.light} alt="" width={41} height={40} className="h-10 w-auto" />
-                    <img src={WORDMARK.light} alt={PLATFORM_NAME} width={147} height={22} className="h-[22px] w-auto" />
+                    <img src={WORDMARK} alt={PLATFORM_NAME} width={132} height={22} className="h-[22px] w-auto" />
                   </div>
                   <span className="font-sans text-[13px] font-semibold uppercase tracking-[0.2em] text-[var(--color-sand-600)]">
                     {PLATFORM_HOST}

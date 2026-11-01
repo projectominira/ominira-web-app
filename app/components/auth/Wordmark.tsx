@@ -1,9 +1,7 @@
+import { WORDMARK } from "@/lib/config/brand-assets";
 import { PLATFORM_NAME } from "@/lib/config/platform";
 
 export default function Wordmark() {
-  return (
-    <span className={`font-serif text-sm font-bold tracking-[0.22em] text-brand-500 uppercase`}>
-      {PLATFORM_NAME}
-    </span>
-  );
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={WORDMARK} alt={PLATFORM_NAME} width={108} height={18} className="block h-[18px] w-auto" />;
 }

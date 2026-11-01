@@ -11,7 +11,7 @@ export const size = OG_SIZE;
 export const contentType = "image/png";
 
 export default async function Image() {
-  const [mark, wordmark] = await Promise.all([brandImage("splash-icon-512.png"), brandImage("wordmark-light.png")]);
+  const [mark, wordmark] = await Promise.all([brandImage("splash-icon-512.png"), brandImage("wordmark-2.png")]);
   return new ImageResponse(
     (
       <div
@@ -26,9 +26,9 @@ export default async function Image() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center" }}>
-          {/* Both PNGs carry their own cream padding, so they sit close. */}
+          {/* The mark PNG carries its own cream padding; the wordmark is trimmed. */}
           <img src={mark} width={420} height={420} alt="" />
-          <img src={wordmark} width={680} height={270} alt="" />
+          <img src={wordmark} width={540} height={90} alt="" style={{ marginLeft: 40 }} />
         </div>
         <div style={{ marginTop: -40, fontSize: 44, fontWeight: 700, color: OG_ACCENT }}>{PLATFORM_HOST}</div>
       </div>

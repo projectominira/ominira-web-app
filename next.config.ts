@@ -41,6 +41,7 @@ const nextConfig: NextConfig = {
       { source: "/icons/icon-512.png", destination: "/icons/icon-512x512.png", permanent: true },
       { source: "/icon.png", destination: "/icons/icon-512x512.png", permanent: true },
       { source: "/apple-icon.png", destination: "/icons/apple-touch-icon-180x180.png", permanent: true },
+      { source: "/icons/wordmark-:theme(light|dark).:ext(webp|png)", destination: "/icons/wordmark-2.:ext", permanent: true },
     ];
   },
   async headers() {

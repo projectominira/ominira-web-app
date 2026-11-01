@@ -60,8 +60,7 @@ export default function AppSplashScreen({ persist = false }: { persist?: boolean
           display: "none",
           "--splash-mark-light": `url(${SPLASH_MARK.light})`,
           "--splash-mark-dark": `url(${SPLASH_MARK.dark})`,
-          "--splash-wordmark-light": `url(${WORDMARK.light})`,
-          "--splash-wordmark-dark": `url(${WORDMARK.dark})`,
+          "--splash-wordmark": `url(${WORDMARK})`,
         } as CSSProperties
       }
     >
