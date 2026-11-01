@@ -92,6 +92,14 @@ export default function ShareQuoteModal({ quote, author, bookTitle, onClose }: P
       typeof navigator.share === "function" &&
       navigator.canShare?.({ files: [new File([], EXPORT_FILENAME, { type: "image/png" })] }) === true
   );
+  // iOS has no Downloads folder: a download link opens a bare file page
+  // ("Open in…"), not a save. Its share sheet's "Save Image" puts the card in
+  // Photos, so there Share is the only button. iPadOS reports as a Mac.
+  const [showDownload] = useState(
+    () =>
+      !canShareFiles ||
+      !(/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1))
+  );
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768);
@@ -177,14 +185,16 @@ export default function ShareQuoteModal({ quote, author, bookTitle, onClose }: P
           </button>
           <span className="text-sm font-bold text-[var(--reader-text)]">Share</span>
           <div className="flex items-center gap-4">
-            <button
-              onClick={onDownload}
-              disabled={busy !== null}
-              aria-label="Download image"
-              className="flex cursor-pointer items-center justify-center border-none bg-transparent text-[var(--reader-text)] disabled:cursor-default disabled:opacity-40"
-            >
-              <Download size={20} />
-            </button>
+            {showDownload && (
+              <button
+                onClick={onDownload}
+                disabled={busy !== null}
+                aria-label="Download image"
+                className="flex cursor-pointer items-center justify-center border-none bg-transparent text-[var(--reader-text)] disabled:cursor-default disabled:opacity-40"
+              >
+                <Download size={20} />
+              </button>
+            )}
             {canShareFiles && (
               <button
                 onClick={onShare}
