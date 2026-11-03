@@ -2,7 +2,9 @@ import { cache } from "react";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getMaterialDetail, MaterialNotFoundError, type MaterialDetail } from "@/lib/materials/detail";
+import BookPage from "@/app/components/materials/BookPage";
 import BookRoomView from "@/app/components/materials/BookRoomView";
+import { BOOK_ROOMS } from "@/lib/config/features";
 import { PLATFORM_NAME, PLATFORM_URL } from "@/lib/config/platform";
 import { resolveBookCoverSrc } from "@/lib/materials/image";
 
@@ -46,7 +48,7 @@ export default async function MaterialDetailPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  /** `?tab=room` opens on the room alone (Home's conversations link so); with the book's info over it otherwise. */
+  /** While book rooms are shown: `?tab=room` opens on the room alone; with the book's info over it otherwise. Ignored while they're hidden. */
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { slug } = await params;
@@ -80,7 +82,7 @@ export default async function MaterialDetailPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
       />
-      <BookRoomView material={material} initialInfo={tab !== "room"} />
+      {BOOK_ROOMS ? <BookRoomView material={material} initialInfo={tab !== "room"} /> : <BookPage material={material} />}
     </>
   );
 }

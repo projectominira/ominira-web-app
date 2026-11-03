@@ -13,21 +13,16 @@ import BookRoom from "@/app/components/rooms/BookRoom";
 import RoomScreen, { replaceTabParam } from "@/app/components/rooms/RoomScreen";
 import Loader from "@/app/components/Loader";
 import { useResume } from "@/lib/reader/useResume";
-import BookDetails from "./BookDetails";
+import BookDetails, { useBookHeader } from "./BookDetails";
 import { readerHref } from "@/app/components/ReaderLink";
 import { useBookmarkedMaterialIds, useToggleMaterialBookmark } from "@/lib/bookmarks/useBookmarks";
 import { quoteReaderHref } from "@/app/components/rooms/PassageQuote";
-import { chapterEnds } from "@/lib/groups/progress";
 import type { MaterialDetail } from "@/lib/materials/detail";
-import { resolveBookThumbnailSrc } from "@/lib/materials/image";
-import { positionPercent } from "@/lib/reader/locator";
-import { bookHeader } from "@/lib/rooms/book";
 import { roomItems } from "@/lib/rooms/timeline";
 import type { RoomItem, RoomNote } from "@/lib/rooms/types";
 import RoomInput from "@/app/components/rooms/RoomInput";
 import { useBookRoom } from "@/lib/rooms/useBookRoom";
 import { useFeedStore } from "@/stores/feed-store";
-import { useReadingPositionStore } from "@/stores/reading-position-store";
 
 /**
  * A book's page (rooms-spec §2 Book room, 6a–6c): the room, with Book info
@@ -50,7 +45,6 @@ export default function BookRoomView({ material, initialInfo }: { material: Mate
     if (href) router.push(href);
   };
   const { viewerId, stream, send, heart, reply, del, visibility, markRead, live, liveRoom, canStart, card, tz, today } = useBookRoom(material.id);
-  const position = useReadingPositionStore((s) => s.positions[material.id]);
   const isSaved = useBookmarkedMaterialIds().has(material.id);
 
   // Opening the room here keeps you on the page (useOpenRoom).
@@ -66,31 +60,7 @@ export default function BookRoomView({ material, initialInfo }: { material: Mate
   const toggleSave = useToggleMaterialBookmark();
   const { enter, pending: starting } = useEnterRoom();
 
-  const ends = useMemo(() => chapterEnds(material.sections, material.spine), [material.sections, material.spine]);
-  const header = useMemo(
-    () =>
-      bookHeader(
-        {
-          title: material.title,
-          materialType: material.materialType,
-          author: material.author,
-          // The header shows it at 80 px at most: the small image.
-          cover: resolveBookThumbnailSrc(material),
-          // Google first, OpenLibrary as backup; the first-party field isn't
-          // reliably filled (as the old details page had it).
-          description: material.googleDescription ?? material.openlibraryDescription ?? material.description ?? "",
-          publishedYear: material.publishedYear,
-          pageCountEstimate: material.pageCountEstimate,
-          narratorCount: material.narratorCount,
-          noteCount: material.noteCount,
-          readers: material.currentReaders,
-          readerCount: material.currentReaderCount,
-        },
-        position ? { pct: positionPercent(position), finished: !!position.finishedAt, listening: position.mode === "listen" } : null,
-        ends
-      ),
-    [material, position, ends]
-  );
+  const header = useBookHeader(material);
   const items = useMemo((): RoomItem[] => {
     const all = roomItems(stream.data?.pages ?? [], {
       tz,

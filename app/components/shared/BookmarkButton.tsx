@@ -26,8 +26,12 @@ export default function BookmarkButton({
   saved,
   onToggle,
   className = "",
+  labelled = false,
 }: {
   saved: boolean;
+  /** A bordered "Save"/"Saved" pill beside ShareButton (book info's share
+   * banner) rather than the bare icon. */
+  labelled?: boolean;
   onToggle: () => void;
   /** Positioning and visibility from the caller only (e.g. BookListRow
    * pinning this to the row's trailing edge and revealing it on hover) —
@@ -58,11 +62,18 @@ export default function BookmarkButton({
         onClick={handleClick}
         aria-label={saved ? "Remove from saved" : "Save for later"}
         aria-pressed={saved}
-        className={`flex h-7 w-7 flex-none cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors ${
-          saved ? "text-brand-500" : "text-[var(--reader-text-subtle)] hover:text-[var(--reader-text-muted)]"
-        }`}
->
-        <Bookmark size={17} strokeWidth={1.75} fill={saved ? "currentColor" : "none"} />
+        className={
+          labelled
+            ? `flex flex-none cursor-pointer items-center gap-1.5 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] px-3 py-2 text-xs font-semibold transition-colors hover:bg-[var(--reader-surface-hover)] ${
+                saved ? "text-brand-500" : "text-[var(--reader-text)]"
+              }`
+            : `flex h-7 w-7 flex-none cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors ${
+                saved ? "text-brand-500" : "text-[var(--reader-text-subtle)] hover:text-[var(--reader-text-muted)]"
+              }`
+        }
+      >
+        <Bookmark size={labelled ? 15 : 17} strokeWidth={1.75} fill={saved ? "currentColor" : "none"} />
+        {labelled && (saved ? "Saved" : "Save")}
       </button>
       {showPrompt && (
         <>

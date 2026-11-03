@@ -23,12 +23,15 @@ export default function RoomScreen({
   children,
   sidebar = true,
   scroll = false,
+  contain = true,
 }: {
   children: ReactNode;
   /** false: the screen spans the whole window on desktop (a study group). */
   sidebar?: boolean;
   /** The screen itself scrolls, so its scrollbar sits at the window's edge (a page of forms and lists). */
   scroll?: boolean;
+  /** false: with `scroll`, the browser's default y-overscroll (a book's page). */
+  contain?: boolean;
 }) {
   const docked = useDockedHeight();
   const navHeight = useLayoutStore((s) => s.bottomNavHeight);
@@ -36,7 +39,7 @@ export default function RoomScreen({
   return (
     <div
       style={{ bottom: docked ? navHeight + docked : 0, paddingTop: "env(safe-area-inset-top)" }}
-      className={`fixed inset-x-0 top-0 z-[41] flex bg-[var(--reader-bg)] ${scroll ? "om-scroll overflow-y-auto overscroll-y-contain" : ""} ${sidebar ? "shell:left-[var(--app-sidebar-w)]" : ""}`}
+      className={`fixed inset-x-0 top-0 z-[41] flex bg-[var(--reader-bg)] ${scroll ? `om-scroll overflow-y-auto ${contain ? "overscroll-y-contain" : ""}` : ""} ${sidebar ? "shell:left-[var(--app-sidebar-w)]" : ""}`}
     >
       <div className="min-w-0 flex-1 shell:px-10">
         <div className={`relative mx-auto flex w-full max-w-4xl ${scroll ? "min-h-full" : "h-full"} flex-col text-[var(--color-app-text)]`}>

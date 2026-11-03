@@ -1,11 +1,14 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, Headphones } from "lucide-react";
 import type { MaterialDetail } from "@/lib/materials/detail";
 import { useMaterialReaction } from "@/lib/materials/useMaterialReaction";
-import { resolveBookCoverSrc } from "@/lib/materials/image";
+import { resolveBookCoverSrc, resolveBookThumbnailSrc } from "@/lib/materials/image";
+import { chapterEnds } from "@/lib/groups/progress";
+import { positionPercent } from "@/lib/reader/locator";
+import { bookHeader } from "@/lib/rooms/book";
 import { pseudonymToSlug } from "@/lib/reader/profileSlug";
 import type { BookRoomHeader } from "@/lib/rooms/types";
 import BookCover from "@/app/components/shared/BookCover";
@@ -16,8 +19,14 @@ import RoomAvatar from "@/app/components/rooms/RoomAvatar";
 import { ResumeButtons } from "@/app/components/rooms/RoomHeader";
 import ReadingProgress from "@/app/components/shared/ReadingProgress";
 import { ScreenPage } from "@/app/components/rooms/RoomScreen";
+import { PLATFORM_NAME } from "@/lib/config/platform";
+import ShareButton from "./ShareButton";
+import BookmarkButton from "@/app/components/shared/BookmarkButton";
+import { useBookmarkedMaterialIds, useToggleMaterialBookmark } from "@/lib/bookmarks/useBookmarks";
+import { useSessionStore } from "@/stores/session-store";
 
-// Book info, over the book's room: main's details page (the cover, title, author and
+// Book info — the book's page (BookPage), or over its room while book
+// rooms are shown: main's details page (the cover, title, author and
 // facts, who added it, the description, your progress and the one resume
 // button with the switch to the other mode), then who's reading now and the
 // contents, each chapter read, or the one you're in.
@@ -26,6 +35,37 @@ const EYEBROW = "text-ui-xs tracking-eyebrow text-[var(--color-app-text-muted)] 
 /** "webpage" never reaches this page; an unknown type is left out. */
 const FORMAT_LABEL: Record<string, string> = { book: "EPUB", pdf: "PDF", docx: "Word document" };
 
+/** The book's facts with your progress and its contents, each chapter's
+ * share read, for Book info. */
+export function useBookHeader(material: MaterialDetail): BookRoomHeader {
+  const position = useReadingPositionStore((s) => s.positions[material.id]);
+  const ends = useMemo(() => chapterEnds(material.sections, material.spine), [material.sections, material.spine]);
+  return useMemo(
+    () =>
+      bookHeader(
+        {
+          title: material.title,
+          materialType: material.materialType,
+          author: material.author,
+          // The header shows it at 80 px at most: the small image.
+          cover: resolveBookThumbnailSrc(material),
+          // Google first, OpenLibrary as backup; the first-party field isn't
+          // reliably filled (as the old details page had it).
+          description: material.googleDescription ?? material.openlibraryDescription ?? material.description ?? "",
+          publishedYear: material.publishedYear,
+          pageCountEstimate: material.pageCountEstimate,
+          narratorCount: material.narratorCount,
+          noteCount: material.noteCount,
+          readers: material.currentReaders,
+          readerCount: material.currentReaderCount,
+        },
+        position ? { pct: positionPercent(position), finished: !!position.finishedAt, listening: position.mode === "listen" } : null,
+        ends
+      ),
+    [material, position, ends]
+  );
+}
+
 export default function BookDetails({
   material,
   header: h,
@@ -33,6 +73,7 @@ export default function BookDetails({
   onContinue,
   onSwitch,
   onChapter,
+  outer = false,
 }: {
   material: MaterialDetail;
   header: BookRoomHeader;
@@ -42,12 +83,14 @@ export default function BookDetails({
   onContinue: () => void;
   onSwitch: () => void;
   onChapter: (id: string) => void;
+  /** The screen scrolls (BookPage), not the details. */
+  outer?: boolean;
 }) {
   const audiobook = material.narratorCount > 0;
   const position = useReadingPositionStore((s) => s.positions[material.id]);
   const setFinished = useReadingPositionStore((s) => s.setFinished);
   return (
-    <ScreenPage>
+    <ScreenPage outer={outer}>
       <div className="flex flex-col items-center gap-5 text-center">
         <BookCover materialType={material.materialType} src={resolveBookCoverSrc(material)} alt={material.title} className="aspect-[2/3] w-48 flex-none shadow-lg shell:w-56" />
         <div className="w-full min-w-0">
@@ -74,23 +117,36 @@ export default function BookDetails({
       </div>
 
       {h.everyone.length > 0 && (
-        <section className="mt-10 flex flex-col">
-          <h2 className={`m-0 pb-1 ${EYEBROW}`}>{h.everyoneCount} reading now</h2>
-          {h.everyone.map(({ comrade }) => (
-            <Link
-              key={comrade.readerId}
-              href={`/@${pseudonymToSlug(comrade.pseudonym)}`}
-              className="-mx-2 flex min-h-12 items-center gap-3 rounded-sm px-2 no-underline hover:bg-sand-75"
-            >
-              <RoomAvatar comrade={comrade} size={30} />
-              <span className="min-w-0 flex-1 truncate text-ui-sm font-bold text-[var(--color-app-text)]">{comrade.pseudonym}</span>
-            </Link>
-          ))}
+        <section className="mt-8 flex flex-col">
+          <h2 className={`m-0 pb-2 ${EYEBROW}`}>{h.everyoneCount} currently reading</h2>
+          <div className="-mx-1.5 flex flex-wrap">
+            {h.everyone.map(({ comrade }) => (
+              <Link
+                key={comrade.readerId}
+                href={`/@${pseudonymToSlug(comrade.pseudonym)}`}
+                className="flex min-h-9 min-w-0 items-center gap-2 rounded-sm px-1.5 pr-3 no-underline hover:bg-sand-75"
+              >
+                <RoomAvatar comrade={comrade} size={24} />
+                <span className="min-w-0 text-ui-caption font-bold break-words text-[var(--color-app-text)]">{comrade.pseudonym}</span>
+              </Link>
+            ))}
+          </div>
           {h.everyoneCount > h.everyone.length && (
             <span className="pt-1.5 text-ui-caption font-bold text-[var(--color-app-text-muted)]">+{h.everyoneCount - h.everyone.length} more comrades</span>
           )}
         </section>
       )}
+
+      <div className="mt-8 flex items-center gap-4 rounded-sm bg-[var(--color-app-surface-muted)] px-4 py-3.5">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold text-[var(--reader-text)]">Share this book</div>
+          <div className="mt-0.5 text-xs font-medium text-[var(--reader-text-muted)]">Send to someone or save for later.</div>
+        </div>
+        <div className="flex flex-none items-center gap-2">
+          <ShareButton title={material.title} text={`I think you’d like ${material.title} by ${material.author}. Read it on ${PLATFORM_NAME}.`} label="Share" />
+          <SaveButton material={material} />
+        </div>
+      </div>
 
       {h.contents.length > 0 && (
         <section className="mt-10 flex flex-col">
@@ -111,6 +167,15 @@ export default function BookDetails({
       )}
     </ScreenPage>
   );
+}
+
+/** Save for later, as a labelled pill; not on your own upload. */
+function SaveButton({ material }: { material: MaterialDetail }) {
+  const viewerId = useSessionStore((s) => s.readerId);
+  const saved = useBookmarkedMaterialIds().has(material.id);
+  const toggle = useToggleMaterialBookmark();
+  if (material.contributor && material.contributor.readerId === viewerId) return null;
+  return <BookmarkButton labelled saved={saved} onToggle={() => toggle.mutate(material.id)} />;
 }
 
 /** Format, year, pages and the audiobook, as one quiet dot-separated line. */
