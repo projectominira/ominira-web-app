@@ -1,6 +1,9 @@
-// Bumped whenever a precached file changes — activate() then drops every
-// older cache, so installed apps pick up the new icon set / splash marks.
-const CACHE_NAME = "ominira-shell-v14";
+// One shell cache per deploy. ServiceWorkerRegistration registers
+// /sw.js?v=<build id>, so every push is a new worker script: it installs,
+// refetches APP_SHELL, and activate() drops the previous deploy's shell —
+// installed apps pick up new icons / splash marks with no manual bump.
+const BUILD_ID = new URL(self.location.href).searchParams.get("v") || "dev";
+const CACHE_NAME = `ominira-shell-${BUILD_ID}`;
 // Offline reading. None of these are cleared on activate — an app update
 // shouldn't make readers redownload what they've already opened.
 //  - documents: PDF/DOCX source files, written by the page itself
@@ -45,12 +48,16 @@ const APP_SHELL = [
   "/icons/badge-96.png",
   "/icons/mark-light.webp",
   "/icons/mark-dark.webp",
-  "/icons/wordmark-2.webp",
+  "/icons/wordmark-3.webp",
 ];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting())
+    caches
+      .open(CACHE_NAME)
+      // cache: "reload" skips the HTTP cache, so the shell is this deploy's files.
+      .then((cache) => cache.addAll(APP_SHELL.map((path) => new Request(path, { cache: "reload" }))))
+      .then(() => self.skipWaiting())
   );
 });
 

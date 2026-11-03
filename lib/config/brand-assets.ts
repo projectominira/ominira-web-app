@@ -50,12 +50,12 @@ export const SPLASH_MARK: Record<BrandTheme, string> = {
 };
 
 /**
- * The OMINIRA wordmark (Frame 1409 lettering, rust #B74F34), trimmed, on a
+ * The OMINIRA wordmark (Nov 2026 lettering, rust #CC6635), trimmed, on a
  * transparent background so one file serves every theme. 720×120 (6:1) —
- * ≥3× its largest UI size (the 180px splash). `wordmark-2.png` (1400×233) is
- * the same cut for the OG cards, which can't read WebP.
+ * ≥3× its largest UI size (the 180px splash). `wordmark-3.png` (801×133, the
+ * source's native size) is the same cut for the OG cards, which can't read WebP.
  */
-export const WORDMARK = "/icons/wordmark-2.webp";
+export const WORDMARK = "/icons/wordmark-3.webp";
 export const WORDMARK_RATIO = 6;
 
 export const BRAND_TAGLINE = "Arise for Freedom";

@@ -11,7 +11,7 @@ export const size = OG_SIZE;
 export const contentType = "image/png";
 
 export default async function Image() {
-  const [mark, wordmark] = await Promise.all([brandImage("splash-icon-512.png"), brandImage("wordmark-2.png")]);
+  const [mark, wordmark] = await Promise.all([brandImage("splash-icon-512.png"), brandImage("wordmark-3.png")]);
   return new ImageResponse(
     (
       <div

@@ -7,10 +7,12 @@ export default function ServiceWorkerRegistration() {
     if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
     let registration: ServiceWorkerRegistration | null = null;
     navigator.serviceWorker
-      .register("/sw.js")
+      // The build id makes each deploy a new worker URL, so it installs (and
+      // refreshes the shell cache) on the first load after a push — sw.js.
+      .register(`/sw.js?v=${process.env.NEXT_PUBLIC_BUILD_ID}`)
       .then((reg) => {
         registration = reg;
-        // Proactively check for a newer sw.js (e.g. after a CACHE_NAME bump)
+        // Proactively check for a newer sw.js
         // instead of relying solely on the browser's navigation-triggered check,
         // which can be delayed by HTTP caching of sw.js itself.
         reg.update().catch(() => {});

@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const nextConfig: NextConfig = {
+  // Versions the service worker per deploy (app/ServiceWorkerRegistration.tsx).
+  env: {
+    NEXT_PUBLIC_BUILD_ID: (process.env.VERCEL_GIT_COMMIT_SHA ?? String(Date.now())).slice(0, 12),
+  },
   // PDFium's Node build loads its pdfium.wasm from beside itself
   // (lib/passage/text.ts), which a bundled copy can't.
   serverExternalPackages: ["@embedpdf/pdfium"],
@@ -41,7 +45,7 @@ const nextConfig: NextConfig = {
       { source: "/icons/icon-512.png", destination: "/icons/icon-512x512.png", permanent: true },
       { source: "/icon.png", destination: "/icons/icon-512x512.png", permanent: true },
       { source: "/apple-icon.png", destination: "/icons/apple-touch-icon-180x180.png", permanent: true },
-      { source: "/icons/wordmark-:theme(light|dark).:ext(webp|png)", destination: "/icons/wordmark-2.:ext", permanent: true },
+      { source: "/icons/wordmark-:old(light|dark|2).:ext(webp|png)", destination: "/icons/wordmark-3.:ext", permanent: true },
     ];
   },
   async headers() {

@@ -37,7 +37,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
   const [cover, wordmark] = await Promise.all([
     // Same pick as the page's hero cover: our upload, else OpenLibrary/Google.
     loadCover(book ? resolveBookCoverSrc(book) : null),
-    brandImage("wordmark-2.png"),
+    brandImage("wordmark-3.png"),
   ]);
 
   return new ImageResponse(
