@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Minus, Plus } from "lucide-react";
-import { FOOT, Footer, StepButton } from "@/app/components/home/TodayCard";
+import { FOOT, Footer, StepButton } from "@/app/components/home/ReadingCards";
 import RoomPanel from "@/app/components/rooms/RoomPanel";
 import { errorMessage } from "@/lib/api/client";
 import { pct } from "@/lib/groups/copy";

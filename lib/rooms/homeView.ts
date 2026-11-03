@@ -16,59 +16,77 @@ import { communityFeedItemHref } from "@/lib/community/useCommunityFeed";
 import { comradesById } from "./comrades";
 import { passageDay } from "./passage";
 import { buildStrip, byLatest, chapterLine, previewText, READING_NOW_MS, STRIP_MS } from "./home";
-import type { CurrentBook, HomePassage, HomeView, RoomRowView, StatusItem } from "./types";
+import { BOOK_ROOMS } from "@/lib/config/features";
+import { forYouBooks } from "@/lib/recommend/books";
+import { withCurrentReaders } from "@/lib/materials/list";
+import type { CurrentBook, HomePassage, HomeView, ReadingBook, RoomRowView, StatusItem } from "./types";
 
 // Home (home-spec §5.2) in one call, for the thin app/api/auth/me/home
-// route: the rooms live now, the book you're reading, the streak, your study
-// groups, the book rooms and Featured. Every read starts as soon as what it needs is in; the rules are
+// route, signed in only: the rooms live now, the books you're reading, the
+// streak, your study groups and groups to join, For you, the book rooms
+// (while shown) and the passage. Every read starts as soon as what it needs
+// is in; the rules are
 // lib/rooms/home. "Start a room"'s suggestions load with its sheet
 // (lib/rooms/startable), not here: Home refetches every minute.
 
+/** Books in progress shown under the current one at most. */
+const READING_MAX = 5;
+
 /** Continue reading: where the reader left off and in which chapter, and
- * how — reading or listening, as the Shelf tells — with both ways back in. */
-async function getCurrentBook(readerId: string): Promise<CurrentBook | null> {
+ * how — reading or listening, as the Shelf tells — with both ways back in;
+ * then their other books in progress, latest first. */
+async function getReading(readerId: string): Promise<{ current: CurrentBook | null; reading: ReadingBook[] }> {
   const admin = getSupabaseAdminClient();
-  const { data: row, error } = await admin
+  const { data: rows, error } = await admin
     .from("reader_activities")
     .select("material_id, progress_percent, locator, mode")
     .eq("reader_id", readerId)
     .is("finished_at", null)
     .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(READING_MAX + 1);
   if (error) throw error;
-  if (!row) return null;
+  if (rows.length === 0) return { current: null, reading: [] };
 
-  const { data: material, error: materialError } = await admin
+  const { data: materials, error: materialError } = await admin
     .from("materials")
     .select(`${MATERIAL_SUMMARY_COLUMNS}, json_storage_path`)
-    .eq("id", row.material_id)
-    .eq("status", "published")
-    .maybeSingle();
+    .in("id", rows.map((r) => r.material_id))
+    .eq("status", "published");
   if (materialError) throw materialError;
-  if (!material) return null;
+  const byId = new Map(materials.map((m) => [m.id, m]));
+  const books = rows.flatMap((row) => {
+    const material = byId.get(row.material_id);
+    if (!material) return [];
+    const summary = toMaterialSummary(material);
+    const locator = isLocator(row.locator) ? row.locator : null;
+    const href = (mode: "read" | "listen") =>
+      locator ? buildResumeHref(summary.slug, { locator, mode }) : `/read/${summary.slug}${mode === "listen" ? "?listen=1" : ""}`;
+    return [{ row, material, summary, href }];
+  });
+  const [first, ...rest] = books;
+  if (!first) return { current: null, reading: [] };
 
   // The outline lives in the book's manifest; only sectioned books have one,
   // and a missing one only costs the chapter line.
+  const { row, material, summary, href } = first;
   const outline = material.json_storage_path ? await fetchMaterialManifest(material.json_storage_path).catch(() => null) : null;
   const pct = row.progress_percent ?? 0;
-  const summary = toMaterialSummary(material);
-  const locator = isLocator(row.locator) ? row.locator : null;
-  const href = (mode: "read" | "listen") =>
-    locator ? buildResumeHref(summary.slug, { locator, mode }) : `/read/${summary.slug}${mode === "listen" ? "?listen=1" : ""}`;
   return {
-    material: summary,
-    chapter: outline ? chapterLine(chapterEnds(outline.toc, outline.spine), pct) : null,
-    pct: Math.round(pct),
-    listening: row.mode === "listen",
-    readHref: href("read"),
-    listenHref: href("listen"),
+    current: {
+      material: summary,
+      chapter: outline ? chapterLine(chapterEnds(outline.toc, outline.spine), pct) : null,
+      pct: Math.round(pct),
+      listening: row.mode === "listen",
+      readHref: href("read"),
+      listenHref: href("listen"),
+    },
+    reading: rest.slice(0, READING_MAX - 1).map((b) => ({ material: b.summary, pct: Math.round(b.row.progress_percent ?? 0), href: b.href(b.row.mode === "listen" ? "listen" : "read") })),
   };
 }
 
 /** The status strip: the rooms live now on public books, and how many are
  * listening in each. */
-async function getStrip(): Promise<StatusItem[]> {
+export async function getStrip(): Promise<StatusItem[]> {
   const admin = getSupabaseAdminClient();
   const { data: rooms, error } = await admin.from("rooms").select("id, material_id, title").eq("status", "live").is("group_id", null);
   if (error) throw error;
@@ -163,20 +181,26 @@ export async function passageView(day: { post_id: string; question: string }): P
   return { question: day.question, excerpt: item.excerpt, cite, answers: item.replies.length, href };
 }
 
-/** Signed out (`readerId` null), Home is the public hub: the rooms live now,
- * groups to join, the book rooms' public notes and Featured; no streak and
- * no reading of your own. */
-export async function getHomeView(readerId: string | null): Promise<HomeView> {
-  const streakP = readerId ? getStreakView(readerId) : null;
-  const [strip, streak, today, current, groups, rooms, featured, passage] = await Promise.all([
+/** Home for a signed-in reader: the rooms live now, your reading and
+ * streak, "Start here" (the first Featured, while you've no book of your
+ * own), For you, your groups and groups to join, and the passage of the
+ * day. */
+export async function getHomeView(readerId: string): Promise<HomeView> {
+  const streakP = getStreakView(readerId);
+  const readingP = getReading(readerId);
+  const startP = readingP.then((r) => (r.current ? null : getFeaturedBooks().then((f) => f[0]?.material ?? null)));
+  const forYouP = forYouBooks(readerId, startP.then((s) => s?.id ?? null));
+  const [strip, streak, today, reading, start, groups, rooms, forYou, passage] = await Promise.all([
     getStrip(),
     streakP,
-    streakP?.then((v) => getStreakToday(readerId!, v.today)) ?? null,
-    readerId ? getCurrentBook(readerId) : null,
-    homeGroups(readerId),
-    getBookRooms(readerId),
-    getFeaturedBooks(),
+    streakP.then((v) => getStreakToday(readerId, v.today)),
+    readingP,
+    startP,
+    homeGroups(readerId, forYouP.then((f) => f.scores)),
+    BOOK_ROOMS ? getBookRooms(readerId) : [],
+    // Who's reading each, for the shelf's "N reading now".
+    forYouP.then(async (f) => (await withCurrentReaders({ items: f.books, nextCursor: null })).items),
     getPassage(),
   ]);
-  return { strip, current, streak, today, groups, rooms, featured: featured.map((f) => ({ material: f.material, sub: f.material.author ?? "" })), passage };
+  return { strip, ...reading, streak, today, groups, rooms, start, forYou, passage };
 }

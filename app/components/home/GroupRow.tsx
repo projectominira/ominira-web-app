@@ -4,12 +4,12 @@ import type { GroupCardView } from "@/lib/rooms/types";
 import { useNow } from "@/lib/time/useNow";
 import RoomRow, { type RoomRowProps } from "@/app/components/rooms/RoomRow";
 
-/** The line under a group: live, a session on now, when it next meets, or
- * how many it is. */
+/** The line under a group's name: live, a session on now, when it next
+ * meets, or how many it is. */
 function signal(g: GroupCardView, now: number): RoomRowProps["signal"] {
   if (g.live !== null) return { text: `Live now · ${g.live} listening`, now: true };
-  if (g.nextAt && sessionPhase(Date.parse(g.nextAt), now) === "on") return { text: "Study group · Session on now", now: true };
-  return { text: `Study group · ${g.nextAt ? `Meets ${sessionWhen(g.nextAt)}` : comradeCount(g.members)}`, now: false };
+  if (g.nextAt && sessionPhase(Date.parse(g.nextAt), now) === "on") return { text: "Session on now", now: true };
+  return { text: g.nextAt ? `Meets ${sessionWhen(g.nextAt)}` : comradeCount(g.members), now: false };
 }
 
 /** Stands in for the preview while the group has no note: what it's
@@ -19,7 +19,7 @@ function empty({ book }: GroupCardView): string {
   return `Reading ${book.title}${book.pct !== null ? ` · ${book.pct}% together` : ""}`;
 }
 
-/** A study group in Home's chat list. */
+/** A study group in Home's Study groups. */
 export default function GroupRow({ group: g }: { group: GroupCardView }) {
   const now = useNow();
   return (
@@ -32,6 +32,7 @@ export default function GroupRow({ group: g }: { group: GroupCardView }) {
       unread={g.unread}
       live={g.live !== null}
       signal={signal(g, now)}
+      fresh={g.fresh}
     />
   );
 }

@@ -3,9 +3,9 @@ import { getAuthenticatedReader } from "@/lib/auth/session";
 import { getHomeView } from "@/lib/rooms/homeView";
 import type { HomeView } from "@/lib/rooms/types";
 
-/** `GET /api/auth/me/home`: Home in one call. Signed out,
- * the public hub (`getHomeView(null)`), since /home is the landing page. */
+/** `GET /api/auth/me/home`: Home in one call, signed in only. */
 export async function GET(request: Request) {
   const reader = await getAuthenticatedReader(request);
-  return NextResponse.json((await getHomeView(reader?.readerId ?? null)) satisfies HomeView);
+  if (!reader) return NextResponse.json({ error: "Sign in to see Home" }, { status: 401 });
+  return NextResponse.json((await getHomeView(reader.readerId)) satisfies HomeView);
 }

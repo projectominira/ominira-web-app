@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api/client";
+import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useSessionStore } from "@/stores/session-store";
 import type { HomeView, RoomSuggestions } from "./types";
 
@@ -12,13 +13,12 @@ import type { HomeView, RoomSuggestions } from "./types";
 export const homeKey = ["home"] as const;
 const useHomeKey = () => [...homeKey, useSessionStore((s) => s.readerId) ?? "anon"] as const;
 
-/** `GET /api/auth/me/home`, signed in or out. */
+/** `GET /api/auth/me/home`, signed in only. */
 export function useHome() {
-  const hasHydrated = useSessionStore((s) => s.hasHydrated);
   return useQuery({
     queryKey: useHomeKey(),
     queryFn: () => apiFetch<HomeView>("/auth/me/home"),
-    enabled: hasHydrated,
+    enabled: useIsAuthenticated(),
     // The strip's live rooms and listener counts stay roughly current while shown.
     refetchInterval: 60_000,
   });

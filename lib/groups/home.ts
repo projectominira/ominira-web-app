@@ -21,17 +21,19 @@ import type { GroupCardView, RoomLast } from "@/lib/rooms/types";
 
 /** Cards at most: your groups, latest joined first. */
 const MAX_CARDS = 10;
-/** While you're in fewer groups than this, Home offers some to join. */
-const FEW = 2;
-/** Groups offered to join, the biggest first. */
+/** Groups offered to join (Recommended), from the newest public ones. */
 const OPEN_CARDS = 6;
+const OPEN_POOL = 24;
 
 const ok = <T>(r: { data: T | null; error: unknown }): T => {
   if (r.error) throw r.error;
   return r.data as T;
 };
 
-export async function homeGroups(readerId: string | null): Promise<GroupCardView[]> {
+/** Your groups, then public groups to join: those reading a book that suits
+ * you first (`scores`, a book's match from lib/recommend/books), then the
+ * biggest. */
+export async function homeGroups(readerId: string | null, scores: Promise<Map<string, number>> = Promise.resolve(new Map())): Promise<GroupCardView[]> {
   const admin = getSupabaseAdminClient();
   // Who may read which notes, for the groups' previews; read alongside.
   const viewerP = loadPostViewer(readerId);
@@ -41,15 +43,12 @@ export async function homeGroups(readerId: string | null): Promise<GroupCardView
   const mine = memberships.map((m) => m.group_id);
   // Newest first, so a group just started has a chance to be found; sorted
   // by size once its members are counted.
-  const open =
-    mine.length < FEW
-      ? ok(
-          await (mine.length ? admin.from("groups").select("id").not("id", "in", `(${mine.join(",")})`) : admin.from("groups").select("id"))
-            .eq("is_private", false)
-            .order("created_at", { ascending: false })
-            .limit(OPEN_CARDS * 2)
-        ).map((g) => g.id)
-      : [];
+  const open = ok(
+    await (mine.length ? admin.from("groups").select("id").not("id", "in", `(${mine.join(",")})`) : admin.from("groups").select("id"))
+      .eq("is_private", false)
+      .order("created_at", { ascending: false })
+      .limit(OPEN_POOL)
+  ).map((g) => g.id);
   const ids = [...mine, ...open];
   if (ids.length === 0) return [];
 
@@ -72,6 +71,7 @@ export async function homeGroups(readerId: string | null): Promise<GroupCardView
   for (const s of sessions) if (!nextOf.has(s.group_id)) nextOf.set(s.group_id, s.starts_at);
   // A group never opened counts from when you joined it.
   const lastRead = new Map([...memberships.map((m) => [m.group_id, m.joined_at] as const), ...reads.map((r) => [r.room_id, r.last_read_at] as const)]);
+  const opened = new Set(reads.map((r) => r.room_id));
   const currentIds = [...new Set(currentOf.values())];
   const readerIds = [...new Set(members.map((m) => m.reader_id))];
 
@@ -132,11 +132,13 @@ export async function homeGroups(readerId: string | null): Promise<GroupCardView
     ).then((pairs) => new Map(pairs)),
   ]);
 
-  // Where each current book's chapters end; a missing manifest only costs
-  // the chapter. The previews' authors load alongside.
+  // Where each of your groups' current books' chapters end (a group to
+  // join shows no chapter); a missing manifest only costs the chapter. The
+  // previews' authors load alongside.
+  const myBooks = new Set(mine.map((id) => currentOf.get(id)));
   const [ends, authors] = await Promise.all([
     Promise.all(
-      materials.map(async (m) => {
+      materials.filter((m) => myBooks.has(m.id)).map(async (m) => {
         const outline = m.json_storage_path ? await fetchMaterialManifest(m.json_storage_path).catch(() => null) : null;
         return [m.id, outline ? chapterEnds(outline.toc, outline.spine) : []] as const;
       })
@@ -181,15 +183,19 @@ export async function homeGroups(readerId: string | null): Promise<GroupCardView
         unread: unread.get(id) ?? 0,
         live: listening.get(id) ?? null,
         last: lastOf(id),
+        fresh: joined && !opened.has(id),
       },
     ];
   };
+  const match = await scores;
+  const scoreOf = (id: string) => match.get(currentOf.get(id) ?? "") ?? 0;
   return [
     ...mine.flatMap((id) => card(id, true)),
     ...open
-      .flatMap((id) => card(id, false))
-      .sort((a, b) => b.members - a.members)
-      .slice(0, OPEN_CARDS),
+      .flatMap((id) => card(id, false).map((c) => ({ c, score: scoreOf(id) })))
+      .sort((a, b) => b.score - a.score || b.c.members - a.c.members)
+      .slice(0, OPEN_CARDS)
+      .map(({ c }) => c),
   ];
 }
 

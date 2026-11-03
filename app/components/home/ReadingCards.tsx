@@ -2,16 +2,15 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Check, ChevronRight, Headphones, Minus, Plus, Target } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Headphones, Minus, Plus, Target } from "lucide-react";
 import ReaderLink from "@/app/components/ReaderLink";
-import Tooltip from "@/app/components/reader/Tooltip";
 import BookCover from "@/app/components/shared/BookCover";
 import ReadingProgress from "@/app/components/shared/ReadingProgress";
 import type { MaterialSummary } from "@/lib/api/types";
 import { resolveBookCoverSrc } from "@/lib/materials/image";
 import { GOAL, GOAL_STOPS, goalIndex, goalLabel, goalShare, goalShort, goalStep, ringTime, streakCopy, weekChain } from "@/lib/rooms/home";
 import { dayLabel } from "@/lib/streaks/history";
-import type { CurrentBook, StreakToday } from "@/lib/rooms/types";
+import type { CurrentBook, ReadingBook, StreakToday } from "@/lib/rooms/types";
 import type { StreakView } from "@/lib/streaks/types";
 import { ModeIcon, RESUME, SWITCH } from "@/app/components/rooms/RoomHeader";
 
@@ -19,44 +18,42 @@ const EYEBROW = "text-ui-xs tracking-eyebrow uppercase";
 const R = 43;
 const CIRC = 2 * Math.PI * R;
 
+const CARD = "overflow-hidden rounded-sm border border-[var(--color-app-border)] bg-[var(--reader-bg)] text-[var(--color-app-text)]";
+
 /**
- * Today (home-spec §2 Home 2): the book you're reading (or, for a new
- * reader, the first Featured book as "Start here"), and today's reading —
- * the ring, the streak, the week, the goal and History. A card each,
- * stacked. Signed out, the book only.
+ * Reading now (home-spec §2 Home 2): the book you're reading (or, for a new
+ * reader, the first Featured book as "Start here"), opening to your other
+ * books in progress. Nothing without either.
  */
-export default function TodayCard({
+export function BookCard({
   current,
+  reading: others = [],
   start,
-  streak,
-  today,
   desktop = false,
-  onSaveGoal,
 }: {
   current: CurrentBook | null;
+  /** Your other books in progress. */
+  reading?: ReadingBook[];
   /** A new reader's first book: the first Featured. */
   start: MaterialSummary | null;
-  streak: StreakView | null;
-  today: StreakToday | null;
   desktop?: boolean;
-  onSaveGoal?: (goal: number) => void;
 }) {
   const book = current?.material ?? start;
-  const card = "overflow-hidden rounded-sm border border-[var(--color-app-border)] bg-[var(--reader-bg)] text-[var(--color-app-text)]";
-  const reading = streak && today;
-  // A card each, stacked: the book, then today's reading.
+  if (!book) return null;
   return (
-    <div className={`flex flex-col ${desktop ? "gap-6" : "gap-4"}`}>
-      {book && (
-        <div className={card}>
-          <BookHalf book={book} current={current} desktop={desktop} />
-        </div>
-      )}
-      {reading && (
-        <div className={card}>
-          <ReadingHalf streak={streak} today={today} desktop={desktop} onSaveGoal={onSaveGoal} />
-        </div>
-      )}
+    <div className={CARD}>
+      <BookHalf book={book} current={current} desktop={desktop} />
+      {current && others.length > 0 && <MoreReading books={others} />}
+    </div>
+  );
+}
+
+/** Today's reading — the ring, the streak, the week, the goal and History.
+ * Signed in only. */
+export function DailyCard({ streak, today, desktop = false, onSaveGoal }: { streak: StreakView; today: StreakToday; desktop?: boolean; onSaveGoal?: (goal: number) => void }) {
+  return (
+    <div className={CARD}>
+      <ReadingHalf streak={streak} today={today} desktop={desktop} onSaveGoal={onSaveGoal} />
     </div>
   );
 }
@@ -64,14 +61,15 @@ export default function TodayCard({
 /**
  * The book (the book page's resume, MaterialDetailView): one primary action
  * that follows how the reader left off — Continue listening when they last
- * listened, as the Shelf tells — and a quiet icon to switch to the other.
+ * listened, as the Shelf tells — and a quieter labelled one for the other
+ * way in, Listen or Read.
  */
 function BookHalf({ book, current, desktop }: { book: MaterialSummary; current: CurrentBook | null; desktop: boolean }) {
   const listening = current?.listening ?? false;
   const readHref = current?.readHref ?? `/read/${book.slug}`;
   const listenHref = current?.listenHref ?? `/read/${book.slug}?listen=1`;
   const cta = !current ? "Start reading" : listening ? "Continue listening" : "Continue reading";
-  const other = listening ? "Switch to reading" : "Listen";
+  const other = listening ? "Read" : "Listen";
   return (
     <div className={`flex h-full min-w-0 flex-col justify-between gap-4 ${desktop ? "p-5" : "p-4"}`}>
       <div className="flex min-w-0 flex-1 items-center gap-4">
@@ -92,16 +90,41 @@ function BookHalf({ book, current, desktop }: { book: MaterialSummary; current: 
         </div>
       </div>
       <div className="flex flex-none items-center gap-2">
-        <ReaderLink href={listening ? listenHref : readHref} className={`${RESUME} flex-1 px-6 py-2.5`}>
+        <ReaderLink href={listening ? listenHref : readHref} className={`${RESUME} flex-1 px-5 py-2.5`}>
           <ModeIcon listening={listening} size={16} />
           {cta}
         </ReaderLink>
-        <Tooltip label={other}>
-          <ReaderLink href={listening ? readHref : listenHref} aria-label={other} className={`${SWITCH} p-2.5`}>
-            <ModeIcon listening={!listening} size={18} />
-          </ReaderLink>
-        </Tooltip>
+        <ReaderLink href={listening ? readHref : listenHref} className={`${SWITCH} gap-2 px-4 py-2.5 text-sm font-semibold`}>
+          <ModeIcon listening={!listening} size={16} />
+          {other}
+        </ReaderLink>
       </div>
+    </div>
+  );
+}
+
+/** "2 more in progress", opening to each with its progress. */
+function MoreReading({ books }: { books: ReadingBook[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-t border-[var(--color-app-border)]">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="flex h-11 w-full cursor-pointer items-center justify-between gap-1.5 border-none bg-transparent px-4 text-ui-sm text-[var(--color-app-text-secondary)] transition-colors hover:bg-sand-75">
+        {books.length} more in progress
+        <ChevronDown size={16} strokeWidth={1.75} aria-hidden className={`transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <ul className="m-0 flex list-none flex-col p-0 pb-2">
+          {books.map((b) => (
+            <li key={b.material.id}>
+              <ReaderLink href={b.href} className="flex items-center gap-3 px-4 py-2 no-underline hover:bg-sand-75">
+                <BookCover src={resolveBookCoverSrc(b.material)} alt="" className="aspect-2/3 w-8 flex-none rounded-xs ring-1 ring-sand-950/8" iconSize={12} />
+                <span className="min-w-0 flex-1 truncate text-ui-sm font-semibold text-[var(--color-app-text)]">{b.material.title}</span>
+                <span className="flex-none text-ui-caption text-[var(--color-app-text-muted)] tabular-nums">{b.pct}%</span>
+              </ReaderLink>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

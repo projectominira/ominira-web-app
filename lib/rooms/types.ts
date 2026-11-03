@@ -215,31 +215,41 @@ export type GroupCardView = {
   /** The group room's latest note, reply or action; null for a group you're
    * not in, or one with no notes yet. */
   last: RoomLast | null;
+  /** One of your groups you joined and haven't opened yet. */
+  fresh: boolean;
 };
 
 /** The book you're reading: where you left off, and both ways back in. */
 export type CurrentBook = { material: MaterialSummary; chapter: string | null; pct: number; listening: boolean; readHref: string; listenHref: string };
 
+/** Another book you're partway through, under the one you're reading. */
+export type ReadingBook = { material: MaterialSummary; pct: number; href: string };
+
 /** Today's reading against the goal on the streak card. */
 export type StreakToday = { minutes: number; goal: number; collectiveMinutes: number };
 
-/** A featured book: "V. I. Lenin · new". */
-export type FeaturedRow = { material: MaterialSummary; sub: string };
-
-/** `GET /api/auth/me/home` (home-spec §5.2). Signed out, it's the public
- * hub: no streak, no current book, and the rooms' public notes. */
+/** `GET /api/auth/me/home` (home-spec §5.2), signed in only. */
 export type HomeView = {
   strip: StatusItem[];
   /** The book you're reading; null for a new reader. */
   current: CurrentBook | null;
-  streak: StreakView | null;
-  today: StreakToday | null;
+  /** Your other books in progress, latest first. */
+  reading: ReadingBook[];
+  streak: StreakView;
+  today: StreakToday;
   /** Your groups, latest joined first; while you're in fewer than two,
    * groups to join after them. */
   groups: GroupCardView[];
-  /** Book rooms with a note you can read, the latest first. */
+  /** Book rooms with a note you can read, the latest first; none while
+   * book rooms are hidden (lib/config/features). */
   rooms: RoomRowView[];
-  featured: FeaturedRow[];
+  /** "Start here": the first Featured, while there's no book of your own
+   * (`current`). */
+  start: MaterialSummary | null;
+  /** For you (lib/recommend/books), best match first, with who's reading
+   * each; empty, and the section hidden, while we know too little to pick
+   * well. Leaves out the book shown as "Start here". */
+  forYou: MaterialSummary[];
   /** Today's passage of the day; null until one is set. */
   passage: HomePassage | null;
 };
