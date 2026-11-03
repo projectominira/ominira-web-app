@@ -31,8 +31,10 @@ import AppIcon from "@/app/components/pwa/AppIcon";
  * Own rendered height is published to layoutStore's `topBarHeight` so
  * AppShell can push page content down below it — same measure-and-store
  * trick bottomNavHeight/playerHeight already use at the other edges.
+ * `inline` (the landing, which has no AppShell to push its content down):
+ * full width, with a spacer of its height in the page's flow instead.
  */
-export default function HomeInstallBanner() {
+export default function HomeInstallBanner({ inline = false }: { inline?: boolean }) {
   const [modalOpen, setModalOpen] = useState(false);
   const { canPrompt, promptInstall, isInstalled } = useInstallPrompt();
   const dismissedAt = useInstallBannerStore((s) => s.dismissedAt);
@@ -60,20 +62,24 @@ export default function HomeInstallBanner() {
   const withinCooldown = dismissedAt !== null && Date.now() - dismissedAt < cooldownMs;
   const show = hasHydrated && !isInstalled && !withinCooldown;
 
+  const [spacer, setSpacer] = useState(0);
   useEffect(() => {
+    const publish = inline ? setSpacer : setTopBarHeight;
     if (!show) {
-      setTopBarHeight(0);
+      publish(0);
       return;
     }
     const el = barRef.current;
     if (!el) return;
-    const ro = new ResizeObserver((entries) => setTopBarHeight(entries[0].contentRect.height));
+    // The landing's spacer takes the whole bar, padding (and the safe area
+    // in it) included; Home's AppShell is published what it always was.
+    const ro = new ResizeObserver(([e]) => publish(inline ? e.borderBoxSize[0].blockSize : e.contentRect.height));
     ro.observe(el);
     return () => {
       ro.disconnect();
-      setTopBarHeight(0);
+      publish(0);
     };
-  }, [show, setTopBarHeight]);
+  }, [show, inline, setTopBarHeight]);
 
   if (!show) return null;
 
@@ -90,7 +96,7 @@ export default function HomeInstallBanner() {
         // whatever the safe area was (0 on desktop) and pushing every child
         // up off-center instead of leaving the row symmetric.
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.625rem)" }}
-        className="fixed left-0 right-0 top-0 z-50 flex items-center gap-3 bg-black px-4 pb-2.5 shadow-md shell:left-[var(--app-sidebar-w)]"
+        className={`flex items-center gap-3 bg-black px-4 pb-2.5 fixed left-0 right-0 top-0 z-50 shadow-md ${inline ? "" : "shell:left-[var(--app-sidebar-w)]"}`}
       >
         <AppIcon size={28} />
         <span className="min-w-0 flex-1 text-[13px] font-bold leading-snug text-white">
@@ -112,6 +118,7 @@ export default function HomeInstallBanner() {
         </button>
       </div>
 
+      {inline && <div aria-hidden className="flex-none" style={{ height: spacer }} />}
       <InstallModal open={modalOpen} onClose={() => setModalOpen(false)} />
     </>
   );
