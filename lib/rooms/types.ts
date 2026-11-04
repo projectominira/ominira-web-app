@@ -167,13 +167,6 @@ export type StatusItem = {
 
 /** A public book you could start a reading room on. `readers`: comrades
  * (never you) who read it in the last day, invited when it starts. */
-export type StartableBook = { material: MaterialSummary; readers: number };
-
-/** `GET /api/rooms/suggestions` — "Start a room"'s books. `mine`: every
- * public book you're currently reading, latest first; `today`: those
- * comrades read in the last day, the busiest first. */
-export type RoomSuggestions = { mine: StartableBook[]; today: StartableBook[] };
-
 /** A book room as a chat row on Home (`RoomRow`, home-spec §2): its latest
  * note you can see. */
 /** A room's latest note, reply or group action, as its row previews it.

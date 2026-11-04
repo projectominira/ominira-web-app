@@ -15,18 +15,19 @@ export default function Shelf({ title, line, href, dark = false, children }: { t
   const scroll = (dir: 1 | -1) => row.current?.scrollBy({ left: dir * row.current.clientWidth * 0.8, behavior: "smooth" });
   const arrow = `flex size-10 cursor-pointer items-center justify-center rounded-full border bg-transparent p-0 text-current ${dark ? "border-white/16" : "border-sand-300"}`;
   return (
-    <section className={dark ? "bg-sand-950 py-10 text-sand-25 md:py-[clamp(40px,4.4vw,72px)]" : "py-10 md:py-[clamp(40px,4.4vw,72px)]"}>
-      <div className="mx-auto flex max-w-[1440px] flex-col gap-5">
+    <section className={dark ? "bg-sand-950 py-8 text-sand-25 md:py-[clamp(40px,4.4vw,72px)]" : "py-8 md:py-[clamp(40px,4.4vw,72px)]"}>
+      <div className="mx-auto flex max-w-[1440px] flex-col gap-3.5 md:gap-5">
         <div className={`flex items-end justify-between gap-4 ${GUTTER}`}>
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-3.5 gap-y-1">
-            <h3 className="m-0 text-display-sm">
+            <h3 className="m-0 font-serif text-[20px]/[1.25] font-semibold md:text-display-sm">
               <Link href={href} className="text-current no-underline hover:underline">
                 {title}
               </Link>
             </h3>
-            <span className={`text-ui-sm ${dark ? "text-sand-25/68" : "text-[var(--color-app-text-secondary)]"}`}>{line}</span>
+            <span className={`text-ui-caption md:text-ui-sm ${dark ? "text-sand-25/68" : "text-[var(--color-app-text-secondary)]"}`}>{line}</span>
           </div>
-          <div className="flex flex-none gap-2">
+          {/* Arrows from md up; a phone swipes. */}
+          <div className="hidden flex-none gap-2 md:flex">
             <button type="button" aria-label="Scroll left" onClick={() => scroll(-1)} className={arrow}>
               <ChevronLeft size={18} />
             </button>

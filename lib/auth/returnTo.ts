@@ -6,8 +6,9 @@
 
 const KEY = "ominira-return-to";
 
-/** Pages never returned to: the auth flow itself, and admin (its own PIN). */
-export const isReturnable = (path: string) => path.startsWith("/") && !path.startsWith("//") && !/^\/(auth|admin)(\/|$|\?)/.test(path);
+/** Pages never returned to: the auth flow itself, admin (its own PIN), and
+ * the landing (signed in, it only redirects to Home: a flash of it). */
+export const isReturnable = (path: string) => path.startsWith("/") && !path.startsWith("//") && !/^\/(auth|admin)(\/|$|\?)/.test(path) && !/^\/($|\?|#)/.test(path);
 
 export function rememberPage(path: string) {
   if (!isReturnable(path)) return;

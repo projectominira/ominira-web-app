@@ -6,10 +6,10 @@ import { groupHref } from "@/lib/groups/copy";
 import type { LandingBook } from "@/lib/landing/view";
 import type { GroupCardView, StatusItem } from "@/lib/rooms/types";
 import Cover from "./Cover";
-import { SECTION_TITLE } from "./styles";
+import { SECTION_LINE, SECTION_TITLE } from "./styles";
 
-const EYEBROW = "flex items-center gap-2.5 text-ui-xs tracking-eyebrow whitespace-nowrap uppercase";
-const CARD_TITLE = "m-0 font-serif text-[24px]/[1.25] font-semibold";
+const EYEBROW = "flex items-center gap-2 text-ui-xs tracking-eyebrow whitespace-nowrap uppercase";
+const CARD_TITLE = "m-0 font-serif text-[19px]/[1.3] font-semibold text-balance md:text-[24px]/[1.25]";
 /** A row's call to action, quiet so a list of them doesn't shout: an
  * outlined verb that takes the brand colour as its row is hovered (the
  * whole row is the link); the icon alone on a phone. */
@@ -33,10 +33,10 @@ function ListenIn() {
   );
 }
 
-const ROW = "group flex items-center gap-3.5 rounded-sm p-3 no-underline";
-const THUMB = "aspect-2/3 w-14 flex-none rounded-xs";
+const ROW = "group flex items-center gap-3 rounded-sm p-2.5 no-underline md:gap-3.5 md:p-3";
+const THUMB = "aspect-2/3 w-11 flex-none rounded-xs md:w-14";
 /** A sample's cover: the landing's own, a touch bigger than a list thumb. */
-const SAMPLE_COVER = "w-14 flex-none";
+const SAMPLE_COVER = "w-11 flex-none md:w-14";
 
 /** Shown while no group is public, on samples[0] and [1]. */
 const SAMPLE_GROUPS = [
@@ -60,12 +60,12 @@ export default function StudyTogether({ live, groups, samples }: { live: StatusI
       <div className="mx-auto flex max-w-[1328px] flex-col gap-7">
         <div className="flex flex-col gap-2">
           <h2 className={SECTION_TITLE}>Study together</h2>
-          <p className="m-0 font-serif text-[17px]/[1.7] text-[var(--color-app-text-secondary)]">Consciousness is built together. Find your comrades.</p>
+          <p className={`${SECTION_LINE} text-[var(--color-app-text-secondary)]`}>Consciousness is built together. Find your comrades.</p>
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)] gap-5 md:grid-cols-2">
-          <div className="flex flex-col gap-4.5 rounded-sm border border-[var(--color-app-border)] p-5 md:p-8">
+          <div className="flex flex-col gap-4 rounded-sm border border-[var(--color-app-border)] p-5 md:p-8">
             <div className={`${EYEBROW} text-[var(--color-app-brand)]`}>
-              <Users size={20} />
+              <Users size={18} />
               Study groups
             </div>
             <h3 className={CARD_TITLE}>Read a book with comrades, at your pace</h3>
@@ -79,7 +79,7 @@ export default function StudyTogether({ live, groups, samples }: { live: StatusI
                       <GroupAvatar name={g.name} size={44} fontSize={15} />
                     )}
                     <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
-                      <span className="truncate text-ui-md">{g.name}</span>
+                      <span className="truncate text-ui-body md:text-ui-md">{g.name}</span>
                       <span className="truncate text-ui-caption text-[var(--color-app-text-secondary)]">
                         {g.members} {g.members === 1 ? "member" : "members"}
                         {g.book && (
@@ -100,7 +100,7 @@ export default function StudyTogether({ live, groups, samples }: { live: StatusI
                   <Link key={g.name} href="/auth/signup" className={`${ROW} bg-[var(--color-app-surface-muted)] text-[var(--reader-text)] transition-[filter] hover:brightness-[0.97]`}>
                     <Cover book={g.book} link={false} className={SAMPLE_COVER} shadow="shadow-sm" />
                     <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
-                      <span className="truncate text-ui-md">{g.name}</span>
+                      <span className="truncate text-ui-body md:text-ui-md">{g.name}</span>
                       <span className="truncate text-ui-caption text-[var(--color-app-text-secondary)]">
                         {g.members} members · Reading <span className="font-serif italic">{g.book.title}</span>
                       </span>
@@ -112,9 +112,9 @@ export default function StudyTogether({ live, groups, samples }: { live: StatusI
             )}
           </div>
 
-          <div className="flex flex-col gap-4.5 rounded-sm bg-sand-950 p-5 text-sand-25 md:p-8">
+          <div className="flex flex-col gap-4 rounded-sm bg-sand-950 p-5 text-sand-25 md:p-8">
             <div className={`${EYEBROW} text-brand-300`}>
-              <Mic size={20} />
+              <Mic size={18} />
               Reading rooms
             </div>
             <h3 className={CARD_TITLE}>Read along together, live</h3>
@@ -124,7 +124,7 @@ export default function StudyTogether({ live, groups, samples }: { live: StatusI
                   <Link key={r.room?.id ?? r.id} href={`/library/${r.id}`} className={`${ROW} bg-sand-900 text-sand-25`}>
                     <BookCover src={r.cover} alt="" className={THUMB} />
                     <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
-                      <span className="truncate text-ui-md">{r.room?.title ?? r.name}</span>
+                      <span className="truncate text-ui-body md:text-ui-md">{r.room?.title ?? r.name}</span>
                       <span className="truncate text-ui-caption text-brand-300">Live now · {r.count} listening</span>
                     </span>
                     <ListenIn />
@@ -137,7 +137,7 @@ export default function StudyTogether({ live, groups, samples }: { live: StatusI
                   <Link key={r.title} href="/auth/signup" className={`${ROW} bg-sand-900 text-sand-25`}>
                     <Cover book={r.book} link={false} className={SAMPLE_COVER} shadow="shadow-none" />
                     <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
-                      <span className="truncate text-ui-md">{r.title}</span>
+                      <span className="truncate text-ui-body md:text-ui-md">{r.title}</span>
                       <span className="truncate text-ui-caption text-brand-300">
                         {r.host} reading · {r.listeners} listening
                       </span>

@@ -13,8 +13,9 @@ export const APP_BG = { light: "#ffffff", dark: "#000000" } as const;
 export const READER_PREFS_STORAGE_KEY = "ominira-reader-prefs";
 export const SPLASH_SESSION_KEY = "ominira:pwa-launch-splash-shown";
 
-/** Total time the launch splash stays up, measured from navigation start. */
-export const SPLASH_DURATION_MS = 2600;
+/** How long the launch splash stays up, from when it's first painted (the
+ * boot script's `data-splash-at`), so a slow load never shortens it. */
+export const SPLASH_DURATION_MS = 3000;
 /** Matches the .app-splash opacity transition in app/globals.css. */
 export const SPLASH_FADE_MS = 300;
 
@@ -48,7 +49,7 @@ d.setAttribute("data-reader-theme",t);
 try{if((matchMedia("(display-mode: standalone)").matches||navigator.standalone===true)
 &&matchMedia("(max-width: 767px)").matches&&(location.pathname==="/"||location.pathname==="/home")
 &&!sessionStorage.getItem(${JSON.stringify(SPLASH_SESSION_KEY)})){
-sessionStorage.setItem(${JSON.stringify(SPLASH_SESSION_KEY)},"1");d.setAttribute("data-splash","");s=true}}catch(e){}
+sessionStorage.setItem(${JSON.stringify(SPLASH_SESSION_KEY)},"1");d.setAttribute("data-splash","");d.setAttribute("data-splash-at",String(Math.round(performance.now())));s=true}}catch(e){}
 var m=document.createElement("meta");m.name="theme-color";
 m.content=(s?${JSON.stringify(BRAND_BG)}:${JSON.stringify(APP_BG)})[t];
 document.head.appendChild(m)})()`;

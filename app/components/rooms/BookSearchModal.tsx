@@ -19,7 +19,8 @@ export function BookSkeleton() {
  * The book picker's modal (SearchModal's shape): the library's search
  * across the top with the clear X and Cancel (Close on desktop), then
  * `children`: the results while a query is typed, else `idle`. Start a
- * room and a group's reading list both pick a book in it.
+ * room and a group's reading list both pick a book in it; `footer` sits
+ * under the list.
  */
 export default function BookSearchModal({
   label,
@@ -28,6 +29,7 @@ export default function BookSearchModal({
   onQuery,
   onClose,
   idle,
+  footer,
   children,
 }: {
   label: string;
@@ -37,6 +39,8 @@ export default function BookSearchModal({
   onClose: () => void;
   /** Shown before anything is typed. */
   idle: ReactNode;
+  /** Pinned below the list (a Start button). */
+  footer?: ReactNode;
   /** The results, shown once something is typed. */
   children: ReactNode;
 }) {
@@ -88,6 +92,7 @@ export default function BookSearchModal({
           </button>
         </div>
         <div className="om-scroll flex-1 overflow-y-auto px-5 py-4">{query.trim() !== "" ? children : idle}</div>
+        {footer && <div className="flex-none border-t border-[var(--reader-border)] px-5 py-3">{footer}</div>}
       </div>
     </div>
   );

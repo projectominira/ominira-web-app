@@ -31,14 +31,18 @@ export default function AppSplashScreen({ persist = false }: { persist?: boolean
 
     if (!root.hasAttribute("data-splash")) return;
 
-    // Measured from navigation start, so a slow hydration eats into the
-    // splash instead of extending it.
-    const fadeAt = Math.max(0, SPLASH_DURATION_MS - performance.now());
+    // Measured from when the boot script raised it (before the first
+    // paint), so neither a slow load nor a slow hydration shortens it.
+    const shownAt = Number(root.getAttribute("data-splash-at")) || 0;
+    const fadeAt = Math.max(0, shownAt + SPLASH_DURATION_MS - performance.now());
     const fade = window.setTimeout(() => {
       root.setAttribute("data-splash", "out");
       setThemeColor(APP_BG[root.getAttribute("data-reader-theme") === "dark" ? "dark" : "light"]);
     }, fadeAt);
-    const remove = window.setTimeout(() => root.removeAttribute("data-splash"), fadeAt + SPLASH_FADE_MS);
+    const remove = window.setTimeout(() => {
+      root.removeAttribute("data-splash");
+      root.removeAttribute("data-splash-at");
+    }, fadeAt + SPLASH_FADE_MS);
     return () => {
       window.clearTimeout(fade);
       window.clearTimeout(remove);

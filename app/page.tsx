@@ -6,7 +6,7 @@ import Shelf from "@/app/components/landing/Shelf";
 import SignedInRedirect, { HIDE_WHEN_SIGNED_IN } from "@/app/components/landing/SignedInRedirect";
 import StudyTogether from "@/app/components/landing/StudyTogether";
 import Voices from "@/app/components/landing/Voices";
-import { BUTTON, BUTTON_SM, GUTTER, INVERSE, PRIMARY, SECTION_TITLE } from "@/app/components/landing/styles";
+import { BUTTON, BUTTON_SM, GUTTER, INVERSE, PRIMARY, SECTION_LINE, SECTION_TITLE } from "@/app/components/landing/styles";
 import { slugifyCategory } from "@/lib/categories/slug";
 import { BRAND_TAGLINE, SPLASH_MARK, WORDMARK, WORDMARK_RATIO } from "@/lib/config/brand-assets";
 import { PLATFORM_NAME } from "@/lib/config/platform";
@@ -58,7 +58,7 @@ export default async function LandingPage() {
       <SignedInRedirect />
       <HomeInstallBanner inline />
       <div id="landing" className="w-full overflow-x-clip bg-[var(--reader-bg)] font-sans text-[var(--reader-text)] subpixel-antialiased">
-        <header className="border-b border-white/8 bg-sand-950 text-sand-25">
+        <header id="landing-header" className="border-b border-white/8 bg-sand-950 text-sand-25">
           <div className={`mx-auto flex max-w-[1440px] items-center justify-between gap-4 py-3 md:py-4 ${GUTTER}`}>
             <Link href="/" aria-label={`${PLATFORM_NAME} home`} className="flex items-center gap-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -78,10 +78,10 @@ export default async function LandingPage() {
 
         <section className="relative bg-sand-950 pt-12 text-sand-25 md:pt-[clamp(48px,6vw,96px)]">
           <div className={`mx-auto flex max-w-[1024px] flex-col items-center gap-5 text-center ${GUTTER}`}>
-            <h1 className="m-0 font-serif text-[clamp(36px,5.4vw,78px)]/[1.05] font-semibold tracking-[-0.015em] text-balance">
-              The largest collection of books available online for <span className="text-brand-300">Pan-Africanists.</span>
+            <h1 className="m-0 font-serif text-[32px]/[1.08] md:text-[clamp(36px,5.4vw,78px)]/[1.05] font-semibold tracking-[-0.015em] text-balance">
+              The largest collection of books for <span className="text-brand-400">Pan-Africanists</span> online.
             </h1>
-            <p className="m-0 font-serif text-[20px]/[1.7] text-sand-25/68">{SUB}</p>
+            <p className="m-0 font-serif text-[17px]/[1.6] text-sand-25/68 md:text-[20px]/[1.7]">{SUB}</p>
             <div className="mt-2 flex flex-wrap justify-center gap-3">
               <Link href="/library" className={`${BUTTON} ${PRIMARY}`}>
                 Browse the library
@@ -116,7 +116,7 @@ export default async function LandingPage() {
             <div className="flex max-w-[760px] flex-col gap-2 px-1">
               <span className={`${EYEBROW} text-[var(--color-app-brand)]`}>Listen</span>
               <h2 className={SECTION_TITLE}>Every book, read aloud.</h2>
-              <p className="m-0 font-serif text-[17px]/[1.7] text-[var(--color-app-text-secondary)]">Choose from 12 curated African voices.</p>
+              <p className={`${SECTION_LINE} text-[var(--color-app-text-secondary)]`}>Choose from 12 curated African voices.</p>
             </div>
             <Voices book={view.passage} />
           </div>
@@ -131,7 +131,7 @@ export default async function LandingPage() {
                   <Cover book={lead} className="w-[40%] max-w-[240px] flex-none sm:w-[clamp(180px,17vw,240px)]" shadow="shadow-lg" />
                   <div className="flex min-w-0 flex-col gap-3">
                     <span className={`${EYEBROW} text-[var(--color-app-brand)]`}>Editors’ pick</span>
-                    <h3 className="m-0 font-serif text-[clamp(20px,2.4vw,32px)]/[1.15] font-semibold text-balance">
+                    <h3 className="m-0 font-serif text-[18px]/[1.2] md:text-[clamp(20px,2.4vw,32px)]/[1.15] font-semibold text-balance">
                       <Link href={`/library/${lead.slug}`} className="text-current no-underline hover:underline">
                         {lead.title}
                       </Link>
@@ -161,18 +161,18 @@ export default async function LandingPage() {
           <section className={`border-y border-[var(--color-app-border)] bg-[var(--color-app-surface-muted)] py-10 md:py-[clamp(40px,5vw,80px)] ${GUTTER}`}>
             <div className={`${WRAP} flex flex-col gap-5.5`}>
               <div className="flex items-end justify-between gap-4">
-                <h2 className={SECTION_TITLE}>Most read now</h2>
+                <h2 className={SECTION_TITLE}>Most read</h2>
                 <span className="pb-1 text-ui-sm whitespace-nowrap text-[var(--color-app-text-muted)]">This week</span>
               </div>
               <ul className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] gap-x-[clamp(24px,4vw,64px)] p-0">
                 {view.mostRead.map((b) => (
                   <li key={b.id} className="border-t border-[var(--color-app-border)]">
-                    <Link href={`/library/${b.slug}`} className="flex items-center gap-3.5 py-3.5 text-[var(--reader-text)] no-underline hover:text-[var(--color-app-brand)] md:gap-[clamp(14px,1.6vw,22px)]">
-                      <span className="w-[clamp(54px,5vw,72px)] flex-none">
+                    <Link href={`/library/${b.slug}`} className="flex items-center gap-3 py-3 text-[var(--reader-text)] no-underline hover:text-[var(--color-app-brand)] md:gap-[clamp(14px,1.6vw,22px)] md:py-3.5">
+                      <span className="w-12 flex-none md:w-[clamp(54px,5vw,72px)]">
                         <Cover book={b} link={false} className="w-full" shadow="shadow-sm" />
                       </span>
                       <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
-                        <span className="line-clamp-2 font-serif text-[18px]/[1.25] font-semibold">{b.title}</span>
+                        <span className="line-clamp-2 font-serif text-[16px]/[1.25] font-semibold md:text-[18px]/[1.25]">{b.title}</span>
                         {b.author && <span className="truncate text-ui-sm text-[var(--color-app-text-secondary)]">{b.author}</span>}
                         <span className="text-ui-caption text-[var(--color-app-text-muted)]">{b.readers.toLocaleString("en")} currently reading</span>
                       </span>
@@ -189,7 +189,7 @@ export default async function LandingPage() {
             <section className={`pt-10 md:pt-[clamp(40px,5vw,72px)] ${GUTTER}`}>
               <div className={`${WRAP} flex items-end justify-between gap-4`}>
                 <h2 className={SECTION_TITLE}>Library</h2>
-                <Link href="/library" className="pb-1 text-ui-md whitespace-nowrap text-[var(--color-app-brand)] no-underline hover:underline">
+                <Link href="/library" className="pb-1 text-ui-sm whitespace-nowrap md:text-ui-md text-[var(--color-app-brand)] no-underline hover:underline">
                   Browse all
                 </Link>
               </div>
@@ -211,8 +211,8 @@ export default async function LandingPage() {
         <section className={`flex flex-col items-center gap-6 bg-sand-950 py-14 text-center text-sand-25 md:py-[clamp(56px,7vw,112px)] ${GUTTER}`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={SPLASH_MARK.light} alt="" width={64} height={62} className="h-auto w-16" />
-          <h2 className="m-0 max-w-[820px] font-serif text-[clamp(32px,4.4vw,64px)]/[1.08] font-semibold text-balance">Arise for Freedom.</h2>
-          <p className="m-0 font-serif text-[17px]/[1.7] text-sand-25/68">Read with comrades across Africa and the diaspora.</p>
+          <h2 className="m-0 max-w-[820px] font-serif text-[28px]/[1.1] md:text-[clamp(32px,4.4vw,64px)]/[1.08] font-semibold text-balance">Arise for Freedom</h2>
+          <p className={`${SECTION_LINE} text-sand-25/68`}>Read with comrades across the African continent and the diaspora.</p>
           <div className="flex flex-wrap justify-center gap-3">
             <Link href="/auth/signup" className={`${BUTTON} ${PRIMARY}`}>
               Join us
@@ -223,9 +223,9 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        <footer className={`flex flex-wrap items-center justify-between gap-4 border-t border-[var(--color-app-border)] py-6 ${GUTTER}`}>
+        <footer className={`flex flex-col items-center gap-4 border-t border-[var(--color-app-border)] py-6 text-center md:flex-row md:flex-wrap md:justify-between md:text-left ${GUTTER}`}>
           <Wordmark className="h-4" />
-          <nav className="flex flex-wrap gap-5 text-ui-sm">
+          <nav className="flex flex-wrap justify-center gap-5 text-ui-sm">
             <Link href="/library" className="text-[var(--color-app-text-secondary)] no-underline hover:underline">
               Library
             </Link>
@@ -235,9 +235,12 @@ export default async function LandingPage() {
             <Link href="/auth/login" className="text-[var(--color-app-text-secondary)] no-underline hover:underline">
               Sign in
             </Link>
+            <Link href="/auth/signup" className="text-[var(--color-app-text-secondary)] no-underline hover:underline">
+              Join us
+            </Link>
           </nav>
           <span className="text-ui-caption text-[var(--color-app-text-muted)]">
-            {PLATFORM_NAME} — “{BRAND_TAGLINE}”
+            {BRAND_TAGLINE}
           </span>
         </footer>
       </div>

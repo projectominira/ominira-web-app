@@ -25,9 +25,7 @@ import type { CurrentBook, HomePassage, HomeView, RoomRowView, StatusItem } from
 // route, signed in only: the rooms live now, the books you're reading, the
 // streak, your study groups and groups to join, For you, the book rooms
 // (while shown) and the passage. Every read starts as soon as what it needs
-// is in; the rules are
-// lib/rooms/home. "Start a room"'s suggestions load with its sheet
-// (lib/rooms/startable), not here: Home refetches every minute.
+// is in; the rules are lib/rooms/home.
 
 /** Recent books checked for the current one (an unpublished one is
  * skipped). */

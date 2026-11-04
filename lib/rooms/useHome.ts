@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api/client";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useSessionStore } from "@/stores/session-store";
-import type { HomeView, RoomSuggestions } from "./types";
+import type { HomeView } from "./types";
 
 // Home on the client (rooms-spec §2 Home): the summary in one call, the
 // daily goal, and "Start a room"'s books.
@@ -21,16 +21,6 @@ export function useHome() {
     enabled: useIsAuthenticated(),
     // The strip's live rooms and listener counts stay roughly current while shown.
     refetchInterval: 60_000,
-  });
-}
-
-/** "Start a room"'s books (`GET /api/rooms/suggestions`), fetched once its
- * sheet opens and kept a minute. */
-export function useRoomSuggestions() {
-  return useQuery({
-    queryKey: [...useHomeKey(), "room-suggestions"],
-    queryFn: () => apiFetch<RoomSuggestions>("/rooms/suggestions"),
-    staleTime: 60_000,
   });
 }
 

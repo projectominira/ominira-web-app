@@ -31,8 +31,9 @@ import AppIcon from "@/app/components/pwa/AppIcon";
  * Own rendered height is published to layoutStore's `topBarHeight` so
  * AppShell can push page content down below it — same measure-and-store
  * trick bottomNavHeight/playerHeight already use at the other edges.
- * `inline` (the landing, which has no AppShell to push its content down):
- * full width, with a spacer of its height in the page's flow instead.
+ * `inline` (the landing): full width, and only once its header
+ * (#landing-header, whose Join us it would echo) has scrolled away; it
+ * slides in over the page, which isn't pushed down.
  */
 export default function HomeInstallBanner({ inline = false }: { inline?: boolean }) {
   const [modalOpen, setModalOpen] = useState(false);
@@ -62,24 +63,31 @@ export default function HomeInstallBanner({ inline = false }: { inline?: boolean
   const withinCooldown = dismissedAt !== null && Date.now() - dismissedAt < cooldownMs;
   const show = hasHydrated && !isInstalled && !withinCooldown;
 
-  const [spacer, setSpacer] = useState(0);
   useEffect(() => {
-    const publish = inline ? setSpacer : setTopBarHeight;
-    if (!show) {
-      publish(0);
+    if (inline || !show) {
+      setTopBarHeight(0);
       return;
     }
     const el = barRef.current;
     if (!el) return;
-    // The landing's spacer takes the whole bar, padding (and the safe area
-    // in it) included; Home's AppShell is published what it always was.
-    const ro = new ResizeObserver(([e]) => publish(inline ? e.borderBoxSize[0].blockSize : e.contentRect.height));
+    const ro = new ResizeObserver(([e]) => setTopBarHeight(e.contentRect.height));
     ro.observe(el);
     return () => {
       ro.disconnect();
-      publish(0);
+      setTopBarHeight(0);
     };
   }, [show, inline, setTopBarHeight]);
+
+  // The landing: whether its header has scrolled out of view.
+  const [pastHeader, setPastHeader] = useState(false);
+  useEffect(() => {
+    const header = inline && show ? document.getElementById("landing-header") : null;
+    if (!header) return;
+    const io = new IntersectionObserver(([e]) => setPastHeader(!e.isIntersecting));
+    io.observe(header);
+    return () => io.disconnect();
+  }, [inline, show]);
+  const hidden = inline && !pastHeader;
 
   if (!show) return null;
 
@@ -96,7 +104,9 @@ export default function HomeInstallBanner({ inline = false }: { inline?: boolean
         // whatever the safe area was (0 on desktop) and pushing every child
         // up off-center instead of leaving the row symmetric.
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.625rem)" }}
-        className={`flex items-center gap-3 bg-black px-4 pb-2.5 fixed left-0 right-0 top-0 z-50 shadow-md ${inline ? "" : "shell:left-[var(--app-sidebar-w)]"}`}
+        aria-hidden={hidden || undefined}
+        inert={hidden || undefined}
+        className={`fixed top-0 right-0 left-0 z-50 flex items-center gap-3 bg-black px-4 pb-2.5 ${hidden ? "-translate-y-full" : "shadow-md"} ${inline ? "transition-[translate,box-shadow] duration-300" : "shell:left-[var(--app-sidebar-w)]"}`}
       >
         <AppIcon size={28} />
         <span className="min-w-0 flex-1 text-[13px] font-bold leading-snug text-white">
@@ -118,7 +128,6 @@ export default function HomeInstallBanner({ inline = false }: { inline?: boolean
         </button>
       </div>
 
-      {inline && <div aria-hidden className="flex-none" style={{ height: spacer }} />}
       <InstallModal open={modalOpen} onClose={() => setModalOpen(false)} />
     </>
   );

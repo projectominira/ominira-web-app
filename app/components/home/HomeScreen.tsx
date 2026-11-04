@@ -34,8 +34,8 @@ export default function HomeScreen() {
   const [starting, setStarting] = useState(false);
   const [startingGroup, setStartingGroup] = useState(false);
 
-  const go = async (entry: RoomEntry) => {
-    if (await enter(entry)) openRoom(entry.materialId);
+  const go = async (entry: RoomEntry, options?: { confirm?: boolean }) => {
+    if (await enter(entry, options)) openRoom(entry.materialId);
   };
 
   useEffect(() => {
@@ -64,7 +64,8 @@ export default function HomeScreen() {
           onClose={() => setStarting(false)}
           onPick={(b) => {
             setStarting(false);
-            void go({ materialId: b.material.id, start: { bookTitle: b.material.title, readers: b.readers } });
+            // Its Start button was the confirm.
+            void go({ materialId: b.id, start: { bookTitle: b.title } }, { confirm: false });
           }}
         />
       )}

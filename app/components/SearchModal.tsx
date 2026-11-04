@@ -1,40 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import NoResults from "@/app/components/shared/NoResults";
-import Link from "next/link";
 import { Search, X } from "lucide-react";
 import type { BookDocument } from "@/lib/book/schema";
 import { useMaterialsSearch } from "@/lib/materials/useMaterialsSearch";
 import { buildBookIndex, searchBook, type SearchResult } from "@/lib/search/bookIndex";
-import BookCover from "@/app/components/shared/BookCover";
-import { resolveBookThumbnailSrc } from "@/lib/materials/image";
-
-function highlight(text: string, q: string) {
-  if (!q) return text;
-  const lowerText = text.toLowerCase();
-  const lowerQ = q.toLowerCase();
-  const parts: ReactNode[] = [];
-  let cursor = 0;
-  let idx = lowerText.indexOf(lowerQ, cursor);
-  if (idx === -1) return text;
-  while (idx !== -1) {
-    parts.push(text.slice(cursor, idx));
-    parts.push(
-      <mark
-        key={idx}
-        style={{ background: "var(--reader-highlight)" }}
-        className="text-inherit rounded-[2px]"
-      >
-        {text.slice(idx, idx + q.length)}
-      </mark>
-    );
-    cursor = idx + q.length;
-    idx = lowerText.indexOf(lowerQ, cursor);
-  }
-  parts.push(text.slice(cursor));
-  return <>{parts}</>;
-}
+import BookResultRow, { BookResultSkeleton, highlight } from "@/app/components/shared/BookResultRow";
 
 type Props = {
   /** Omitted on the home page, which has no single book in scope — see the
@@ -44,24 +16,6 @@ type Props = {
   onNavigate?: (sectionId: string, passageId: string) => void;
   onClose?: () => void;
 };
-
-/** Same rounded-row footprint as a real result (SearchModal's own two
- * result-row shapes below) so the list doesn't jump once results swap in —
- * shown while `isSearching` is true, i.e. only in the library-wide
- * (backend-search) mode. Book-scoped search is a synchronous in-memory
- * MiniSearch query (see searchBook), so it never has a loading state to
- * skeleton. */
-function ResultRowSkeleton() {
-  return (
-    <div className="flex items-center gap-3 py-3 border-b border-[var(--reader-border)] animate-pulse">
-      <div className="h-14 w-11 flex-none rounded-sm bg-[var(--reader-surface-hover)]" />
-      <div className="min-w-0 flex-1">
-        <div className="mb-2 h-3 w-2/3 rounded-full bg-[var(--reader-surface-hover)]" />
-        <div className="h-2.5 w-2/5 rounded-full bg-[var(--reader-surface-hover)]" />
-      </div>
-    </div>
-  );
-}
 
 export default function SearchModal({ book, onNavigate, onClose }: Props) {
   const [query, setQuery] = useState("");
@@ -162,26 +116,11 @@ export default function SearchModal({ book, onNavigate, onClose }: Props) {
           ) : (
             <>
               {isSearching
-                ? Array.from({ length: 5 }).map((_, i) => <ResultRowSkeleton key={i} />)
+                ? Array.from({ length: 5 }).map((_, i) => <BookResultSkeleton key={i} />)
                 : libraryResults.map((material) => (
-                    <Link
-                      key={material.id}
-                      href={`/library/${material.slug}`}
-                      // Left open on click, same as the book-scoped branch
-                      // above — a reader browsing several results in a row
-                      // shouldn't lose the search each time.
-                      className="flex items-center gap-3 py-3 border-b border-[var(--reader-border)] no-underline"
-                    >
-                      <BookCover materialType={material.materialType} src={resolveBookThumbnailSrc(material)} alt={material.title} className="h-14 w-11 flex-none rounded-sm border border-[var(--reader-border)]" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] font-semibold text-[var(--reader-text)]">
-                          {highlight(material.title, query)}
-                        </div>
-                        <div className="truncate text-xs font-medium text-[var(--reader-text-muted)]">
-                          {highlight(material.author, query)}
-                        </div>
-                      </div>
-                    </Link>
+                    // Left open on click, same as the book-scoped branch
+                    // above: browsing several results shouldn't lose the search.
+                    <BookResultRow key={material.id} material={material} query={query} href={`/library/${material.slug}`} />
                   ))}
               {!isSearching && query.trim() && libraryResults.length === 0 && (
                 <div className="py-10 text-center">

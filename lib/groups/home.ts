@@ -30,9 +30,9 @@ const ok = <T>(r: { data: T | null; error: unknown }): T => {
   return r.data as T;
 };
 
-/** Your groups, then public groups to join: those reading a book that suits
- * you first (`scores`, a book's match from lib/recommend/books), then the
- * biggest. */
+/** Your groups, then public groups you can join: those reading a book that
+ * suits you first (`scores`, a book's match from lib/recommend/books), then
+ * the active (live, or meeting soon), then the biggest. */
 export async function homeGroups(readerId: string | null, scores: Promise<Map<string, number>> = Promise.resolve(new Map())): Promise<GroupCardView[]> {
   const admin = getSupabaseAdminClient();
   // Who may read which notes, for the groups' previews; read alongside.
@@ -189,11 +189,12 @@ export async function homeGroups(readerId: string | null, scores: Promise<Map<st
   };
   const match = await scores;
   const scoreOf = (id: string) => match.get(currentOf.get(id) ?? "") ?? 0;
+  const active = (c: GroupCardView) => (c.live !== null ? 2 : c.nextAt ? 1 : 0);
   return [
     ...mine.flatMap((id) => card(id, true)),
     ...open
       .flatMap((id) => card(id, false).map((c) => ({ c, score: scoreOf(id) })))
-      .sort((a, b) => b.score - a.score || b.c.members - a.c.members)
+      .sort((a, b) => b.score - a.score || active(b.c) - active(a.c) || b.c.members - a.c.members)
       .slice(0, OPEN_CARDS)
       .map(({ c }) => c),
   ];

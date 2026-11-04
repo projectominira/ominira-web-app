@@ -1,70 +1,61 @@
 "use client";
 
 import { useState } from "react";
-import BookListRow from "@/app/components/shell/BookListRow";
+import SheetActions from "@/app/components/groups/SheetActions";
+import BookResultRow, { BookResultSkeleton } from "@/app/components/shared/BookResultRow";
 import NoResults from "@/app/components/shared/NoResults";
+import { useContinueReading } from "@/lib/auth/useContinueReading";
+import { useSavedMaterials } from "@/lib/bookmarks/useBookmarks";
+import type { MaterialSummary } from "@/lib/api/types";
 import { useMaterialsSearch } from "@/lib/materials/useMaterialsSearch";
-import { useRoomSuggestions } from "@/lib/rooms/useHome";
-import type { StartableBook } from "@/lib/rooms/types";
-import BookSearchModal, { BookSkeleton as Skeleton } from "./BookSearchModal";
+import BookSearchModal from "./BookSearchModal";
 
 const HEADING = "m-0 pt-1 text-[11px] font-extrabold tracking-eyebrow text-[var(--reader-text-muted)]";
 
-/** "2 comrades read this today", when anyone did. */
-const readToday = (n: number) => (n > 0 ? `${n} comrade${n === 1 ? "" : "s"} read this today` : undefined);
+/** Public books only: a room is public. */
+const isPublic = (m: MaterialSummary) => m.visibility === "public";
 
 /**
- * "Start a room": pick the book to read together, in BookSearchModal. Before
- * you type, every book you're currently reading and every one comrades read
- * today (they're invited when it starts), loaded as it opens. Rows are the
- * Shelf's (BookListRow), progress bar and all. Public books only: a room is
- * public.
+ * "Start a reading room": search the library for the book, in the library
+ * search's own rows (BookResultRow). Before you type, your shelf (reading,
+ * then saved, then finished: the Shelf's own queries, likely cached). Tap
+ * a book to select it, then Start room (the study group sheet's footer).
  */
-export default function StartRoomSheet({ onPick, onClose }: { onPick: (book: StartableBook) => void; onClose: () => void }) {
+export default function StartRoomSheet({ onPick, onClose }: { onPick: (book: MaterialSummary) => void; onClose: () => void }) {
   const [query, setQuery] = useState("");
+  const [picked, setPicked] = useState<MaterialSummary | null>(null);
   const { results, isSearching } = useMaterialsSearch(query, { limit: 20 });
-  const { data: books, isPending } = useRoomSuggestions();
-  const found = results.filter((m) => m.visibility === "public");
-  // Search can't say who read a book today; the suggestions can.
-  const readers = new Map([...(books?.mine ?? []), ...(books?.today ?? [])].map((b) => [b.material.id, b.readers]));
-  const row = (b: StartableBook) => <BookListRow key={b.material.id} material={b.material} note={readToday(b.readers)} onPick={() => onPick(b)} />;
+  const { data: activities, isPending: readingPending } = useContinueReading();
+  const { data: saved, isPending: savedPending } = useSavedMaterials();
+  const found = results.filter(isPublic);
+  const reading = (activities ?? []).filter((a) => !a.finishedAt).map((a) => a.material);
+  const finished = (activities ?? []).filter((a) => a.finishedAt).map((a) => a.material);
+  const shelf = [...new Map([...reading, ...(saved ?? []), ...finished].filter(isPublic).map((m) => [m.id, m])).values()];
+  const row = (m: MaterialSummary) => (
+    <BookResultRow key={m.id} material={m} query={query} selected={picked?.id === m.id} onSelect={() => setPicked(picked?.id === m.id ? null : m)} />
+  );
+  const skeletons = (n: number) => Array.from({ length: n }).map((_, i) => <BookResultSkeleton key={i} />);
 
   return (
     <BookSearchModal
       label="Start a reading room"
-      placeholder="Search the library for a book"
+      placeholder="Search for a book to read together"
       query={query}
       onQuery={setQuery}
       onClose={onClose}
       idle={
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-1">
-            <h2 className="m-0 font-serif text-base font-semibold text-[var(--reader-text)]">Start a reading room</h2>
-            <p className="m-0 text-[13px] leading-relaxed text-[var(--reader-text-muted)]">Pick a book, or search for one. Anyone reading it can join and listen in.</p>
-          </div>
-          {isPending && (
-            <section>
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} />
-              ))}
-            </section>
-          )}
-          {!!books?.mine.length && (
-            <section>
-              <h3 className={HEADING}>CURRENTLY READING</h3>
-              {books.mine.map(row)}
-            </section>
-          )}
-          {!!books?.today.length && (
-            <section>
-              <h3 className={HEADING}>BEING READ TODAY</h3>
-              {books.today.map(row)}
-            </section>
-          )}
-        </div>
+        readingPending || savedPending
+          ? skeletons(3)
+          : shelf.length > 0 && (
+              <section>
+                <h3 className={HEADING}>FROM YOUR SHELF</h3>
+                {shelf.map(row)}
+              </section>
+            )
       }
+      footer={<SheetActions label="Start room" onCancel={onClose} onConfirm={() => picked && onPick(picked)} disabled={!picked} />}
     >
-      {isSearching ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} />) : found.map((m) => row({ material: m, readers: readers.get(m.id) ?? 0 }))}
+      {isSearching ? skeletons(5) : found.map(row)}
       {!isSearching && found.length === 0 && <NoResults className="py-10 text-center" message={`No books for "${query}"`} />}
     </BookSearchModal>
   );

@@ -15,7 +15,7 @@ import StudyGroups from "./StudyGroups";
  *                  the first Featured as "Start here"); DailyCard — today's reading
  *   ForYou       — books picked for you; hidden while we know too little
  *   StudyGroups  — your groups, and starting a group or a room
- *   GroupsToJoin — public groups you're not in
+ *   GroupsToJoin — public groups you can join
  *   PassageCard  — the passage of the day, desktop only
  * Mobile: one column, your groups before For you. Desktop: the book beside
  * today's reading; then one panel (half) of your groups over groups to join, beside

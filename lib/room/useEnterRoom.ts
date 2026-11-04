@@ -13,8 +13,7 @@ import { showToast } from "@/stores/toast-store";
  * host: any signed-in reader, public books only). */
 export type RoomEntry = { materialId: string } & (
   | { join: { id: string; title: string } }
-  /** `readers`: comrades who read it today, told when it starts. */
-  | { start: { bookTitle?: string; readers?: number } }
+  | { start: { bookTitle?: string } }
 );
 
 /** Asks first (the join screen, or for a start a confirm; unless `confirm`
@@ -32,16 +31,13 @@ export function useEnterRoom() {
       showToast("Sign in to join the room.");
       return false;
     }
-    const readers = "start" in entry ? (entry.start.readers ?? 0) : 0;
     const ok =
       !confirm ||
       (await ("join" in entry
         ? askToJoin(entry.join)
         : confirmAction({
             title: "Start a reading room?",
-            message:
-              `Anyone reading ${entry.start.bookTitle ?? "this book"} can join and listen in.` +
-              (readers > 0 ? ` We’ll let the ${readers === 1 ? "comrade" : `${readers} comrades`} who read it today know.` : ""),
+            message: `Anyone reading ${entry.start.bookTitle ?? "this book"} can join and listen in.`,
             confirmLabel: "Start room",
           })));
     if (!ok) return false;

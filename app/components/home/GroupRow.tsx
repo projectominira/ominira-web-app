@@ -6,7 +6,7 @@ import RoomRow, { type RoomRowProps } from "@/app/components/rooms/RoomRow";
 
 /** The line under a group's name: live, a session on now, or when it next
  * meets; nothing otherwise. */
-function signal(g: GroupCardView, now: number): RoomRowProps["signal"] {
+export function signal(g: GroupCardView, now: number): RoomRowProps["signal"] {
   if (g.live !== null) return { text: `Live now · ${g.live} listening`, now: true };
   if (g.nextAt && sessionPhase(Date.parse(g.nextAt), now) === "on") return { text: "Session on now", now: true };
   return g.nextAt ? { text: `Meets ${sessionWhen(g.nextAt)}`, now: false } : null;

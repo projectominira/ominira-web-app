@@ -81,7 +81,7 @@ export default function Voices({ book }: { book: LandingBook | null }) {
 
   const caption = book && (
     <div className="flex min-w-0 flex-col gap-1">
-      <span className="font-serif text-[17px]/[1.3] font-semibold">{book.title}</span>
+      <span className="font-serif text-[15px]/[1.3] font-semibold md:text-[17px]/[1.3]">{book.title}</span>
       <span className="text-ui-caption text-sand-25/68">
         {book.author} · {WHERE}
       </span>
@@ -107,7 +107,7 @@ export default function Voices({ book }: { book: LandingBook | null }) {
             {caption}
           </div>
         )}
-        <p className="m-0 font-serif text-[clamp(24px,2.6vw,36px)]/[1.45] text-pretty" aria-live="off">
+        <p className="m-0 font-serif text-[19px]/[1.5] md:text-[clamp(24px,2.6vw,36px)]/[1.45] text-pretty" aria-live="off">
           {WORDS.map((w, i) => (
             <span key={i}>
               <span
