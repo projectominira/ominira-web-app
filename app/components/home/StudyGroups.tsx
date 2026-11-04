@@ -40,7 +40,7 @@ export default function StudyGroups({
     { label: "Start a reading room", icon: <Mic size={18} />, onClick: onStartRoom },
   ];
   return (
-    <section className="flex min-w-0 flex-col gap-1.5">
+    <section className="flex min-w-0 flex-col gap-3">
       <div className="flex min-h-9 items-center justify-between gap-3">
         <h2 className={SECTION_TITLE}>Study groups</h2>
         <NewMenu desktop={desktop} disabled={entering} actions={actions} />

@@ -91,7 +91,7 @@ export default function Home({
       {/* Study groups a little wider than Reading now above it (the side
           column takes the rest). */}
       <div className={`grid items-start gap-10 ${side || toJoin.length > 0 ? "grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]" : "grid-cols-[minmax(0,720px)]"}`}>
-        <div className="flex min-w-0 flex-col gap-5 rounded-sm border border-[var(--color-app-border)] bg-[var(--reader-bg)] px-4 pt-4 pb-5">
+        <div className="flex min-w-0 flex-col gap-5 rounded-sm border border-[var(--color-app-border)] bg-[var(--reader-bg)] px-4 pt-3 pb-5">
           {groups}
           {joinInPanel && (
             <>
