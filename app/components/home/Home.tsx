@@ -65,13 +65,16 @@ export default function Home({
   );
   const join = <GroupsToJoin groups={toJoin} />;
 
+  const passage = view.passage && <PassageCard passage={view.passage} />;
+
   if (!desktop)
     return (
       <div className="flex flex-col gap-8">
         {live}
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           {book}
           {daily}
+          {passage}
         </div>
         {groups}
         {forYou}
@@ -79,20 +82,29 @@ export default function Home({
       </div>
     );
 
-  // Desktop: the two cards side by side, then Study groups, For you and the
-  // groups to join, each the full width and on the page itself, then the
-  // passage.
+  // Desktop: the two cards side by side; Study groups in its panel (the
+  // groups to join in it too), with the passage beside it when there is one,
+  // in the same two columns; then For you the full width.
   return (
     <div className="flex flex-col gap-8 pb-4">
       {live}
-      <div className="grid grid-cols-2 gap-10">
+      <div className="grid grid-cols-2 gap-6">
         {book}
         {daily}
       </div>
-      {groups}
+      <div className={`grid items-start gap-6 ${passage ? "grid-cols-2" : "grid-cols-1"}`}>
+        <div className="flex min-w-0 flex-col gap-5 rounded-sm border border-[var(--color-app-border)] bg-[var(--reader-bg)] px-4 pt-3 pb-5">
+          {groups}
+          {toJoin.length > 0 && (
+            <>
+              <div className="-mx-4 h-px bg-[var(--color-app-border)]" />
+              {join}
+            </>
+          )}
+        </div>
+        {passage}
+      </div>
       {forYou}
-      {join}
-      {view.passage && <PassageCard passage={view.passage} />}
     </div>
   );
 }
