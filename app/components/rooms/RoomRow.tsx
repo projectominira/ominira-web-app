@@ -46,7 +46,7 @@ export default function RoomRow({ href, name, mark, last, empty, unread, live, s
         {mark.group ? <GroupAvatar name={name} size={44} fontSize={15} /> : <BookCover src={mark.cover} alt="" className="aspect-2/3 w-[30px] rounded-xs ring-1 ring-sand-950/8" iconSize={14} />}
         {live && <span aria-hidden className={`absolute -inset-1 border-2 border-brand-500 ${mark.group ? "rounded-full" : "rounded-sm"}`} />}
       </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-[13px] font-bold">{name}</span>
         {signal && (
           <span className={`flex min-w-0 items-center gap-1.5 text-ui-caption ${live ? "font-semibold text-[var(--color-app-brand)]" : "text-[var(--reader-text-muted)]"}`}>

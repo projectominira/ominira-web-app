@@ -1,15 +1,15 @@
-import { comradeCount, groupHref, sessionWhen } from "@/lib/groups/copy";
+import { groupHref, sessionWhen } from "@/lib/groups/copy";
 import { sessionPhase } from "@/lib/groups/sessions";
 import type { GroupCardView } from "@/lib/rooms/types";
 import { useNow } from "@/lib/time/useNow";
 import RoomRow, { type RoomRowProps } from "@/app/components/rooms/RoomRow";
 
-/** The line under a group's name: live, a session on now, when it next
- * meets, or how many it is. */
+/** The line under a group's name: live, a session on now, or when it next
+ * meets; nothing otherwise. */
 function signal(g: GroupCardView, now: number): RoomRowProps["signal"] {
   if (g.live !== null) return { text: `Live now · ${g.live} listening`, now: true };
   if (g.nextAt && sessionPhase(Date.parse(g.nextAt), now) === "on") return { text: "Session on now", now: true };
-  return { text: g.nextAt ? `Meets ${sessionWhen(g.nextAt)}` : comradeCount(g.members), now: false };
+  return g.nextAt ? { text: `Meets ${sessionWhen(g.nextAt)}`, now: false } : null;
 }
 
 /** Stands in for the preview while the group has no note: what it's
