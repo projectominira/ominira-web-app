@@ -79,8 +79,8 @@ export default function Home({
       </div>
     );
 
-  const side = !!view.passage || view.forYou.length > 0;
-  const joinInPanel = toJoin.length > 0 && side;
+  // Desktop: the two cards side by side, then Study groups (with the groups
+  // to join in its panel) and For you each the full width, then the passage.
   return (
     <div className="flex flex-col gap-8 pb-4">
       {live}
@@ -88,26 +88,17 @@ export default function Home({
         {book}
         {daily}
       </div>
-      {/* Study groups a little wider than Reading now above it (the side
-          column takes the rest). */}
-      <div className={`grid items-start gap-10 ${side || toJoin.length > 0 ? "grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]" : "grid-cols-[minmax(0,720px)]"}`}>
-        <div className="flex min-w-0 flex-col gap-5 rounded-sm border border-[var(--color-app-border)] bg-[var(--reader-bg)] px-4 pt-3 pb-5">
-          {groups}
-          {joinInPanel && (
-            <>
-              <div className="-mx-6 h-px bg-[var(--color-app-border)]" />
-              {join}
-            </>
-          )}
-        </div>
-        {(side || toJoin.length > 0) && (
-          <div className="flex min-w-0 flex-col gap-8">
-            {view.passage && <PassageCard passage={view.passage} />}
-            {forYou}
-            {!joinInPanel && join}
-          </div>
+      <div className="flex min-w-0 flex-col gap-5 rounded-sm border border-[var(--color-app-border)] bg-[var(--reader-bg)] px-4 pt-3 pb-5">
+        {groups}
+        {toJoin.length > 0 && (
+          <>
+            <div className="-mx-4 h-px bg-[var(--color-app-border)]" />
+            {join}
+          </>
         )}
       </div>
+      {forYou}
+      {view.passage && <PassageCard passage={view.passage} />}
     </div>
   );
 }
