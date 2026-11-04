@@ -40,7 +40,7 @@ export default function RoomRow({ href, name, mark, last, empty, unread, live, s
       href={href}
       title={name}
       aria-label={`Open ${name}`}
-      className={`-mx-3 flex items-center gap-3 rounded-sm px-3 py-2.5 text-[var(--color-app-text)] no-underline transition-colors hover:bg-[var(--reader-surface-hover)] ${fresh ? WASH : ""}`}
+      className={`-mx-3 flex items-center gap-3 px-3 py-2.5 text-[var(--color-app-text)] no-underline transition-colors hover:bg-[var(--reader-surface-hover)] ${fresh ? WASH : ""}`}
     >
       <span className="relative flex-none">
         {mark.group ? <GroupAvatar name={name} size={44} fontSize={15} /> : <BookCover src={mark.cover} alt="" className="aspect-2/3 w-[30px] rounded-xs ring-1 ring-sand-950/8" iconSize={14} />}
