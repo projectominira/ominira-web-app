@@ -36,7 +36,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           paddingBottom: bottomNavHeight + dockedHeight,
         }}
       >
-        <main className="mx-auto max-w-5xl px-5 py-2 shell:max-w-none shell:px-10">{children}</main>
+        <main className="mx-auto max-w-5xl px-5 py-2 shell:px-10">{children}</main>
       </div>
 
       <AppBottomNav />
