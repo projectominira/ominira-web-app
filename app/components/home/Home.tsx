@@ -79,8 +79,9 @@ export default function Home({
       </div>
     );
 
-  // Desktop: the two cards side by side, then Study groups (with the groups
-  // to join in its panel) and For you each the full width, then the passage.
+  // Desktop: the two cards side by side, then Study groups, For you and the
+  // groups to join, each the full width and on the page itself, then the
+  // passage.
   return (
     <div className="flex flex-col gap-8 pb-4">
       {live}
@@ -88,16 +89,9 @@ export default function Home({
         {book}
         {daily}
       </div>
-      <div className="flex min-w-0 flex-col gap-5 rounded-sm border border-[var(--color-app-border)] bg-[var(--reader-bg)] px-4 pt-3 pb-5">
-        {groups}
-        {toJoin.length > 0 && (
-          <>
-            <div className="-mx-4 h-px bg-[var(--color-app-border)]" />
-            {join}
-          </>
-        )}
-      </div>
+      {groups}
       {forYou}
+      {join}
       {view.passage && <PassageCard passage={view.passage} />}
     </div>
   );

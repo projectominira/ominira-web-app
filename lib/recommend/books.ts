@@ -19,7 +19,7 @@ type Doc = { id: string; title: string; author: string; categories: string; desc
 
 const TTL_MS = 10 * 60_000;
 /** Picks shown at most. */
-const SHOWN = 6;
+const SHOWN = 10;
 /** Signals (interests plus books read or picked) needed before we pick. */
 const MIN_SIGNAL = 2;
 /** Fewer good picks than this and there's no section. */
