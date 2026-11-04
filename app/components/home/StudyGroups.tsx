@@ -46,7 +46,7 @@ export default function StudyGroups({
         <NewMenu desktop={desktop} disabled={entering} actions={actions} />
       </div>
       {groups.length || rooms.length ? (
-        <div className="flex flex-col">
+        <div className="flex flex-col divide-y divide-[var(--color-app-border)]">
           {byLatest(groups).map((g) => (
             <GroupRow key={`g:${g.slug}`} group={g} />
           ))}

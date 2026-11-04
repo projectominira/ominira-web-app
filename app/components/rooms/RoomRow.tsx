@@ -28,9 +28,9 @@ const WASH = "bg-[color-mix(in_srgb,var(--reader-accent)_8%,var(--reader-surface
 
 /**
  * A room as a chat row (home-spec §2 Room row): the cover or the group's
- * letter (a brand ring while live), the name and its signal line, the
- * preview "{name}: {body}", and the time over the unread count. Unread: the
- * name bolder, the preview in primary and the time in brand. Name and
+ * letter (a brand ring while live), the name (bold) and its signal line,
+ * the preview "{name}: {body}", and the time over the unread count. Unread:
+ * the preview in primary and the time in brand. Name and
  * preview keep to a line each; the full name shows on hover.
  */
 export default function RoomRow({ href, name, mark, last, empty, unread, live, signal, fresh = false }: RoomRowProps) {
@@ -46,20 +46,24 @@ export default function RoomRow({ href, name, mark, last, empty, unread, live, s
         {mark.group ? <GroupAvatar name={name} size={44} fontSize={15} /> : <BookCover src={mark.cover} alt="" className="aspect-2/3 w-[30px] rounded-xs ring-1 ring-sand-950/8" iconSize={14} />}
         {live && <span aria-hidden className={`absolute -inset-1 border-2 border-brand-500 ${mark.group ? "rounded-full" : "rounded-sm"}`} />}
       </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-px">
-        <span className={`truncate text-[15px]/[1.4] ${unread ? "font-bold" : "font-semibold"}`}>{name}</span>
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="truncate text-[13px] font-bold">{name}</span>
         {signal && (
-          <span className={`flex min-w-0 items-center gap-1.5 text-ui-caption ${live ? "font-bold text-[var(--color-app-brand)]" : "text-[var(--reader-text-muted)]"}`}>
+          <span className={`flex min-w-0 items-center gap-1.5 text-ui-caption ${live ? "font-semibold text-[var(--color-app-brand)]" : "text-[var(--reader-text-muted)]"}`}>
             {signal.now && <PulseDot tone={live ? "live" : "forest"} />}
             <span className="truncate">{signal.text}</span>
           </span>
         )}
-        <span className={`truncate text-ui-body-regular ${unread ? "text-[var(--color-app-text)]" : "text-[var(--color-app-text-secondary)]"}`}>{last ? rowPreview(last) : empty}</span>
+        {last ? (
+          <span className={`truncate text-[13px] ${unread ? "text-[var(--color-app-text)]" : "text-[var(--reader-text-muted)]"}`}>{rowPreview(last)}</span>
+        ) : (
+          <span className="truncate text-ui-sm text-[var(--reader-text-muted)]">{empty}</span>
+        )}
       </span>
       <span className="flex flex-none flex-col items-end gap-1.5 self-stretch pt-0.5">
         {last && <span className={`text-ui-caption ${unread ? "text-[var(--color-app-brand)]" : "text-[var(--reader-text-muted)]"}`}>{chatTime(last.at, now)}</span>}
         {unread > 0 && (
-          <span className="h-5 min-w-5 rounded-full bg-brand-500 px-1.5 text-center font-sans text-[11px]/5 font-bold text-sand-25">{unread}</span>
+          <span className="h-4.5 min-w-4.5 rounded-full bg-brand-500 px-1.5 text-center font-sans text-[10px]/4.5 font-bold text-sand-25">{unread}</span>
         )}
       </span>
     </Link>
