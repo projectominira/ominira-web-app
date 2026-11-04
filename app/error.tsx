@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { startTransition, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import StatusPage, { statusActionClass } from "@/app/components/shared/StatusPage";
 
 // error.message is deliberately not shown — in production Next replaces
@@ -8,6 +9,14 @@ import StatusPage, { statusActionClass } from "@/app/components/shared/StatusPag
 // It is still logged: a client-side throw caught here never reaches Next's dev
 // overlay, so the console is the only place it surfaces.
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  // reset() alone re-renders what's already on the client, so a page whose
+  // server render failed fails again; refetch it first, in one transition.
+  const router = useRouter();
+  const retry = () =>
+    startTransition(() => {
+      router.refresh();
+      reset();
+    });
   useEffect(() => {
     console.error(error);
   }, [error]);
@@ -16,7 +25,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
     <StatusPage
       title="Something went wrong"
       action={
-        <button type="button" onClick={reset} className={statusActionClass}>
+        <button type="button" onClick={retry} className={statusActionClass}>
           Try again
         </button>
       }

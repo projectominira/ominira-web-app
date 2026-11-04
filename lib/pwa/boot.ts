@@ -34,7 +34,8 @@ export function setThemeColor(color: string) {
 // saved light only counts once flagged themeExplicit (older blobs may hold
 // the old default); otherwise the device's scheme, light if it has none.
 //
-// The splash is the installed mobile app's Home launch only: a detail URL
+// The splash is the installed mobile app's launch only — at its start_url
+// ("/", which a signed-in reader leaves for /home) or at /home: a detail URL
 // opened from the app is regular navigation, and a browser tab never gets
 // one. Once per session, so a reload mid-session doesn't replay it.
 export const BOOT_SCRIPT = `(function(){
@@ -45,7 +46,7 @@ else if(st&&st.themeExplicit&&st.theme==="light")t="light"}catch(e){}
 if(!t)try{t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}catch(e){t="light"}
 d.setAttribute("data-reader-theme",t);
 try{if((matchMedia("(display-mode: standalone)").matches||navigator.standalone===true)
-&&matchMedia("(max-width: 767px)").matches&&location.pathname==="/home"
+&&matchMedia("(max-width: 767px)").matches&&(location.pathname==="/"||location.pathname==="/home")
 &&!sessionStorage.getItem(${JSON.stringify(SPLASH_SESSION_KEY)})){
 sessionStorage.setItem(${JSON.stringify(SPLASH_SESSION_KEY)},"1");d.setAttribute("data-splash","");s=true}}catch(e){}
 var m=document.createElement("meta");m.name="theme-color";
