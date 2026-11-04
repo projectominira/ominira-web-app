@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Check, ChevronDown, ChevronRight, Headphones, Minus, Plus, Target } from "lucide-react";
+import { Check, ChevronRight, Headphones, Minus, Plus, Target } from "lucide-react";
 import ReaderLink from "@/app/components/ReaderLink";
 import BookCover from "@/app/components/shared/BookCover";
 import ReadingProgress from "@/app/components/shared/ReadingProgress";
@@ -10,7 +10,7 @@ import type { MaterialSummary } from "@/lib/api/types";
 import { resolveBookCoverSrc } from "@/lib/materials/image";
 import { GOAL, GOAL_STOPS, goalIndex, goalLabel, goalShare, goalShort, goalStep, ringTime, streakCopy, weekChain } from "@/lib/rooms/home";
 import { dayLabel } from "@/lib/streaks/history";
-import type { CurrentBook, ReadingBook, StreakToday } from "@/lib/rooms/types";
+import type { CurrentBook, StreakToday } from "@/lib/rooms/types";
 import type { StreakView } from "@/lib/streaks/types";
 import { ModeIcon, RESUME, SWITCH } from "@/app/components/rooms/RoomHeader";
 
@@ -22,18 +22,14 @@ const CARD = "overflow-hidden rounded-sm border border-[var(--color-app-border)]
 
 /**
  * Reading now (home-spec §2 Home 2): the book you're reading (or, for a new
- * reader, the first Featured book as "Start here"), opening to your other
- * books in progress. Nothing without either.
+ * reader, the first Featured book as "Start here"). Nothing without either.
  */
 export function BookCard({
   current,
-  reading: others = [],
   start,
   desktop = false,
 }: {
   current: CurrentBook | null;
-  /** Your other books in progress. */
-  reading?: ReadingBook[];
   /** A new reader's first book: the first Featured. */
   start: MaterialSummary | null;
   desktop?: boolean;
@@ -43,7 +39,6 @@ export function BookCard({
   return (
     <div className={CARD}>
       <BookHalf book={book} current={current} desktop={desktop} />
-      {current && others.length > 0 && <MoreReading books={others} />}
     </div>
   );
 }
@@ -91,7 +86,6 @@ function BookHalf({ book, current, desktop }: { book: MaterialSummary; current: 
       </div>
       <div className="flex flex-none items-center gap-2">
         <ReaderLink href={listening ? listenHref : readHref} className={`${RESUME} flex-1 px-5 py-2.5`}>
-          <ModeIcon listening={listening} size={16} />
           {cta}
         </ReaderLink>
         <ReaderLink href={listening ? readHref : listenHref} className={`${SWITCH} gap-2 px-4 py-2.5 text-sm font-semibold`}>
@@ -99,32 +93,6 @@ function BookHalf({ book, current, desktop }: { book: MaterialSummary; current: 
           {other}
         </ReaderLink>
       </div>
-    </div>
-  );
-}
-
-/** "2 more in progress", opening to each with its progress. */
-function MoreReading({ books }: { books: ReadingBook[] }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="border-t border-[var(--color-app-border)]">
-      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="flex h-11 w-full cursor-pointer items-center justify-between gap-1.5 border-none bg-transparent px-4 text-ui-sm text-[var(--color-app-text-secondary)] transition-colors hover:bg-sand-75">
-        {books.length} more in progress
-        <ChevronDown size={16} strokeWidth={1.75} aria-hidden className={`transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <ul className="m-0 flex list-none flex-col p-0 pb-2">
-          {books.map((b) => (
-            <li key={b.material.id}>
-              <ReaderLink href={b.href} className="flex items-center gap-3 px-4 py-2 no-underline hover:bg-sand-75">
-                <BookCover src={resolveBookCoverSrc(b.material)} alt="" className="aspect-2/3 w-8 flex-none rounded-xs ring-1 ring-sand-950/8" iconSize={12} />
-                <span className="min-w-0 flex-1 truncate text-ui-sm font-semibold text-[var(--color-app-text)]">{b.material.title}</span>
-                <span className="flex-none text-ui-caption text-[var(--color-app-text-muted)] tabular-nums">{b.pct}%</span>
-              </ReaderLink>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }

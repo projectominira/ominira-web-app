@@ -19,7 +19,7 @@ import { buildStrip, byLatest, chapterLine, previewText, READING_NOW_MS, STRIP_M
 import { BOOK_ROOMS } from "@/lib/config/features";
 import { forYouBooks } from "@/lib/recommend/books";
 import { withCurrentReaders } from "@/lib/materials/list";
-import type { CurrentBook, HomePassage, HomeView, ReadingBook, RoomRowView, StatusItem } from "./types";
+import type { CurrentBook, HomePassage, HomeView, RoomRowView, StatusItem } from "./types";
 
 // Home (home-spec §5.2) in one call, for the thin app/api/auth/me/home
 // route, signed in only: the rooms live now, the books you're reading, the
@@ -29,13 +29,13 @@ import type { CurrentBook, HomePassage, HomeView, ReadingBook, RoomRowView, Stat
 // lib/rooms/home. "Start a room"'s suggestions load with its sheet
 // (lib/rooms/startable), not here: Home refetches every minute.
 
-/** Books in progress shown under the current one at most. */
-const READING_MAX = 5;
+/** Recent books checked for the current one (an unpublished one is
+ * skipped). */
+const READING_MAX = 3;
 
 /** Continue reading: where the reader left off and in which chapter, and
- * how — reading or listening, as the Shelf tells — with both ways back in;
- * then their other books in progress, latest first. */
-async function getReading(readerId: string): Promise<{ current: CurrentBook | null; reading: ReadingBook[] }> {
+ * how — reading or listening, as the Shelf tells — with both ways back in. */
+async function getReading(readerId: string): Promise<{ current: CurrentBook | null }> {
   const admin = getSupabaseAdminClient();
   const { data: rows, error } = await admin
     .from("reader_activities")
@@ -43,9 +43,9 @@ async function getReading(readerId: string): Promise<{ current: CurrentBook | nu
     .eq("reader_id", readerId)
     .is("finished_at", null)
     .order("updated_at", { ascending: false })
-    .limit(READING_MAX + 1);
+    .limit(READING_MAX);
   if (error) throw error;
-  if (rows.length === 0) return { current: null, reading: [] };
+  if (rows.length === 0) return { current: null };
 
   const { data: materials, error: materialError } = await admin
     .from("materials")
@@ -63,8 +63,8 @@ async function getReading(readerId: string): Promise<{ current: CurrentBook | nu
       locator ? buildResumeHref(summary.slug, { locator, mode }) : `/read/${summary.slug}${mode === "listen" ? "?listen=1" : ""}`;
     return [{ row, material, summary, href }];
   });
-  const [first, ...rest] = books;
-  if (!first) return { current: null, reading: [] };
+  const [first] = books;
+  if (!first) return { current: null };
 
   // The outline lives in the book's manifest; only sectioned books have one,
   // and a missing one only costs the chapter line.
@@ -80,7 +80,6 @@ async function getReading(readerId: string): Promise<{ current: CurrentBook | nu
       readHref: href("read"),
       listenHref: href("listen"),
     },
-    reading: rest.slice(0, READING_MAX - 1).map((b) => ({ material: b.summary, pct: Math.round(b.row.progress_percent ?? 0), href: b.href(b.row.mode === "listen" ? "listen" : "read") })),
   };
 }
 

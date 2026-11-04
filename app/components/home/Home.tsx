@@ -57,7 +57,7 @@ export default function Home({
   const joined = view.groups.filter((g) => g.joined);
   const toJoin = view.groups.filter((g) => !g.joined);
   const live = view.strip.length > 0 && <StatusStrip items={view.strip} onPick={onPickRoom} disabled={entering} className="pb-1" />;
-  const book = <BookCard current={view.current} reading={view.reading} start={view.start} desktop={desktop} />;
+  const book = <BookCard current={view.current} start={view.start} desktop={desktop} />;
   const daily = <DailyCard streak={view.streak} today={view.today} desktop={desktop} onSaveGoal={onSaveGoal} />;
   const forYou = <ForYou books={view.forYou} desktop={desktop} />;
   const groups = (

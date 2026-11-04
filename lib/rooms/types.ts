@@ -222,9 +222,6 @@ export type GroupCardView = {
 /** The book you're reading: where you left off, and both ways back in. */
 export type CurrentBook = { material: MaterialSummary; chapter: string | null; pct: number; listening: boolean; readHref: string; listenHref: string };
 
-/** Another book you're partway through, under the one you're reading. */
-export type ReadingBook = { material: MaterialSummary; pct: number; href: string };
-
 /** Today's reading against the goal on the streak card. */
 export type StreakToday = { minutes: number; goal: number; collectiveMinutes: number };
 
@@ -233,8 +230,6 @@ export type HomeView = {
   strip: StatusItem[];
   /** The book you're reading; null for a new reader. */
   current: CurrentBook | null;
-  /** Your other books in progress, latest first. */
-  reading: ReadingBook[];
   streak: StreakView;
   today: StreakToday;
   /** Your groups, latest joined first; while you're in fewer than two,
