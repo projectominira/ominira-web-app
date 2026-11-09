@@ -52,7 +52,7 @@ export default function HomeScreen() {
   if (!signedIn) return null;
 
   return (
-    <SearchableAppPage className="pb-2 shell:pb-10" greeting={reader ? `${timeOfDay()}, ${reader.pseudonym}` : timeOfDay()}>
+    <SearchableAppPage className="pb-2 shell:pb-10" greeting={timeOfDay()} greetingName={reader?.pseudonym}>
       <HomeInstallBanner />
       <HomePushPrompt />
       <Home

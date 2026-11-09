@@ -22,6 +22,9 @@ type Props = {
   /** Home's "Good morning, Kofi": the page's heading on the left, with
    * search made compact on the right (an icon on a phone). */
   greeting?: string;
+  /** The reader's name: on a phone it drops to its own line under a small
+   * "Good morning," so the icons on the right never cut it off. */
+  greetingName?: string;
 };
 
 /** The one browsing-chrome row every page shares (search + bell + profile).
@@ -32,7 +35,7 @@ type Props = {
  * itself and it fought the search field for space and broke on pages that
  * don't want search at all; keeping the two rows separate is deliberate,
  * not a regression to "fix" back into one component again. */
-export default function AppHeader({ searchValue, onSearchChange, onSearchFocus, greeting }: Props) {
+export default function AppHeader({ searchValue, onSearchChange, onSearchFocus, greeting, greetingName }: Props) {
   const isAuthenticated = useIsAuthenticated();
   // Until the session has rehydrated we can't tell signed-in from signed-out,
   // so neither the bell nor the theme toggle shows (no toggle → bell swap).
@@ -43,7 +46,16 @@ export default function AppHeader({ searchValue, onSearchChange, onSearchFocus, 
       <div className="flex items-center gap-4">
         {greeting && (
           <>
-            <h1 className="m-0 min-w-0 flex-1 truncate font-serif text-[22px]/[1.2] font-extrabold text-[var(--reader-text)] shell:text-[24px]/[1.25]">{greeting}</h1>
+            {greetingName ? (
+              <h1 className="m-0 min-w-0 flex-1 font-serif font-extrabold text-[var(--reader-text)] shell:truncate shell:text-[24px]/[1.25]">
+                <span className="block font-sans text-[13px]/[1.3] font-semibold text-[var(--reader-text-muted)] shell:inline shell:font-serif shell:text-[24px]/[1.25] shell:font-extrabold shell:text-[var(--reader-text)]">
+                  {greeting},
+                </span>{" "}
+                <span className="block truncate text-[19px]/[1.25] shell:inline shell:text-[24px]/[1.25]">{greetingName}</span>
+              </h1>
+            ) : (
+              <h1 className="m-0 min-w-0 flex-1 truncate font-serif text-[22px]/[1.2] font-extrabold text-[var(--reader-text)] shell:text-[24px]/[1.25]">{greeting}</h1>
+            )}
             <button
               type="button"
               aria-label="Search the library"
