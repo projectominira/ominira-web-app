@@ -70,15 +70,14 @@ const nextFree = (held: Map<string, unknown>, from: string) => {
   return day;
 };
 
-export type ScheduleOutcome = { day: string; bumped: { id: string; day: string } | null } | "not_found" | "past" | "taken" | "no_question";
+export type ScheduleOutcome = { day: string; bumped: { id: string; day: string } | null } | "not_found" | "past" | "taken";
 
 /**
  * Approves a quote for a day (§8.3): the day picked, an anniversary's own
  * date, else the first free day from tomorrow. An anniversary or topical
  * quote moves an evergreen one off its day; it can't take another's.
  */
-export async function approveQuote(id: string, question: string, picked?: string): Promise<ScheduleOutcome> {
-  if (!question.trim()) return "no_question";
+export async function approveQuote(id: string, picked?: string): Promise<ScheduleOutcome> {
   const { data: q, error } = await db().from("passage_quotes").select("id, kind, wanted_day, status").eq("id", id).maybeSingle();
   if (error) throw error;
   if (!q || (q.status !== "new" && q.status !== "approved")) return "not_found";
@@ -104,7 +103,7 @@ export async function approveQuote(id: string, question: string, picked?: string
     }
     target = day;
   }
-  const { error: saveError } = await db().from("passage_quotes").update({ status: "approved", day: target, question: question.trim() }).eq("id", id);
+  const { error: saveError } = await db().from("passage_quotes").update({ status: "approved", day: target }).eq("id", id);
   if (saveError) throw saveError;
   return { day: target, bumped };
 }
@@ -157,7 +156,7 @@ export async function publishScheduledPassage(): Promise<"published" | "none" | 
 
   const [posted, due] = await Promise.all([
     db().from("daily_passages").select("day").eq("day", day).maybeSingle(),
-    db().from("passage_quotes").select("id, question").eq("status", "approved").eq("day", day).maybeSingle(),
+    db().from("passage_quotes").select("id").eq("status", "approved").eq("day", day).maybeSingle(),
   ]);
   if (posted.error) throw posted.error;
   if (due.error) throw due.error;
@@ -167,13 +166,13 @@ export async function publishScheduledPassage(): Promise<"published" | "none" | 
     if (error) throw error;
     return "none";
   }
-  const outcome = await setTodayFromQuote(due.data.id, due.data.question, null);
+  const outcome = await setTodayFromQuote(due.data.id, null);
   return typeof outcome === "string" ? outcome : "published";
 }
 
 // ---- Editorial brief (§8.5) ----------------------------------------------
 
-export const DEFAULT_BRIEF = `Ominira passages keep a revolutionary zeal alive: Pan-African, anti-imperialist and emancipatory. Choose words that stir, sharpen or give hope, not ones that only describe despair. Keep them short and plain-spoken, no academic jargon. Each passage should make a member want to read the book. The question links the passage to the member's own life or to today, is open, and is never a quiz.
+export const DEFAULT_BRIEF = `Ominira passages keep a revolutionary zeal alive: Pan-African, anti-imperialist and emancipatory. Choose words that stir, sharpen or give hope, not ones that only describe despair. Keep them short and plain-spoken, no academic jargon. Each passage should make a member want to read the book.
 
 Key dates (confirm each with a web search before using it):
 - 1 Jan: Haiti declares independence (1804)

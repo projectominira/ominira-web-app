@@ -17,8 +17,6 @@ export type RoomNote = FeedItem & {
   fromReader: boolean;
   /** The pin's label ("Passage of the day"); null when not pinned. */
   pinned: string | null;
-  /** The passage of the day's question, on its note. */
-  question: string | null;
   /** All replies; `replies` holds the latest page of them. */
   replyCount: number;
   /** The footer's avatars and names, latest first. */
@@ -242,14 +240,19 @@ export type HomeView = {
   passage: HomePassage | null;
 };
 
-/** The passage of the day on Home: its question, the quote and where it is. */
+/** The passage of the day on Home: the quote, where it is, and a line of
+ * context when the editors gave one. */
 export type HomePassage = {
-  question: string;
   excerpt: string;
-  cite: string;
-  answers: number;
+  /** Its day: "Tue 10 Nov". */
+  day: string;
+  /** The editors' line: "Anniversary" (label) and "Ken Saro-Wiwa and eight
+   * other Ogoni men were executed on 10 November 1995.", or a line on the
+   * book with no label; null when none. */
+  context: { label: string | null; text: string } | null;
   /** The reader, at the quote. */
   href: string;
-  /** For the share image. */
-  book: { title: string; author: string };
+  book: { title: string; author: string; cover: string | null; materialType: string };
+  /** Where in the book: "Ch. 4, p. 81", "Page 79"; null when unknown. */
+  where: string | null;
 };

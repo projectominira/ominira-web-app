@@ -134,22 +134,44 @@ function Status({ quote }: { quote: QuoteView }) {
   return <span className="font-semibold text-[var(--reader-accent)]">New</span>;
 }
 
-/** Fill: the quotes waiting for review, each approvable for the open day. */
-function FillPanel({ day, calendar, onDone, onClose }: { day: string; calendar: Calendar; onDone: () => void; onClose: () => void }) {
+/** The first open day after `day` in the calendar, skipping `filled`. */
+const nextOpen = (calendar: Calendar, day: string, filled: ReadonlySet<string>) =>
+  calendar.days.find((d) => d.day > day && !d.posted && !d.quote && !filled.has(d.day))?.day ?? null;
+
+/** Fill: the quotes waiting for review, each approvable for the open day,
+ * an anniversary on its own date first. Approving moves on to the next open
+ * day, so a run of days fills in one go; Skip moves on without one. */
+function FillPanel({ day: first, calendar, onApproved, onClose }: { day: string; calendar: Calendar; onApproved: () => void; onClose: () => void }) {
+  const [day, setDay] = useState(first);
   const [busy, setBusy] = useState<string | null>(null);
+  // Approved here, before the calendar reloads.
+  const [done, setDone] = useState<{ quotes: Set<string>; days: Set<string> }>({ quotes: new Set(), days: new Set() });
   const label = day === calendar.today ? "today" : dayLabel(day);
+  const next = nextOpen(calendar, day, done.days);
+  const rank = (q: QuoteView) => (q.kind !== "anniversary" || !q.wantedDay ? 1 : q.wantedDay === day ? 0 : 2);
+  const waiting = calendar.waiting.filter((q) => !done.quotes.has(q.id)).sort((a, b) => rank(a) - rank(b));
   const approve = async (q: QuoteView) => {
     setBusy(q.id);
     try {
       const res = await fetch(`/api/admin/passage/quotes/${q.id}/schedule`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q.question, day }),
+        body: JSON.stringify({ day }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error ?? "Please try again.");
-      showToast(`Approved for ${label}.`);
-      onDone();
+      const quotes = new Set(done.quotes).add(q.id);
+      const days = new Set(done.days).add(day);
+      setDone({ quotes, days });
+      onApproved();
+      const after = nextOpen(calendar, day, days);
+      if (after && waiting.length > 1) {
+        showToast(`Approved for ${label}. Now ${dayLabel(after)}.`);
+        setDay(after);
+      } else {
+        showToast(`Approved for ${label}.`);
+        onClose();
+      }
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Please try again.");
     } finally {
@@ -160,30 +182,38 @@ function FillPanel({ day, calendar, onDone, onClose }: { day: string; calendar: 
     <AdminSidePanel label={`Fill ${label}`} onClose={onClose}>
       <AdminPanelHeader
         title={`Fill ${label}`}
-        subtitle={day === calendar.today ? "Goes out at 07:00, or within minutes if that's passed" : `${plural(calendar.waiting.length, "quote")} to review`}
+        subtitle={day === calendar.today ? "Goes out at 07:00, or within minutes if that's passed" : `${plural(waiting.length, "quote")} to review`}
         onClose={onClose}
       />
-      {calendar.waiting.length === 0 ? (
+      {next && (
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--reader-border)] px-5 py-2.5 text-ui-caption text-[var(--reader-text-muted)]">
+          <span>Next open day: {dayLabel(next)}</span>
+          <button type="button" onClick={() => setDay(next)} className="cursor-pointer border-none bg-transparent p-0 font-[inherit] font-semibold text-[var(--reader-text)] hover:underline">
+            Skip to {dayLabel(next)} →
+          </button>
+        </div>
+      )}
+      {waiting.length === 0 ? (
         <p className="m-0 px-5 py-8 text-center text-ui-sm text-[var(--reader-text-muted)]">
           Nothing waiting for review. Ask your AI to plan the next 30 days.
         </p>
       ) : (
         <ul className="m-0 flex list-none flex-col p-0">
-          {calendar.waiting.map((q) => (
+          {waiting.map((q) => (
             <li key={q.id} className="flex flex-col gap-2 border-b border-[var(--reader-border)] px-5 py-4">
               <span className="text-ui-caption text-[var(--reader-text-muted)]">
                 <span className="font-semibold text-[var(--reader-text)]">{KIND_LABEL[q.kind]}</span>
-                {q.kind === "anniversary" && q.wantedDay && <> · {dayLabel(q.wantedDay)}</>}
+                {q.kind === "anniversary" && q.wantedDay && <> · {q.wantedDay === day ? <span className="font-semibold text-brand-600">this day</span> : dayLabel(q.wantedDay)}</>}
                 {q.occasion && <> · {q.occasion}</>}
               </span>
               <p className="m-0 line-clamp-3 font-serif text-[15px]/[1.55] text-[var(--reader-text)]">&ldquo;{stripMarkers(quoteText(q.ranges))}&rdquo;</p>
               <p className="m-0 text-ui-caption text-[var(--reader-text-muted)]">
                 {q.book.title}
-                {q.question && <> · {q.question}</>}
+                {q.book.author && <> · {q.book.author}</>}
               </p>
               <div className="flex justify-end">
-                <button type="button" disabled={!!busy || !q.question.trim()} onClick={() => approve(q)} className={PRIMARY}>
-                  {q.question.trim() ? (busy === q.id ? "Approving…" : `Approve for ${label}`) : "Needs a question (To review)"}
+                <button type="button" disabled={!!busy} onClick={() => approve(q)} className={PRIMARY}>
+                  {busy === q.id ? "Approving…" : `Approve for ${label}`}
                 </button>
               </div>
             </li>
@@ -328,6 +358,10 @@ export default function PassageAdminView({
             close();
             setFilling(day);
           }}
+          onOpenWaiting={(q) => {
+            close();
+            setCalendarQuote(q);
+          }}
           onChanged={onScheduled}
         />
       )}
@@ -389,9 +423,9 @@ export default function PassageAdminView({
               <thead>
                 <tr className="border-b border-[var(--reader-border)] text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--reader-text-subtle)]">
                   <th className={TH}>Day</th>
-                  <th className={TH}>Question</th>
+                  <th className={TH}>Quote</th>
                   <th className={TH}>Book</th>
-                  <th className={`${TH} text-right`}>Answers</th>
+                  <th className={`${TH} text-right`}>Replies</th>
                   <th className={TH}>Set by</th>
                 </tr>
               </thead>
@@ -399,7 +433,7 @@ export default function PassageAdminView({
                 {items.map((d) => (
                   <tr key={d.day} onClick={() => setOpenId(d.day)} className={`${ROW} ${openId === d.day ? ACTIVE : ""}`}>
                     <td className={`${TD} whitespace-nowrap font-semibold text-[var(--reader-text)]`}>{fullDay(d.day)}</td>
-                    <td className={`${TD} max-w-[340px] truncate text-[var(--reader-text)]`}>{d.question}</td>
+                    <td className={`${TD} max-w-[340px] truncate text-[var(--reader-text)]`}>&ldquo;{stripMarkers(d.quote)}&rdquo;</td>
                     <td className={`${TD} max-w-[200px] truncate text-[var(--reader-text-muted)]`}>{d.book ?? "—"}</td>
                     <td className={`${TD} text-right tabular-nums text-[var(--reader-text-muted)]`}>{d.answers}</td>
                     <td className={`${TD} max-w-[160px] truncate text-[var(--reader-text-muted)]`}>{d.setBy ?? "—"}</td>
@@ -426,6 +460,13 @@ export default function PassageAdminView({
               calendar={calendar}
               onUsed={onUsed}
               onScheduled={onScheduled}
+              onApproved={() => {
+                // The next quote still waiting, in list order.
+                const all = sets.items.flatMap((set) => set.quotes);
+                const at = all.findIndex((q) => q.id === openQuote.quote.id);
+                const next = [...all.slice(at + 1), ...all.slice(0, at)].find((q) => q.status === "new" && q.id !== openQuote.quote.id);
+                setOpenId(next?.id ?? null);
+              }}
             />
           </div>
         </AdminSidePanel>
@@ -459,31 +500,22 @@ export default function PassageAdminView({
       )}
 
       {filling && (
-        <FillPanel
-          day={filling}
-          calendar={calendar}
-          onDone={() => {
-            close();
-            onScheduled();
-          }}
-          onClose={close}
-        />
+        <FillPanel key={filling} day={filling} calendar={calendar} onApproved={onScheduled} onClose={close} />
       )}
 
       {openDay && (
         <AdminSidePanel label="Passage of the day" onClose={close}>
           <AdminPanelHeader title={fullDay(openDay.day)} subtitle={openDay.setBy ? `Set by ${openDay.setBy}` : undefined} onClose={close} />
           <div className="flex flex-col gap-3 px-5 py-5">
-            <p className="m-0 text-[13px]/[1.4] font-semibold text-[var(--reader-text)]">{openDay.question}</p>
             <blockquote className="m-0 border-l-2 border-brand-400 pl-3 font-serif text-[15px]/[1.6] text-pretty sm:text-[16px]/[1.65] text-[var(--reader-text)]">
               &ldquo;{openDay.quote}&rdquo;
             </blockquote>
             <p className="m-0 text-ui-caption text-[var(--reader-text-muted)]">
-              {[openDay.book, plural(openDay.answers, "answer"), openDay.fromSet && `from ${openDay.fromSet}`].filter(Boolean).join(" · ")}
+              {[openDay.book, plural(openDay.answers, "reply", "replies"), openDay.fromSet && `from ${openDay.fromSet}`].filter(Boolean).join(" · ")}
             </p>
             <div>
               <a href={`/note/${openDay.postId}`} target="_blank" rel="noopener noreferrer" className={BUTTON}>
-                <ArrowUpRight size={14} /> Open thread
+                <ArrowUpRight size={14} /> Open note
               </a>
             </div>
           </div>

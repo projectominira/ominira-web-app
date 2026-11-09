@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Mic, Users } from "lucide-react";
 import { byLatest } from "@/lib/rooms/home";
 import type { GroupCardView, RoomRowView } from "@/lib/rooms/types";
@@ -16,7 +17,9 @@ export const ROW_ACTION =
  * Study groups: the heading with its ＋ (NewMenu: a study group or a reading
  * room), then the groups you're in, the latest first (and the book rooms,
  * while they're shown — lib/config/features). In none, a row like a group's
- * with the way to start one, pointing at the groups you can join.
+ * with the way to start one, pointing at the groups you can join. Boxed
+ * (desktop), the heading sits above a panel of the rows and `children`
+ * (groups to join).
  */
 export default function StudyGroups({
   groups,
@@ -26,6 +29,8 @@ export default function StudyGroups({
   desktop,
   onStartRoom,
   onStartGroup,
+  boxed = false,
+  children,
 }: {
   /** Your groups (joined). */
   groups: GroupCardView[];
@@ -36,6 +41,9 @@ export default function StudyGroups({
   desktop: boolean;
   onStartRoom: () => void;
   onStartGroup: () => void;
+  boxed?: boolean;
+  /** More inside the panel, under your groups. */
+  children?: ReactNode;
 }) {
   const actions: NewAction[] = [
     { label: "Start a study group", icon: <Users size={18} />, onClick: onStartGroup },
@@ -47,30 +55,33 @@ export default function StudyGroups({
         <h2 className={SECTION_TITLE}>Study groups</h2>
         <NewMenu desktop={desktop} disabled={entering} actions={actions} />
       </div>
-      {groups.length || rooms.length ? (
-        <div className="flex flex-col divide-y divide-[var(--color-app-border)]">
-          {byLatest(groups).map((g) => (
-            <GroupRow key={`g:${g.slug}`} group={g} />
-          ))}
-          {rooms.map((r) => (
-            <BookRoomRow key={`b:${r.slug}`} room={r} />
-          ))}
-        </div>
-      ) : (
-        // None yet: a row like a group's, a dashed mark where its letter goes.
-        <div className="flex items-center gap-3 py-2.5">
-          <span className="flex size-11 flex-none items-center justify-center rounded-full border border-dashed border-[var(--reader-border)] text-[var(--reader-text-muted)]">
-            <Users size={18} />
-          </span>
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-[13px] font-bold text-[var(--color-app-text)]">No study group yet</span>
-            <span className="text-ui-sm text-[var(--reader-text-muted)]">{joinable ? "Join one below, or start your own." : "Start one and read books with others."}</span>
-          </span>
-          <button type="button" onClick={onStartGroup} disabled={entering} className={ROW_ACTION}>
-            Start one
-          </button>
-        </div>
-      )}
+      <div className={boxed ? "flex min-w-0 flex-col gap-3 rounded-sm border border-[var(--color-app-border)] bg-[var(--reader-bg)] px-4 pt-1 pb-3" : "contents"}>
+        {groups.length || rooms.length ? (
+          <div className="flex flex-col divide-y divide-[var(--color-app-border)]">
+            {byLatest(groups).map((g) => (
+              <GroupRow key={`g:${g.slug}`} group={g} />
+            ))}
+            {rooms.map((r) => (
+              <BookRoomRow key={`b:${r.slug}`} room={r} />
+            ))}
+          </div>
+        ) : (
+          // None yet: a row like a group's, a dashed mark where its letter goes.
+          <div className="flex items-center gap-3 py-2.5">
+            <span className="flex size-11 flex-none items-center justify-center rounded-full border border-dashed border-[var(--reader-border)] text-[var(--reader-text-muted)]">
+              <Users size={18} />
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-[13px] font-bold text-[var(--color-app-text)]">No study group yet</span>
+              <span className="text-ui-sm text-[var(--reader-text-muted)]">{joinable ? "Join one below, or start your own." : "Start one and read books with others."}</span>
+            </span>
+            <button type="button" onClick={onStartGroup} disabled={entering} className={ROW_ACTION}>
+              Start one
+            </button>
+          </div>
+        )}
+        {children}
+      </div>
     </section>
   );
 }

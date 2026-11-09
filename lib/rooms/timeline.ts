@@ -185,9 +185,9 @@ export type NoteContext = {
   teamIds: ReadonlySet<string>;
   /** The official account (2.8): "Ominira". */
   officialIds: ReadonlySet<string>;
-  /** Passages of the day among the page's notes (2.8), by post id: each
-   * keeps its question; only today's is pinned. */
-  passages: ReadonlyMap<string, { question: string; today: boolean }>;
+  /** Passages of the day among the page's notes (2.8), by post id; only
+   * today's is pinned. */
+  passages: ReadonlyMap<string, { today: boolean }>;
   /** A book room labels notes that are in a group too ("Also in …"). */
   alsoIn: boolean;
 };
@@ -209,13 +209,11 @@ export function toRoomNote(item: FeedItem, ctx: NoteContext): RoomNote {
   }
   const author = note.author.readerId;
   const passage = ctx.passages.get(note.id) ?? null;
-  const question = passage?.question ?? null;
   return {
     ...item,
     authorTag: ctx.officialIds.has(author) ? OFFICIAL_TAG : ctx.teamIds.has(author) ? TEAM_TAG : null,
-    fromReader: item.excerpt !== null && question === null,
+    fromReader: item.excerpt !== null && passage === null,
     pinned: passage?.today ? PASSAGE_PIN : note.id === ctx.pinnedId ? NOTE_PIN : null,
-    question,
     replyCount: replies.length,
     repliers: latestFirst.slice(0, FOOTER_REPLIERS),
     replierCount: latestFirst.length,
@@ -257,6 +255,6 @@ export function pendingNote(id: string, text: string, author: Note["author"], at
       reactionCount: 0, reactedByMe: false, group, mentions: [], createdAt: at, updatedAt: at,
     },
     material: null, sectionId: null, label: null, excerpt: null, replies: [],
-    authorTag: null, fromReader: false, pinned: null, question: null, replyCount: 0, repliers: [], replierCount: 0, replyingNow: 0, newReplies: 0, alsoIn: null,
+    authorTag: null, fromReader: false, pinned: null, replyCount: 0, repliers: [], replierCount: 0, replyingNow: 0, newReplies: 0, alsoIn: null,
   };
 }

@@ -188,7 +188,6 @@ export default function NoteBubble({
           </span>
         )}
         {n.excerpt && <PassageQuote excerpt={n.excerpt} cite={n.label ? chapterLabel(n.label) : null} onClick={onPassage} />}
-        {n.question && <span className="font-serif text-[16px]/[1.4] font-semibold text-pretty">{n.question}</span>}
         {text && <NoteContent content={note.content} mentions={noteMentionNames(note)} variant="card" />}
 
         {actions && (

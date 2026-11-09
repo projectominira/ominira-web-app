@@ -32,14 +32,20 @@ export const CreateSetInput = z.object({
         /** Where to look first: a block id, or a PDF page number. */
         near: z.union([z.string().max(200), z.int().positive()]).optional(),
         why: z.string().trim().max(2000).default(""),
-        question: z.string().trim().max(280).default(""),
         /** passage-spec §8.1. */
         kind: z
           .enum(["anniversary", "topical", "evergreen"])
           .default("evergreen")
           .describe("anniversary: tied to a date (pass day). topical: speaks to something happening now. evergreen: any day."),
-        /** Why this, today; admin only. */
-        occasion: z.string().trim().max(200).default("").describe("One line on why this passage, today, e.g. \"Haiti declared independence on this day in 1804\". Shown to editors only."),
+        /** Its line of context, shown to members above the quote. */
+        occasion: z
+          .string()
+          .trim()
+          .max(200)
+          .default("")
+          .describe(
+            "One plain sentence members see above the quote. Anniversary: what happened that day, e.g. \"Haiti declared independence on 1 January 1804.\" Topical: the event it speaks to. Evergreen: who wrote it and what the book is, e.g. \"Walter Rodney on how Europe's wealth was built on Africa's, 1972.\""
+          ),
         /** An anniversary's date, YYYY-MM-DD. */
         day: z.iso.date().optional().describe("For an anniversary: the date it falls on next, YYYY-MM-DD, within the calendar's days."),
       })
@@ -109,7 +115,6 @@ export async function createSet(raw: CreateSetInput): Promise<CreateSetResult> {
         picked_ranges: f.ranges,
         context: f.context,
         why: q.why,
-        question: q.question,
         kind: q.kind,
         occasion: q.occasion,
         wanted_day: q.kind === "anniversary" ? (q.day ?? null) : null,
@@ -132,7 +137,6 @@ type QuoteRow = {
   picked_ranges: unknown;
   context: unknown;
   why: string;
-  question: string;
   status: QuoteView["status"];
   post_id: string | null;
   kind: QuoteView["kind"];
@@ -141,7 +145,7 @@ type QuoteRow = {
   day: string | null;
 };
 
-export const QUOTE_COLUMNS = "id, set_id, material_id, ranges, picked_ranges, context, why, question, status, post_id, kind, occasion, wanted_day, day";
+export const QUOTE_COLUMNS = "id, set_id, material_id, ranges, picked_ranges, context, why, status, post_id, kind, occasion, wanted_day, day";
 
 /** The latest day each quote was the passage: its own note's, or any of the
  * Ominira account's notes on the same words. */
@@ -204,7 +208,6 @@ export async function quoteViews(quotes: QuoteRow[]): Promise<Map<string, QuoteV
       picked: q.picked_ranges as AnnotationRange[],
       context: q.context as ContextBlock[],
       why: q.why,
-      question: q.question,
       book: { id: m.id, slug: m.slug, title: m.title, author: m.author, materialType: m.material_type },
       chapter: (section && labels.get(m.id)?.get(section)) || null,
       page: page >= 0 ? page + 1 : null,
@@ -281,8 +284,8 @@ export async function listDays({ cursor }: { cursor: string | null }): Promise<P
   return { items: await dayViews(days), nextCursor };
 }
 
-type DayRow = { day: string; post_id: string; question: string; set_by: string | null };
-export const DAY_COLUMNS = "day, post_id, question, set_by";
+type DayRow = { day: string; post_id: string; set_by: string | null };
+export const DAY_COLUMNS = "day, post_id, set_by";
 
 /** daily_passages rows as History shows them: quote, book, answers, who set
  * it, and the set it came from. */
@@ -319,7 +322,6 @@ export async function dayViews(days: DayRow[]): Promise<DayView[]> {
       return {
         day: d.day,
         postId: d.post_id,
-        question: d.question,
         quote: quoteText((post?.ranges ?? []) as AnnotationRange[]),
         book: (post?.material_id && titles.get(post.material_id)) || null,
         answers: answers.get(d.post_id) ?? 0,
@@ -365,12 +367,6 @@ export async function trimQuote(id: string, ranges: AnnotationRange[]): Promise<
   return saved;
 }
 
-export async function setQuestion(id: string, question: string): Promise<boolean> {
-  const { data, error } = await db().from("passage_quotes").update({ question }).eq("id", id).select("id").maybeSingle();
-  if (error) throw error;
-  return !!data;
-}
-
 /** Dismisses a quote, or restores or unschedules it (back to new); either
  * way it loses its day. */
 export async function setStatus(id: string, status: "new" | "dismissed"): Promise<boolean> {
@@ -381,12 +377,12 @@ export async function setStatus(id: string, status: "new" | "dismissed"): Promis
 
 /** Makes the quote today's passage (setPassage: posts, replaces today's,
  * notifies), then marks it used with its note. */
-export async function setTodayFromQuote(id: string, question: string, setBy: string | null): Promise<PassageOutcome | "not_found"> {
+export async function setTodayFromQuote(id: string, setBy: string | null): Promise<PassageOutcome | "not_found"> {
   const row = await quoteRow(id);
   if (!row) return "not_found";
-  const outcome = await setPassage({ materialId: row.material_id, ranges: row.ranges as AnnotationRange[], text: "", question }, setBy);
+  const outcome = await setPassage({ materialId: row.material_id, ranges: row.ranges as AnnotationRange[], text: "" }, setBy);
   if (typeof outcome === "string") return outcome;
-  const { error } = await db().from("passage_quotes").update({ status: "used", post_id: outcome.postId, question }).eq("id", id);
+  const { error } = await db().from("passage_quotes").update({ status: "used", post_id: outcome.postId }).eq("id", id);
   if (error) throw error;
   return outcome;
 }

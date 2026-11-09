@@ -8,6 +8,7 @@ import { notifyReaders } from "@/lib/notifications/notify";
 import { notificationSnippet } from "@/lib/notifications/snippet";
 import { RangeSchema } from "@/lib/room/events";
 import { localDay } from "@/lib/time/zone";
+import { quoteText } from "@/lib/passage/types";
 import { PASSAGE_PIN } from "./timeline";
 
 // The passage of the day (rooms-spec §5.5): one for every reader, not a
@@ -27,7 +28,6 @@ export const PassageInput = z.object({
   ranges: z.array(RangeSchema).min(1).max(5),
   /** The note's own words, under the quote; usually none. */
   text: z.string().trim().max(2000).default(""),
-  question: z.string().trim().min(1).max(280),
 });
 export type PassageInput = z.infer<typeof PassageInput>;
 
@@ -40,21 +40,21 @@ export async function officialReaderIds(): Promise<Set<string>> {
   return new Set(data.map((r) => r.id));
 }
 
-/** The passages among a page of notes, by post id: their questions, and
- * whether each is today's. One small read, none for an empty page. */
-export async function pagePassages(rows: { id: string }[], now: number): Promise<Map<string, { question: string; today: boolean }>> {
-  const out = new Map<string, { question: string; today: boolean }>();
+/** The passages among a page of notes, by post id: whether each is
+ * today's. One small read, none for an empty page. */
+export async function pagePassages(rows: { id: string }[], now: number): Promise<Map<string, { today: boolean }>> {
+  const out = new Map<string, { today: boolean }>();
   if (rows.length === 0) return out;
   const { data, error } = await getSupabaseAdminClient()
     .from("daily_passages")
-    .select("day, post_id, question")
+    .select("day, post_id")
     .in(
       "post_id",
       rows.map((r) => r.id)
     );
   if (error) throw error;
   const today = passageDay(now);
-  for (const p of data) out.set(p.post_id, { question: p.question, today: p.day === today });
+  for (const p of data) out.set(p.post_id, { today: p.day === today });
   return out;
 }
 
@@ -91,9 +91,10 @@ export async function setPassage(input: PassageInput, setBy: string | null): Pro
 
   const { error: dayError } = await admin
     .from("daily_passages")
-    .upsert({ day: passageDay(Date.now()), post_id: post.id, question: input.question, set_by: setBy, created_at: new Date().toISOString() });
+    .upsert({ day: passageDay(Date.now()), post_id: post.id, set_by: setBy, created_at: new Date().toISOString() });
   if (dayError) throw dayError;
 
+  const quote = quoteText(input.ranges);
   after(async () => {
     try {
       const { data: readers, error: readersError } = await admin.from("readers").select("id").eq("official", false);
@@ -104,11 +105,11 @@ export async function setPassage(input: PassageInput, setBy: string | null): Pro
         {
           kind: "passage",
           title: PASSAGE_PIN,
-          body: notificationSnippet(input.question) ?? input.question,
+          body: notificationSnippet(quote) ?? quote,
           url: `/note/${post.id}`,
           tag: "passage",
           actorReaderId: authorId,
-          snippet: input.question,
+          snippet: quote,
           // One a day per reader: replacing the day's passage doesn't push again.
           ref: "passage",
         }

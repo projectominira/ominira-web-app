@@ -7,6 +7,7 @@ import StartGroupSheet from "@/app/components/groups/StartGroupSheet";
 import StartRoomSheet from "@/app/components/rooms/StartRoomSheet";
 import { useShell } from "@/app/components/useShell";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
+import { useProfile } from "@/lib/auth/useProfile";
 import { useEnterRoom, type RoomEntry } from "@/lib/room/useEnterRoom";
 import { useOpenRoom } from "@/lib/room/useOpenRoom";
 import { useHome, useSaveGoal } from "@/lib/rooms/useHome";
@@ -22,8 +23,15 @@ import HomePushPrompt from "./HomePushPrompt";
  * or started here opens in the reader; a group started here opens on its
  * page.
  */
+/** "Good morning", "Good afternoon" or "Good evening", by the device's clock. */
+function timeOfDay() {
+  const h = new Date().getHours();
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+}
+
 export default function HomeScreen() {
   const { data: view, isError } = useHome();
+  const { data: reader } = useProfile();
   const saveGoal = useSaveGoal();
   const desktop = useShell();
   const { enter, pending } = useEnterRoom();
@@ -44,7 +52,7 @@ export default function HomeScreen() {
   if (!signedIn) return null;
 
   return (
-    <SearchableAppPage className="pb-2 shell:pb-10">
+    <SearchableAppPage className="pb-2 shell:pb-10" greeting={reader ? `${timeOfDay()}, ${reader.pseudonym}` : timeOfDay()}>
       <HomeInstallBanner />
       <HomePushPrompt />
       <Home

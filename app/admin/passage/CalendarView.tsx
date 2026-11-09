@@ -9,8 +9,9 @@ import { showToast } from "@/stores/toast-store";
 import DayPicker, { dayLabel, KIND_LABEL } from "./DayPicker";
 import { stripMarkers } from "./QuoteCard";
 
-const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 const FILL = "inline-flex h-8 cursor-pointer items-center gap-1 rounded-sm border border-dashed border-sand-300 bg-transparent px-2.5 text-[13px] font-semibold text-[var(--reader-text-muted)] transition-colors hover:border-brand-400 hover:text-brand-600";
+
+const APPROVE = "inline-flex h-8 cursor-pointer items-center rounded-sm border-none bg-brand-500 px-2.5 text-[13px] font-bold text-white transition-colors hover:bg-brand-600 disabled:cursor-default disabled:opacity-50";
 
 async function patch(url: string, body: unknown, method = "PATCH") {
   const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -32,26 +33,49 @@ function weekTitle(day: string, today: string) {
  * The next 30 days (passage-spec §8.4): a strip showing which days are
  * planned, then a row per day, today first and highlighted, grouped by
  * week. Planned rows drag onto another day (a held day swaps) or move from
- * ⋯; an open day's Fill approves a quote waiting for review.
+ * ⋯; an open day's Fill approves a quote waiting for review, and an
+ * anniversary waiting for review shows on its own date, approvable there.
  */
 export default function CalendarView({
   calendar,
   onOpenQuote,
   onOpenPosted,
   onFill,
+  onOpenWaiting,
   onChanged,
 }: {
   calendar: Calendar;
   onOpenQuote: (quote: QuoteView) => void;
   onOpenPosted: () => void;
   onFill: (day: string) => void;
+  /** An anniversary waiting for review, opened from its own date. */
+  onOpenWaiting: (quote: QuoteView) => void;
   /** Something moved: reload the calendar. */
   onChanged: () => void;
 }) {
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [moving, setMoving] = useState<QuoteView | null>(null);
+  const [approving, setApproving] = useState<string | null>(null);
   const { today, days } = calendar;
+
+  /** An anniversary waiting for review that falls on an open day: shown on
+   * that day, approvable there without opening To review. */
+  const suggested = new Map<string, QuoteView>();
+  for (const q of calendar.waiting) if (q.kind === "anniversary" && q.wantedDay && !suggested.has(q.wantedDay)) suggested.set(q.wantedDay, q);
+
+  const approve = async (quote: QuoteView, day: string) => {
+    setApproving(quote.id);
+    try {
+      await patch(`/api/admin/passage/quotes/${quote.id}/schedule`, { day }, "POST");
+      showToast(`Approved for ${day === today ? "today" : dayLabel(day)}.`);
+      onChanged();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Please try again.");
+    } finally {
+      setApproving(null);
+    }
+  };
 
   const move = async (quote: QuoteView, day: string) => {
     setMoving(null);
@@ -101,6 +125,7 @@ export default function CalendarView({
           const title = weekTitle(d.day, today);
           const isToday = d.day === today;
           const q = d.quote;
+          const s = !d.posted && !q ? suggested.get(d.day) : undefined;
           return (
             <div key={d.day}>
               {(i === 0 || weekTitle(days[i - 1].day, today) !== title) && (
@@ -135,9 +160,9 @@ export default function CalendarView({
                   setDragging(null);
                   setOver(null);
                 }}
-                onClick={() => (d.posted ? onOpenPosted() : q ? onOpenQuote(q) : undefined)}
+                onClick={() => (d.posted ? onOpenPosted() : q ? onOpenQuote(q) : s ? onOpenWaiting(s) : undefined)}
                 className={`flex scroll-mt-24 items-start gap-3 border-t border-[var(--reader-border)] px-4 py-3 transition-colors ${
-                  d.posted || q ? "cursor-pointer hover:bg-[var(--reader-surface-hover)]" : ""
+                  d.posted || q || s ? "cursor-pointer hover:bg-[var(--reader-surface-hover)]" : ""
                 } ${isToday ? "bg-[var(--reader-surface)] shadow-[inset_3px_0_0_var(--color-brand-500)]" : ""} ${
                   over === d.day ? "bg-brand-50 outline-2 -outline-offset-2 outline-dashed outline-brand-400" : ""
                 } ${dragging === q?.id && q ? "opacity-50" : ""} ${q && !d.posted ? "sm:cursor-grab" : ""}`}
@@ -151,10 +176,9 @@ export default function CalendarView({
 
                 {d.posted ? (
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <p className="m-0 text-[13px]/[1.4] font-semibold text-[var(--reader-text)]">{d.posted.question}</p>
-                    <p className="m-0 line-clamp-1 font-serif text-[15px]/[1.5] text-[var(--reader-text-muted)]">&ldquo;{d.posted.quote}&rdquo;</p>
+                    <p className="m-0 line-clamp-2 font-serif text-[15px]/[1.5] text-[var(--reader-text)]">&ldquo;{stripMarkers(d.posted.quote)}&rdquo;</p>
                     <p className="m-0 text-ui-caption text-[var(--reader-text-muted)]">
-                      Posted · {[d.posted.book, plural(d.posted.answers, "answer")].filter(Boolean).join(" · ")} ·{" "}
+                      Posted · {d.posted.book ?? ""} ·{" "}
                       <a
                         href={`/note/${d.posted.postId}`}
                         target="_blank"
@@ -162,7 +186,7 @@ export default function CalendarView({
                         onClick={(e) => e.stopPropagation()}
                         className="font-semibold text-[var(--reader-text)] hover:underline"
                       >
-                        Open thread
+                        Open note
                       </a>
                     </p>
                   </div>
@@ -189,6 +213,28 @@ export default function CalendarView({
                           { label: "Open", icon: <ArrowUpRight size={14} />, onClick: () => onOpenQuote(q) },
                         ]}
                       />
+                    </div>
+                  </>
+                ) : s ? (
+                  <>
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <p className="m-0 truncate text-ui-caption text-[var(--reader-text-muted)]">
+                        <span className="font-semibold text-[var(--reader-text)]">Anniversary</span> · to review
+                        {s.occasion && <> · {s.occasion}</>}
+                      </p>
+                      <p className="m-0 line-clamp-2 font-serif text-[15px]/[1.5] text-[var(--reader-text-muted)]">&ldquo;{stripMarkers(quoteText(s.ranges))}&rdquo;</p>
+                      <p className="m-0 truncate text-ui-caption text-[var(--reader-text-muted)]">
+                        {s.book.title}
+                        {s.book.author && <> · {s.book.author}</>}
+                      </p>
+                    </div>
+                    <div onClick={(e) => e.stopPropagation()} className="flex flex-none flex-col items-end gap-1.5 sm:flex-row sm:items-center">
+                      <button type="button" disabled={approving === s.id} onClick={() => approve(s, d.day)} className={APPROVE}>
+                        {approving === s.id ? "Approving…" : "Approve"}
+                      </button>
+                      <button type="button" onClick={() => onFill(d.day)} className={FILL}>
+                        Other
+                      </button>
                     </div>
                   </>
                 ) : (

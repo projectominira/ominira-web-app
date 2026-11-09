@@ -16,12 +16,10 @@ import StudyGroups from "./StudyGroups";
  *   ForYou       — books picked for you; hidden while we know too little
  *   StudyGroups  — your groups, and starting a group or a room
  *   GroupsToJoin — public groups you can join
- *   PassageCard  — the passage of the day, desktop only
+ *   PassageCard  — the passage of the day
  * Mobile: one column, your groups before For you. Desktop: the book beside
- * today's reading; then one panel (half) of your groups over groups to join, beside
- * a side column of the passage and For you. With neither, groups to join
- * moves into the side column; with nothing to move, the panel stops at
- * 720px. No view yet: a spinner, or a line when it failed.
+ * today's reading; then the passage, with a narrow panel of your groups over
+ * groups to join beside it; then For you. No view yet: a spinner, or a line when it failed.
  */
 export default function Home({
   view,
@@ -82,9 +80,10 @@ export default function Home({
       </div>
     );
 
-  // Desktop: the two cards side by side; Study groups in its panel (the
-  // groups to join in it too), with the passage beside it when there is one,
-  // in the same two columns; then For you the full width.
+  // Desktop: the two cards side by side; then the passage in the wide
+  // column with Study groups in its panel (the groups to join in it too) in
+  // a narrow one beside it, or the panel alone across; then For you the
+  // full width.
   return (
     <div className="flex flex-col gap-8 pb-4">
       {live}
@@ -92,17 +91,25 @@ export default function Home({
         {book}
         {daily}
       </div>
-      <div className={`grid items-start gap-6 ${passage ? "grid-cols-2" : "grid-cols-1"}`}>
-        <div className="flex min-w-0 flex-col gap-5 rounded-sm border border-[var(--color-app-border)] bg-[var(--reader-bg)] px-4 pt-3 pb-5">
-          {groups}
+      <div className={`grid items-start gap-6 ${passage ? "grid-cols-[minmax(0,1fr)_340px]" : "grid-cols-1"}`}>
+        {passage}
+        <StudyGroups
+          groups={joined}
+          rooms={view.rooms}
+          joinable={toJoin.length > 0}
+          desktop
+          entering={entering}
+          onStartRoom={onStartRoom}
+          onStartGroup={onStartGroup}
+          boxed
+        >
           {toJoin.length > 0 && (
             <>
               <div className="-mx-4 h-px bg-[var(--color-app-border)]" />
               {join}
             </>
           )}
-        </div>
-        {passage}
+        </StudyGroups>
       </div>
       {forYou}
     </div>

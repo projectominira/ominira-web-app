@@ -19,7 +19,6 @@ export type QuoteView = {
   picked: AnnotationRange[];
   context: ContextBlock[];
   why: string;
-  question: string;
   book: { id: string; slug: string; title: string; author: string; materialType: string };
   /** The chapter, for an EPUB. */
   chapter: string | null;
@@ -28,7 +27,7 @@ export type QuoteView = {
   /** The latest day this quote (its note, or the same words) was the passage. */
   usedOn: string | null;
   kind: PassageKind;
-  /** Why this, today: admin only. */
+  /** Its line of context, shown to members above the quote. */
   occasion: string;
   /** The AI's date, for an anniversary. */
   wantedDay: string | null;
@@ -41,7 +40,6 @@ export type SetView = { id: string; title: string; note: string; createdAt: stri
 export type DayView = {
   day: string;
   postId: string;
-  question: string;
   quote: string;
   book: string | null;
   answers: number;
@@ -64,6 +62,11 @@ export type CalendarView = {
 export type TodayView = { passage: HomePassage; postId: string; setBy: string | null; at: string } | null;
 
 export type Page<T> = { items: T[]; nextCursor: string | null };
+
+/** The line of context members see above the passage: its occasion, led
+ * by "Anniversary" for an anniversary. Null when the editors gave none. */
+export const passageContext = (kind: PassageKind, occasion: string) =>
+  occasion.trim() ? { label: kind === "anniversary" ? "Anniversary" : null, text: occasion.trim() } : null;
 
 /** A quote's words: its ranges' own text, as the reader quotes them (quoteForRanges). */
 export const quoteText = (ranges: AnnotationRange[]) => ranges.map((r) => r.text ?? "").join(" … ");

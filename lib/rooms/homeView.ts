@@ -12,13 +12,14 @@ import { getStreakToday, getStreakView } from "@/lib/streaks/record";
 import { homeGroups } from "@/lib/groups/home";
 import { chapterEnds } from "@/lib/groups/progress";
 import { enrichFeedItems } from "@/lib/community/feed";
-import { communityFeedItemHref } from "@/lib/community/useCommunityFeed";
+import { communityFeedItemHref } from "@/lib/community/feedHref";
 import { comradesById } from "./comrades";
 import { passageDay } from "./passage";
 import { buildStrip, byLatest, chapterLine, previewText, READING_NOW_MS, STRIP_MS } from "./home";
 import { BOOK_ROOMS } from "@/lib/config/features";
 import { forYouBooks } from "@/lib/recommend/books";
 import { withCurrentReaders } from "@/lib/materials/list";
+import { passageContext } from "@/lib/passage/types";
 import type { CurrentBook, HomePassage, HomeView, RoomRowView, StatusItem } from "./types";
 
 // Home (home-spec §5.2) in one call, for the thin app/api/auth/me/home
@@ -158,24 +159,37 @@ async function activeCount(roomId: string): Promise<number> {
   return data;
 }
 
-/** Today's passage of the day (rooms-spec §5.5): its question and quote, and
- * how many have answered. Null when none is set today. */
+/** Today's passage of the day (rooms-spec §5.5): the quote and its line of
+ * context. Null when none is set today. */
 async function getPassage(): Promise<HomePassage | null> {
-  const { data: day, error } = await getSupabaseAdminClient().from("daily_passages").select("post_id, question").eq("day", passageDay(Date.now())).maybeSingle();
+  const today = passageDay(Date.now());
+  const { data: day, error } = await getSupabaseAdminClient().from("daily_passages").select("post_id").eq("day", today).maybeSingle();
   if (error) throw error;
-  return day && passageView(day);
+  return day && passageView(day.post_id, today);
 }
 
-/** A day's passage as Home shows it. */
-export async function passageView(day: { post_id: string; question: string }): Promise<HomePassage | null> {
-  const { data: post, error: postError } = await getSupabaseAdminClient().from("posts").select("*").eq("id", day.post_id).eq("visibility", "public").maybeSingle();
+/** A day's passage as Home shows it. `day` is YYYY-MM-DD. */
+export async function passageView(postId: string, day: string): Promise<HomePassage | null> {
+  const admin = getSupabaseAdminClient();
+  const [{ data: post, error: postError }, { data: quote, error: quoteError }] = await Promise.all([
+    admin.from("posts").select("*").eq("id", postId).eq("visibility", "public").maybeSingle(),
+    admin.from("passage_quotes").select("kind, occasion").eq("post_id", postId).limit(1).maybeSingle(),
+  ]);
   if (postError) throw postError;
+  if (quoteError) throw quoteError;
   if (!post) return null;
   const [item] = await enrichFeedItems([post], null);
   const href = item && communityFeedItemHref(item);
   if (!item?.excerpt || !item.material || !href) return null;
-  const cite = [item.material.title, item.label].filter(Boolean).join(" · ");
-  return { question: day.question, excerpt: item.excerpt, cite, answers: item.replies.length, href, book: { title: item.material.title, author: item.material.author } };
+  const m = item.material;
+  return {
+    excerpt: item.excerpt,
+    day: new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }),
+    context: quote ? passageContext(quote.kind, quote.occasion) : null,
+    href,
+    book: { title: m.title, author: m.author, cover: resolveBookCoverSrc(m), materialType: m.materialType },
+    where: item.label,
+  };
 }
 
 /** Home for a signed-in reader: the rooms live now, your reading and

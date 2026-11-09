@@ -829,7 +829,7 @@ export type Database = {
        * passage, a note in the group, and its question. */
       daily_passages: {
         Row: { day: string; post_id: string; question: string; set_by: string | null; created_at: string };
-        Insert: { day: string; post_id: string; question: string; set_by?: string | null; created_at?: string };
+        Insert: { day: string; post_id: string; question?: string; set_by?: string | null; created_at?: string };
         Update: Partial<Database["public"]["Tables"]["daily_passages"]["Insert"]>;
         Relationships: [];
       };

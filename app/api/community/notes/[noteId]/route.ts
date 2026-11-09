@@ -17,7 +17,7 @@ import type { Database } from "@/lib/supabase/database.types";
 
 /** One thread as a room shows it (`toRoomNote` over the feed's own
  * enrichment) — so /note/[id] renders the very same NoteBubble a room does:
- * the official and moderator tags, the pin and the passage's question. A
+ * the official and moderator tags, and the pin. A
  * note posted in a group says whether the viewer moderates it (Remove).
  *
  * Asking for a *reply* returns its root thread with `focusId` set to that

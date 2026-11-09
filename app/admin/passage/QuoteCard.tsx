@@ -8,7 +8,7 @@ import { useShareQuote } from "@/app/components/reader/ShareQuoteModal";
 import type { AnnotationRange } from "@/lib/api/types";
 import { ensureFreshSession } from "@/lib/api/client";
 import { communityFeedItemHref } from "@/lib/community/useCommunityFeed";
-import { quoteText, type CalendarView, type ContextBlock, type QuoteView } from "@/lib/passage/types";
+import { passageContext, quoteText, type CalendarView, type ContextBlock, type QuoteView } from "@/lib/passage/types";
 import DayPicker, { approveDay, dayLabel, KIND_LABEL } from "./DayPicker";
 import { sameRanges } from "@/stores/library-store";
 import { showToast } from "@/stores/toast-store";
@@ -158,7 +158,7 @@ async function send(url: string, body: unknown, method = "PATCH", headers: Recor
 
 /**
  * One quote (passage-spec §3, §8.4): why this day, the words, where they're
- * from and why, and the question members answer. Its main action approves
+ * from and why. Its main action approves
  * it for a day ("Approve for Thu 12 Nov"); once approved it can move or be
  * unscheduled. "Edit words" opens the context to reselect; the rest is in ⋯.
  */
@@ -169,6 +169,7 @@ export default function QuoteCard({
   calendar,
   onUsed,
   onScheduled,
+  onApproved,
 }: {
   quote: QuoteView;
   /** Updates the quote where it's listed. */
@@ -178,8 +179,9 @@ export default function QuoteCard({
   onUsed: () => void;
   /** A day was given, changed or taken away: the calendar reloads. */
   onScheduled: () => void;
+  /** Approved: To review moves on to the next quote. */
+  onApproved?: () => void;
 }) {
-  const [question, setQuestion] = useState(quote.question);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [picking, setPicking] = useState<"approve" | "move" | null>(null);
@@ -207,17 +209,6 @@ export default function QuoteCard({
     }
   };
 
-  const saveQuestion = async () => {
-    const next = question.trim();
-    if (!next || next === quote.question) return;
-    try {
-      await send(`/api/admin/passage/quotes/${quote.id}`, { question: next });
-      setQuote((q) => ({ ...q, question: next }));
-    } catch (err) {
-      fail(err);
-    }
-  };
-
   const setStatus = async (status: "new" | "dismissed") => {
     const wasApproved = quote.status === "approved";
     try {
@@ -232,14 +223,13 @@ export default function QuoteCard({
 
   const approve = async (day?: string) => {
     setPicking(null);
-    const q = question.trim();
-    if (!q) return showToast("Add a question for members first.");
     setBusy(true);
     try {
-      const data = await send(`/api/admin/passage/quotes/${quote.id}/schedule`, { question: q, ...(day ? { day } : {}) }, "POST");
-      setQuote((x) => ({ ...x, status: "approved", day: data.day, question: q }));
+      const data = await send(`/api/admin/passage/quotes/${quote.id}/schedule`, day ? { day } : {}, "POST");
+      setQuote((x) => ({ ...x, status: "approved", day: data.day }));
       showToast(`Approved for ${dayLabel(data.day)}${data.bumped ? `. The evergreen passage moved to ${dayLabel(data.bumped.day)}` : ""}.`);
       onScheduled();
+      onApproved?.();
     } catch (err) {
       fail(err);
     } finally {
@@ -263,8 +253,8 @@ export default function QuoteCard({
     setBusy(true);
     try {
       const token = await ensureFreshSession();
-      await send(`/api/admin/passage/quotes/${quote.id}/use`, { question: question.trim() }, "POST", token ? { Authorization: `Bearer ${token}` } : {});
-      setQuote((q) => ({ ...q, status: "used", question: question.trim(), usedOn: new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" }) }));
+      await send(`/api/admin/passage/quotes/${quote.id}/use`, {}, "POST", token ? { Authorization: `Bearer ${token}` } : {});
+      setQuote((q) => ({ ...q, status: "used", usedOn: new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" }) }));
       setConfirming(false);
       showToast("Today's passage is set.");
       onUsed();
@@ -337,21 +327,6 @@ export default function QuoteCard({
         </div>
       )}
 
-      {(quote.status === "new" || approved) && (
-        <label className="flex flex-col gap-1.5">
-          <span className="text-ui-xs tracking-eyebrow uppercase text-[var(--reader-text-subtle)]">Question for members</span>
-          <textarea
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            onBlur={saveQuestion}
-            maxLength={280}
-            rows={2}
-            placeholder="What should members answer?"
-            className="resize-none rounded-sm border border-sand-300 bg-[var(--reader-bg)] px-3 py-2 text-ui-sm text-[var(--reader-text)] outline-none focus:border-brand-400"
-          />
-        </label>
-      )}
-
       <div className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1 pt-1">
         {!editing && (
           <button type="button" onClick={() => setEditing(true)} className={LINK}>
@@ -407,28 +382,15 @@ export default function QuoteCard({
             <h2 id={`use-${quote.id}`} className="m-0 font-serif text-[16px] font-semibold text-[var(--reader-text)]">
               Set as today&rsquo;s passage
             </h2>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-ui-xs tracking-eyebrow uppercase text-[var(--reader-text-subtle)]">Question for members</span>
-              <textarea
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                onBlur={saveQuestion}
-                maxLength={280}
-                rows={2}
-                autoFocus
-                placeholder="What should members answer?"
-                className="resize-none rounded-sm border border-sand-300 bg-[var(--reader-bg)] px-3 py-2 text-ui-sm text-[var(--reader-text)] outline-none focus:border-brand-400"
-              />
-            </label>
             <div className="pointer-events-none">
               <PassageCard
                 passage={{
-                  question: question.trim() || "Your question",
                   excerpt: words,
-                  cite: [book.title, quote.chapter ?? (quote.page ? `Page ${quote.page}` : null)].filter(Boolean).join(" · "),
-                  answers: 0,
+                  day: dayLabel(calendar.today),
+                  context: passageContext(quote.kind, quote.occasion),
                   href: href ?? "",
-                  book: { title: book.title, author: book.author },
+                  book: { title: book.title, author: book.author, cover: null, materialType: book.materialType },
+                  where: quote.chapter ?? (quote.page ? `Page ${quote.page}` : null),
                 }}
               />
             </div>
@@ -441,7 +403,7 @@ export default function QuoteCard({
               <button type="button" disabled={busy} onClick={() => setConfirming(false)} className={BUTTON}>
                 Cancel
               </button>
-              <button type="button" disabled={busy || !question.trim()} onClick={use} className={PRIMARY}>
+              <button type="button" disabled={busy} onClick={use} className={PRIMARY}>
                 {busy ? "Setting…" : hasToday ? "Replace today’s passage" : "Set and notify"}
               </button>
             </div>

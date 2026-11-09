@@ -19,6 +19,9 @@ type Props = {
    * without onSearchChange, the field is made readOnly: there's nothing
    * local to type into here, since the modal owns the actual query. */
   onSearchFocus?: () => void;
+  /** Home's "Good morning, Kofi": the page's heading on the left, with
+   * search made compact on the right (an icon on a phone). */
+  greeting?: string;
 };
 
 /** The one browsing-chrome row every page shares (search + bell + profile).
@@ -29,7 +32,7 @@ type Props = {
  * itself and it fought the search field for space and broke on pages that
  * don't want search at all; keeping the two rows separate is deliberate,
  * not a regression to "fix" back into one component again. */
-export default function AppHeader({ searchValue, onSearchChange, onSearchFocus }: Props) {
+export default function AppHeader({ searchValue, onSearchChange, onSearchFocus, greeting }: Props) {
   const isAuthenticated = useIsAuthenticated();
   // Until the session has rehydrated we can't tell signed-in from signed-out,
   // so neither the bell nor the theme toggle shows (no toggle → bell swap).
@@ -38,6 +41,19 @@ export default function AppHeader({ searchValue, onSearchChange, onSearchFocus }
   return (
     <header className="mb-5 bg-[var(--reader-bg)] py-3">
       <div className="flex items-center gap-4">
+        {greeting && (
+          <>
+            <h1 className="m-0 min-w-0 flex-1 truncate font-serif text-[22px]/[1.2] font-extrabold text-[var(--reader-text)] shell:text-[24px]/[1.25]">{greeting}</h1>
+            <button
+              type="button"
+              aria-label="Search the library"
+              onClick={onSearchFocus}
+              className="inline-flex size-10 flex-none cursor-pointer items-center justify-center rounded-sm border-none bg-transparent text-[var(--reader-text-muted)] hover:text-[var(--reader-text)] shell:hidden"
+            >
+              <Search size={20} />
+            </button>
+          </>
+        )}
         {/* Search first and flexible, account chrome last and fixed. The
             bell used to sit on the far left with the avatar on the far
             right, which read as two unrelated headers: they're one thing —
@@ -46,7 +62,11 @@ export default function AppHeader({ searchValue, onSearchChange, onSearchFocus }
             order, and the same right-hand corner, every app puts them in).
             The field no longer needs its own centering column, so it just
             grows into whatever space the cluster leaves. */}
-        <div className="flex h-10 w-full min-w-0 max-w-sm items-center gap-2 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] px-3.5">
+        <div
+          className={`h-10 min-w-0 items-center gap-2 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] px-3.5 ${
+            greeting ? "hidden w-80 flex-none shell:flex" : "flex w-full max-w-sm"
+          }`}
+        >
           <Search size={16} className="flex-none text-[var(--reader-text-muted)]" />
           <input
             value={searchValue ?? ""}
@@ -64,7 +84,7 @@ export default function AppHeader({ searchValue, onSearchChange, onSearchFocus }
             group rather than as two separate header items — close enough
             to pair, far enough that the unread badge never overlaps the
             avatar beside it. */}
-        <div className="ml-auto flex flex-none items-center gap-5">
+        <div className={`flex flex-none items-center gap-5 ${greeting ? "" : "ml-auto"}`}>
           {/* Signed-out readers have no bell and no theme switch in their
               account menu, so the theme toggle takes the bell's slot. */}
           {isAuthenticated ? <NotificationsMenu /> : sessionKnown && <HeaderThemeToggle />}

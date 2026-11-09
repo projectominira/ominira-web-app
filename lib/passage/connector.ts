@@ -29,7 +29,7 @@ export const INSTRUCTIONS = `You help an Ominira editor with two jobs in Ominira
 
 ## Passages
 
-Passages are shared as images or as the passage of the day (a quote plus a question members answer). Each morning at 07:00 Lagos time Ominira posts the day's approved passage on its own, from a calendar of the next 30 days.
+Passages are shared as images or as the passage of the day: the quote alone, with one line of context above it. Each morning at 07:00 Lagos time Ominira posts the day's approved passage on its own, from a calendar of the next 30 days.
 
 ### Planning the calendar
 
@@ -39,7 +39,7 @@ When the editor asks you to plan or fill days ("plan the next 30 days", "fill ne
 3. Topical: work from what the editor raises, or search the news when asked. Use a passage only when it sheds light on the moment, not because it shares a word. \`kind: "topical"\`.
 4. Evergreen: fill the remaining open days with strong passages. Use what readers already love as a taste guide (Goodreads quotes, well-known speeches, wherever Pan-Africanist thought is shared), then find those words, or better ones, in Ominira's own edition: only the library's text can be sent.
 5. Spread books and authors: avoid the ones \`calendar\` lists as featured recently, and don't repeat a book within the same batch.
-6. Give every quote an \`occasion\`: one line on why this passage, that day.
+6. Give every quote an \`occasion\`: the one line of context members see above the quote. A plain fact, not a prompt: for an anniversary, what happened that day ("Ken Saro-Wiwa and eight other Ogoni men were executed on 10 November 1995."); for a topical one, the event; for an evergreen one, who wrote it and what the book is.
 7. A month is a lot of reading for one chat: plan anniversaries and topical days first, then evergreen, and send each batch with \`send_to_ominira\` as its own set once it's ready: asking you to plan is asking you to send. Editors approve each quote in Ominira; nothing is posted without them.
 
 ### Finding passages for an idea
@@ -54,8 +54,8 @@ How to work:
 ### Every quote
 - Quote word for word from \`read\` output. A quote that isn't found verbatim in the book is rejected.
 - Keep quotes short (one to three sentences) and self-contained: they must make sense without what comes before.
-- For each quote, pass \`near\` (the block id or page number \`read\` showed), say why it fits, and suggest one open question members can answer from their own life.
-- Check \`recent_passages\` and avoid repeating recent quotes, books or questions.
+- For each quote, pass \`near\` (the block id or page number \`read\` showed) and say why it fits.
+- Check \`recent_passages\` and avoid repeating recent quotes or books.
 
 ## Tagging books
 
@@ -567,11 +567,11 @@ const Recent = z.object({ days: z.int().min(1).max(365).default(30) });
 
 async function recentPassages({ days }: z.infer<typeof Recent>) {
   const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
-  const out: { day: string; quote: string; book: string | null; question: string }[] = [];
+  const out: { day: string; quote: string; book: string | null }[] = [];
   let cursor: string | null = null;
   do {
     const page = await listDays({ cursor });
-    for (const d of page.items) if (d.day >= since) out.push({ day: d.day, quote: d.quote, book: d.book, question: d.question });
+    for (const d of page.items) if (d.day >= since) out.push({ day: d.day, quote: d.quote, book: d.book });
     cursor = page.items.at(-1)?.day && page.items.at(-1)!.day >= since ? page.nextCursor : null;
   } while (cursor);
   return { passages: out };
@@ -648,7 +648,7 @@ const TOOLS: Record<string, Tool> = {
     readOnly: true,
   },
   find: { description: "Search up to 10 books for words or phrases. Returns matching blocks, best first, with a snippet.", input: Find, run: find, readOnly: true },
-  recent_passages: { description: "Recent passages of the day: quote, book and question. Avoid repeating them.", input: Recent, run: recentPassages, readOnly: true },
+  recent_passages: { description: "Recent passages of the day: quote and book. Avoid repeating them.", input: Recent, run: recentPassages, readOnly: true },
   categories: { description: "Every category, in order, with how many public books it has, plus how many books have none.", input: Categories, run: listCategories, readOnly: true },
   books_to_tag: {
     description: "Public books with their slug, title, author, year, categories and description, to tag or tidy. Untagged books only by default; pages of up to 100.",
