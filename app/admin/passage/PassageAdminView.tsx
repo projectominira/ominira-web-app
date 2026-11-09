@@ -1,23 +1,33 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowUpRight, CalendarDays, History } from "lucide-react";
 import AdminPageHeader from "../AdminPageHeader";
+import { AdminMenu, AdminPanelHeader, AdminSidePanel } from "../AdminControls";
 import { formatTimeAgo } from "@/lib/reader/timeAgo";
-import type { DayView, Page, SetView, TodayView } from "@/lib/passage/types";
-import ConnectPanel from "./ConnectPanel";
-import QuoteCard, { BUTTON } from "./QuoteCard";
+import { showToast } from "@/stores/toast-store";
+import { quoteText, type CalendarView as Calendar, type DayView, type Page, type QuoteView, type SetView } from "@/lib/passage/types";
+import QuoteCard, { BUTTON, PRIMARY, shortDay, stripMarkers } from "./QuoteCard";
+import CalendarView from "./CalendarView";
+import { dayLabel, KIND_LABEL } from "./DayPicker";
 
-export type Tab = "sets" | "history";
+export type Tab = "calendar" | "review" | "history";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "sets", label: "Sets" },
-  { id: "history", label: "History" },
-];
-
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const plural = (n: number, one: string, many = `${one}s`) =>
+  `${n} ${n === 1 ? one : many}`;
+const TH = "px-3 py-2.5 font-[inherit]";
+const TD = "px-3 py-2.5 align-middle";
+const ROW = "cursor-pointer border-b border-[var(--reader-border)] transition-colors last:border-b-0 hover:bg-[var(--reader-surface-hover)]";
+const ACTIVE = "bg-[var(--reader-surface-hover)]";
+const fullDay = (day: string) =>
+  new Date(`${day}T00:00:00Z`).toLocaleDateString("en", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 
 /** A cursor-paged list from an /api/admin/passage route: the first page
  * from the server when the page opens on its tab, else fetched when the tab
@@ -33,10 +43,18 @@ function usePaged<T>(url: string, first: Page<T> | null) {
   const load = async (cursor: string | null) => {
     setState((s) => ({ ...s, loading: true, error: false }));
     try {
-      const res = await fetch(cursor ? `${url}?cursor=${encodeURIComponent(cursor)}` : url);
+      const res = await fetch(
+        cursor ? `${url}?cursor=${encodeURIComponent(cursor)}` : url,
+      );
       if (!res.ok) throw new Error();
       const page = (await res.json()) as Page<T>;
-      setState((s) => ({ items: cursor ? [...s.items, ...page.items] : page.items, next: page.nextCursor, loaded: true, loading: false, error: false }));
+      setState((s) => ({
+        items: cursor ? [...s.items, ...page.items] : page.items,
+        next: page.nextCursor,
+        loaded: true,
+        loading: false,
+        error: false,
+      }));
     } catch {
       setState((s) => ({ ...s, loading: false, error: true }));
     }
@@ -46,30 +64,48 @@ function usePaged<T>(url: string, first: Page<T> | null) {
     open: () => !state.loaded && !state.loading && load(null),
     more: () => state.next && load(state.next),
     reload: () => load(null),
+    update: (fn: (items: T[]) => T[]) =>
+      setState((s) => ({ ...s, items: fn(s.items) })),
   };
 }
 
-function Paged<T>({ list, empty, children }: { list: ReturnType<typeof usePaged<T>>; empty: string; children: (items: T[]) => ReactNode }) {
-  if (!list.loaded) {
+function Paged<T>({
+  list,
+  empty,
+  children,
+}: {
+  list: ReturnType<typeof usePaged<T>>;
+  empty: string;
+  children: (items: T[]) => ReactNode;
+}) {
+  if (!list.loaded || list.items.length === 0) {
     return (
-      <p className="m-0 py-10 text-center text-sm text-[var(--reader-text-muted)]">
-        {list.error ? (
+      <div className="rounded-sm border border-[var(--reader-border)] px-5 py-10 text-center text-sm text-[var(--reader-text-muted)]">
+        {!list.loaded && list.error ? (
           <button type="button" onClick={list.reload} className={BUTTON}>
             Couldn&rsquo;t load. Try again
           </button>
-        ) : (
+        ) : !list.loaded ? (
           "Loading…"
+        ) : (
+          empty
         )}
-      </p>
+      </div>
     );
   }
-  if (list.items.length === 0) return <p className="m-0 py-10 text-center text-sm text-[var(--reader-text-muted)]">{empty}</p>;
   return (
     <>
-      {children(list.items)}
+      <div className="overflow-x-auto rounded-sm border border-[var(--reader-border)]">
+        {children(list.items)}
+      </div>
       {list.next && (
         <div className="mt-6 flex justify-center">
-          <button type="button" disabled={list.loading} onClick={list.more} className={BUTTON}>
+          <button
+            type="button"
+            disabled={list.loading}
+            onClick={list.more}
+            className={BUTTON}
+          >
             {list.loading ? "Loading…" : "Load more"}
           </button>
         </div>
@@ -78,123 +114,101 @@ function Paged<T>({ list, empty, children }: { list: ReturnType<typeof usePaged<
   );
 }
 
-/** What members see today, in one strip above the tabs. */
-function TodayStrip({ today }: { today: TodayView }) {
+function Status({ quote }: { quote: QuoteView }) {
+  if (quote.status === "approved")
+    return <span className="font-semibold text-brand-600">Scheduled{quote.day ? ` · ${shortDay(quote.day)}` : ""}</span>;
+  if (quote.status === "used")
+    return (
+      <span className="font-semibold text-brand-600">
+        Passage of the day{quote.usedOn ? ` · ${shortDay(quote.usedOn)}` : ""}
+      </span>
+    );
+  if (quote.status === "dismissed")
+    return <span className="text-[var(--reader-text-subtle)]">Dismissed</span>;
+  if (quote.usedOn)
+    return (
+      <span className="text-[var(--reader-text-muted)]">
+        Used {shortDay(quote.usedOn)}
+      </span>
+    );
+  return <span className="font-semibold text-[var(--reader-accent)]">New</span>;
+}
+
+/** Fill: the quotes waiting for review, each approvable for the open day. */
+function FillPanel({ day, calendar, onDone, onClose }: { day: string; calendar: Calendar; onDone: () => void; onClose: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const label = day === calendar.today ? "today" : dayLabel(day);
+  const approve = async (q: QuoteView) => {
+    setBusy(q.id);
+    try {
+      const res = await fetch(`/api/admin/passage/quotes/${q.id}/schedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q.question, day }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "Please try again.");
+      showToast(`Approved for ${label}.`);
+      onDone();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Please try again.");
+    } finally {
+      setBusy(null);
+    }
+  };
   return (
-    <section aria-label="Today" className="mb-6 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] px-4 py-3">
-      <div className="mb-1 text-ui-xs tracking-eyebrow uppercase text-[var(--reader-text-subtle)]">Today&rsquo;s passage</div>
-      {today ? (
-        <div className="flex flex-col gap-1">
-          <p className="m-0 text-[14px]/[1.4] font-semibold text-[var(--reader-text)]">{today.passage.question}</p>
-          <p className="m-0 line-clamp-1 font-serif text-[13px] text-[var(--reader-text-muted)]">&ldquo;{today.passage.excerpt}&rdquo;</p>
-          <p className="m-0 mt-0.5 text-ui-caption text-[var(--reader-text-muted)]">
-            {today.passage.cite} · set by {today.setBy ?? "an admin"} at {new Date(today.at).toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" })} ·{" "}
-            {plural(today.passage.answers, "answer")} ·{" "}
-            <Link href={`/note/${today.postId}`} target="_blank" className="font-semibold text-[var(--reader-text)] hover:underline">
-              Open thread
-            </Link>
-          </p>
-        </div>
+    <AdminSidePanel label={`Fill ${label}`} onClose={onClose}>
+      <AdminPanelHeader
+        title={`Fill ${label}`}
+        subtitle={day === calendar.today ? "Goes out at 07:00, or within minutes if that's passed" : `${plural(calendar.waiting.length, "quote")} to review`}
+        onClose={onClose}
+      />
+      {calendar.waiting.length === 0 ? (
+        <p className="m-0 px-5 py-8 text-center text-ui-sm text-[var(--reader-text-muted)]">
+          Nothing waiting for review. Ask your AI to plan the next 30 days.
+        </p>
       ) : (
-        <p className="m-0 text-ui-sm text-[var(--reader-text-muted)]">None set yet. Pick a quote below and choose &ldquo;Set as today&rsquo;s passage&rdquo;.</p>
+        <ul className="m-0 flex list-none flex-col p-0">
+          {calendar.waiting.map((q) => (
+            <li key={q.id} className="flex flex-col gap-2 border-b border-[var(--reader-border)] px-5 py-4">
+              <span className="text-ui-caption text-[var(--reader-text-muted)]">
+                <span className="font-semibold text-[var(--reader-text)]">{KIND_LABEL[q.kind]}</span>
+                {q.kind === "anniversary" && q.wantedDay && <> · {dayLabel(q.wantedDay)}</>}
+                {q.occasion && <> · {q.occasion}</>}
+              </span>
+              <p className="m-0 line-clamp-3 font-serif text-[15px]/[1.55] text-[var(--reader-text)]">&ldquo;{stripMarkers(quoteText(q.ranges))}&rdquo;</p>
+              <p className="m-0 text-ui-caption text-[var(--reader-text-muted)]">
+                {q.book.title}
+                {q.question && <> · {q.question}</>}
+              </p>
+              <div className="flex justify-end">
+                <button type="button" disabled={!!busy || !q.question.trim()} onClick={() => approve(q)} className={PRIMARY}>
+                  {q.question.trim() ? (busy === q.id ? "Approving…" : `Approve for ${label}`) : "Needs a question (To review)"}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
-    </section>
+    </AdminSidePanel>
   );
 }
 
-/** A set: its header, and its quotes. Sets still holding new quotes open;
- * the rest fold to their header. */
-function SetSection({ set, children }: { set: SetView; children: ReactNode }) {
-  const counts = { new: 0, used: 0, dismissed: 0 };
-  for (const q of set.quotes) counts[q.status]++;
-  const [open, setOpen] = useState(counts.new > 0);
-  const Chevron = open ? ChevronDown : ChevronRight;
-  return (
-    <section className="flex flex-col">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="group flex cursor-pointer items-start gap-2 border-none bg-transparent p-0 py-2 text-left"
-      >
-        <Chevron size={16} className="mt-[2px] flex-none text-[var(--reader-text-subtle)] group-hover:text-[var(--reader-text)]" />
-        <span className="min-w-0 flex-1">
-          <span className="block font-serif text-[16px]/[1.3] font-semibold sm:text-[17px] text-[var(--reader-text)]">{set.title}</span>
-          <span className="mt-0.5 block text-ui-caption text-[var(--reader-text-muted)]">
-            {[
-              formatTimeAgo(new Date(set.createdAt).getTime()),
-              plural(set.quotes.length, "quote"),
-              counts.new > 0 && <span key="new" className="font-semibold text-[var(--reader-accent)]">{counts.new} new</span>,
-              counts.used > 0 && `${counts.used} used`,
-            ]
-              .filter(Boolean)
-              .flatMap((part, i) => (i ? [" · ", part] : [part]))}
-          </span>
-        </span>
-      </button>
-      {open && (
-        <div className="flex flex-col gap-3 pt-1 sm:ml-6">
-          {set.note && <p className="m-0 max-w-prose text-ui-sm font-normal whitespace-pre-line text-[var(--reader-text)]">{set.note}</p>}
-          <div className="divide-y divide-[var(--reader-border)] rounded-sm border border-[var(--reader-border)] bg-[var(--reader-bg)]">{children}</div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-/** History, grouped by month: the date on the left, the passage beside it. */
-function HistoryList({ items }: { items: DayView[] }) {
-  const months = new Map<string, DayView[]>();
-  for (const d of items) {
-    const key = d.day.slice(0, 7);
-    months.set(key, [...(months.get(key) ?? []), d]);
-  }
-  const date = (day: string, opts: Intl.DateTimeFormatOptions) => new Date(`${day}T00:00:00Z`).toLocaleDateString("en", { ...opts, timeZone: "UTC" });
-  return (
-    <div className="flex flex-col gap-8">
-      {[...months].map(([month, days]) => (
-        <section key={month}>
-          <h2 className="m-0 mb-2 text-ui-xs tracking-eyebrow uppercase text-[var(--reader-text-subtle)]">{date(`${month}-01`, { month: "long", year: "numeric" })}</h2>
-          <ul className="m-0 list-none divide-y divide-[var(--reader-border)] rounded-sm border border-[var(--reader-border)] p-0">
-            {days.map((d) => (
-              <li key={d.day}>
-                <a href={`/note/${d.postId}`} target="_blank" rel="noopener noreferrer" className="flex gap-4 px-4 py-4 no-underline hover:bg-[var(--reader-surface-hover)]">
-                  <span className="flex w-10 flex-none flex-col items-center pt-0.5">
-                    <span className="font-serif text-[18px]/[1] font-semibold text-[var(--reader-text)]">{date(d.day, { day: "numeric" })}</span>
-                    <span className="mt-1 text-ui-xs uppercase text-[var(--reader-text-subtle)]">{date(d.day, { weekday: "short" })}</span>
-                  </span>
-                  <span className="flex min-w-0 flex-1 flex-col gap-1">
-                    <span className="text-[14px]/[1.4] font-semibold text-[var(--reader-text)]">{d.question}</span>
-                    <span className="line-clamp-2 font-serif text-[14px]/[1.55] text-[var(--reader-text-muted)]">&ldquo;{d.quote}&rdquo;</span>
-                    <span className="text-ui-caption text-[var(--reader-text-muted)]">
-                      {[d.book, plural(d.answers, "answer"), d.setBy && `set by ${d.setBy}`, d.fromSet && `from ${d.fromSet}`].filter(Boolean).join(" · ")}
-                    </span>
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
-    </div>
-  );
-}
-
-/** /admin/passage (passage-spec §3): finding passages. Today's passage of
- * the day on top; the sets the AI sent, and the history of past passages
- * of the day, below. */
+/**
+ * /admin/passage (passage-spec §8.4): the next 30 days, today first, and
+ * the quotes the AI sent waiting for review; past passages from ⋯. A row
+ * opens its quote on the right.
+ */
 export default function PassageAdminView({
-  connectorUrl,
   tab: initialTab,
-  today,
+  calendar,
   newQuotes,
   members,
   firstSets,
   firstDays,
 }: {
-  connectorUrl: string | null;
   tab: Tab;
-  today: TodayView;
+  calendar: Calendar;
   newQuotes: number;
   members: number;
   firstSets: Page<SetView> | null;
@@ -202,69 +216,278 @@ export default function PassageAdminView({
 }) {
   const router = useRouter();
   const [tab, setTab] = useState(initialTab);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [filling, setFilling] = useState<string | null>(null);
+  /** A quote opened from the calendar, edited in place. */
+  const [calendarQuote, setCalendarQuote] = useState<QuoteView | null>(null);
   const sets = usePaged("/api/admin/passage/sets", firstSets);
   const days = usePaged("/api/admin/passage/days", firstDays);
+  const close = () => {
+    setOpenId(null);
+    setCalendarQuote(null);
+    setFilling(null);
+  };
+  const openQuote =
+    tab === "review" && openId
+      ? sets.items.flatMap((set) => set.quotes.map((quote) => ({ set, quote }))).find((x) => x.quote.id === openId)
+      : undefined;
+  const posted = calendar.days[0].posted;
+  const openDay = tab === "history" && openId ? days.items.find((d) => d.day === openId) : openId === "today" ? posted : undefined;
+  const planned = calendar.days.filter((d) => d.posted || d.quote).length;
 
   const go = (next: Tab) => {
     setTab(next);
-    if (next === "sets") void sets.open();
+    close();
+    if (next === "review") void sets.open();
     if (next === "history") void days.open();
-    window.history.replaceState(null, "", next === "sets" ? "/admin/passage" : `/admin/passage?tab=${next}`);
+    window.history.replaceState(null, "", next === "calendar" ? "/admin/passage" : `/admin/passage?tab=${next}`);
+  };
+
+  /** The calendar comes with the page: a change reloads it, and the review
+   * list when it's been opened. */
+  const onScheduled = () => {
+    router.refresh();
+    if (sets.loaded) void sets.reload();
   };
 
   const onUsed = () => {
-    router.refresh();
+    onScheduled();
     if (days.loaded) void days.reload();
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const updateQuote =
+    (setId: string, quoteId: string) => (update: (q: QuoteView) => QuoteView) =>
+      sets.update((items) =>
+        items.map((s) =>
+          s.id !== setId
+            ? s
+            : {
+                ...s,
+                quotes: s.quotes.map((q) => (q.id === quoteId ? update(q) : q)),
+              },
+        ),
+      );
+
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <div>
       <AdminPageHeader
         title="Passages"
-        subtitle="Quotes your AI found in the library, to share or set as the passage of the day."
-        actions={<ConnectPanel url={connectorUrl} />}
+        subtitle={
+          tab === "history"
+            ? "Past passages of the day."
+            : `${planned} of the next ${calendar.days.length} days planned${newQuotes > 0 ? ` · ${newQuotes} to review` : ""}`
+        }
+        actions={
+          <AdminMenu
+            items={[
+              tab === "history"
+                ? { label: "Calendar", icon: <CalendarDays size={14} />, onClick: () => go("calendar") }
+                : { label: "Passage history", icon: <History size={14} />, onClick: () => go("history") },
+            ]}
+          />
+        }
       />
 
-      <TodayStrip today={today} />
+      {tab !== "history" && (
+        <div role="tablist" aria-label="Passages" className="mb-5 inline-flex h-9 overflow-hidden rounded-sm border border-sand-300 bg-[var(--reader-surface)] p-0.5">
+          {(
+            [
+              ["calendar", `Next ${calendar.days.length} days`],
+              ["review", newQuotes > 0 ? `To review ${newQuotes}` : "To review"],
+            ] as const
+          ).map(([t, label]) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => go(t)}
+              className={`cursor-pointer rounded-[3px] border-none px-3 text-[13px] font-semibold transition-colors ${
+                tab === t ? "bg-[var(--reader-surface-hover)] text-[var(--reader-text)]" : "bg-transparent text-[var(--reader-text-muted)] hover:text-[var(--reader-text)]"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
-      <nav className="mb-6 flex gap-1 border-b border-[var(--reader-border)]" aria-label="Passages">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => go(t.id)}
-            aria-current={tab === t.id ? "page" : undefined}
-            className={`-mb-px cursor-pointer border-0 border-b-2 border-solid bg-transparent px-3 py-2 text-[13px] font-semibold transition-colors ${
-              tab === t.id ? "border-brand-500 text-[var(--reader-text)]" : "border-transparent text-[var(--reader-text-muted)] hover:text-[var(--reader-text)]"
-            }`}
-          >
-            {t.label}
-            {t.id === "sets" && newQuotes > 0 && <span className="text-[var(--reader-accent)]"> · {newQuotes} new</span>}
-          </button>
-        ))}
-      </nav>
+      {tab === "calendar" && (
+        <CalendarView
+          calendar={calendar}
+          onOpenQuote={(q) => {
+            close();
+            setCalendarQuote(q);
+          }}
+          onOpenPosted={() => {
+            close();
+            setOpenId("today");
+          }}
+          onFill={(day) => {
+            close();
+            setFilling(day);
+          }}
+          onChanged={onScheduled}
+        />
+      )}
 
-      {tab === "sets" && (
-        <Paged list={sets} empty="No sets yet. Connect your AI to start sending.">
+      {tab === "review" && (
+        <Paged
+          list={sets}
+          empty="No quotes yet. Connect your AI to start sending."
+        >
           {(items) => (
-            <div className="flex flex-col gap-6">
-              {items.map((set) => (
-                <SetSection key={set.id} set={set}>
-                  {set.quotes.map((q) => (
-                    <QuoteCard key={q.id} quote={q} members={members} hasToday={!!today} onUsed={onUsed} />
-                  ))}
-                </SetSection>
-              ))}
-            </div>
+            <table className="w-full min-w-[720px] border-collapse text-left text-[12px]">
+              <thead>
+                <tr className="border-b border-[var(--reader-border)] text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--reader-text-subtle)]">
+                  <th className={TH}>Quote</th>
+                  <th className={TH}>Book</th>
+                  <th className={TH}>Kind</th>
+                  <th className={TH}>Set</th>
+                  <th className={TH}>Status</th>
+                  <th className={TH}>Added</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((set) =>
+                  set.quotes.map((q) => (
+                    <tr
+                      key={q.id}
+                      onClick={() => setOpenId(q.id)}
+                      className={`${ROW} ${openId === q.id ? ACTIVE : ""}`}
+                    >
+                      <td
+                        className={`${TD} max-w-[300px] truncate font-semibold ${q.status === "dismissed" ? "text-[var(--reader-text-subtle)] line-through" : "text-[var(--reader-text)]"}`}
+                      >
+                        &ldquo;{stripMarkers(quoteText(q.ranges))}&rdquo;
+                      </td>
+                      <td className={`${TD} max-w-[180px] truncate text-[var(--reader-text-muted)]`}>{q.book.title}</td>
+                      <td className={`${TD} whitespace-nowrap text-[var(--reader-text-muted)]`} title={q.occasion || undefined}>
+                        {KIND_LABEL[q.kind]}
+                      </td>
+                      <td className={`${TD} max-w-[160px] truncate text-[var(--reader-text-muted)]`}>{set.title}</td>
+                      <td className={`${TD} whitespace-nowrap`}>
+                        <Status quote={q} />
+                      </td>
+                      <td className={`${TD} whitespace-nowrap text-[var(--reader-text-muted)]`}>
+                        {formatTimeAgo(new Date(set.createdAt).getTime())}
+                      </td>
+                    </tr>
+                  )),
+                )}
+              </tbody>
+            </table>
           )}
         </Paged>
       )}
 
       {tab === "history" && (
         <Paged list={days} empty="No passage of the day yet.">
-          {(items) => <HistoryList items={items} />}
+          {(items) => (
+            <table className="w-full min-w-[720px] border-collapse text-left text-[12px]">
+              <thead>
+                <tr className="border-b border-[var(--reader-border)] text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--reader-text-subtle)]">
+                  <th className={TH}>Day</th>
+                  <th className={TH}>Question</th>
+                  <th className={TH}>Book</th>
+                  <th className={`${TH} text-right`}>Answers</th>
+                  <th className={TH}>Set by</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((d) => (
+                  <tr key={d.day} onClick={() => setOpenId(d.day)} className={`${ROW} ${openId === d.day ? ACTIVE : ""}`}>
+                    <td className={`${TD} whitespace-nowrap font-semibold text-[var(--reader-text)]`}>{fullDay(d.day)}</td>
+                    <td className={`${TD} max-w-[340px] truncate text-[var(--reader-text)]`}>{d.question}</td>
+                    <td className={`${TD} max-w-[200px] truncate text-[var(--reader-text-muted)]`}>{d.book ?? "—"}</td>
+                    <td className={`${TD} text-right tabular-nums text-[var(--reader-text-muted)]`}>{d.answers}</td>
+                    <td className={`${TD} max-w-[160px] truncate text-[var(--reader-text-muted)]`}>{d.setBy ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </Paged>
+      )}
+
+      {openQuote && (
+        <AdminSidePanel label="Quote" onClose={close}>
+          <AdminPanelHeader title={openQuote.quote.book.title} subtitle={openQuote.set.title} onClose={close} />
+          <div className="flex flex-col gap-4 px-5 py-5">
+            {openQuote.set.note && (
+              <p className="m-0 text-ui-sm whitespace-pre-line text-[var(--reader-text-muted)]">{openQuote.set.note}</p>
+            )}
+            <QuoteCard
+              key={openQuote.quote.id}
+              quote={openQuote.quote}
+              onChange={updateQuote(openQuote.set.id, openQuote.quote.id)}
+              members={members}
+              calendar={calendar}
+              onUsed={onUsed}
+              onScheduled={onScheduled}
+            />
+          </div>
+        </AdminSidePanel>
+      )}
+
+      {calendarQuote && (
+        <AdminSidePanel label="Quote" onClose={close}>
+          <AdminPanelHeader
+            title={calendarQuote.day ? (calendarQuote.day === calendar.today ? "Today" : fullDay(calendarQuote.day)) : calendarQuote.book.title}
+            subtitle={calendarQuote.book.title}
+            onClose={close}
+          />
+          <div className="px-5 py-5">
+            <QuoteCard
+              key={calendarQuote.id}
+              quote={calendarQuote}
+              onChange={(update) => {
+                setCalendarQuote((q) => (q ? update(q) : q));
+                onScheduled();
+              }}
+              members={members}
+              calendar={calendar}
+              onUsed={() => {
+                close();
+                onUsed();
+              }}
+              onScheduled={onScheduled}
+            />
+          </div>
+        </AdminSidePanel>
+      )}
+
+      {filling && (
+        <FillPanel
+          day={filling}
+          calendar={calendar}
+          onDone={() => {
+            close();
+            onScheduled();
+          }}
+          onClose={close}
+        />
+      )}
+
+      {openDay && (
+        <AdminSidePanel label="Passage of the day" onClose={close}>
+          <AdminPanelHeader title={fullDay(openDay.day)} subtitle={openDay.setBy ? `Set by ${openDay.setBy}` : undefined} onClose={close} />
+          <div className="flex flex-col gap-3 px-5 py-5">
+            <p className="m-0 text-[13px]/[1.4] font-semibold text-[var(--reader-text)]">{openDay.question}</p>
+            <blockquote className="m-0 border-l-2 border-brand-400 pl-3 font-serif text-[15px]/[1.6] text-pretty sm:text-[16px]/[1.65] text-[var(--reader-text)]">
+              &ldquo;{openDay.quote}&rdquo;
+            </blockquote>
+            <p className="m-0 text-ui-caption text-[var(--reader-text-muted)]">
+              {[openDay.book, plural(openDay.answers, "answer"), openDay.fromSet && `from ${openDay.fromSet}`].filter(Boolean).join(" · ")}
+            </p>
+            <div>
+              <a href={`/note/${openDay.postId}`} target="_blank" rel="noopener noreferrer" className={BUTTON}>
+                <ArrowUpRight size={14} /> Open thread
+              </a>
+            </div>
+          </div>
+        </AdminSidePanel>
       )}
     </div>
   );

@@ -17,6 +17,9 @@ import type { RoomKind } from "@/lib/rooms/types";
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type GroupEventKind = "joined" | "target_set" | "book_current" | "book_added" | "session_scheduled" | "room_started";
+/** migrations/20261204_passage_calendar.sql (passage-spec §8). */
+export type PassageQuoteStatus = "new" | "approved" | "used" | "dismissed";
+export type PassageKind = "anniversary" | "topical" | "evergreen";
 
 type Timestamps = { created_at: string; updated_at: string };
 
@@ -83,7 +86,7 @@ export type Database = {
           original_filename: string | null;
           mime_type: string | null;
           file_size_bytes: number | null;
-          status: "pending" | "approved";
+          status: "pending" | "approved" | "declined";
           material_id: string | null;
         } & Timestamps;
         Insert: {
@@ -97,7 +100,7 @@ export type Database = {
           original_filename?: string | null;
           mime_type?: string | null;
           file_size_bytes?: number | null;
-          status?: "pending" | "approved";
+          status?: "pending" | "approved" | "declined";
           material_id?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -849,9 +852,13 @@ export type Database = {
           context: Json;
           why: string;
           question: string;
-          status: "new" | "used" | "dismissed";
+          status: PassageQuoteStatus;
           post_id: string | null;
           created_at: string;
+          kind: PassageKind;
+          occasion: string;
+          wanted_day: string | null;
+          day: string | null;
         };
         Insert: {
           id?: string;
@@ -863,11 +870,22 @@ export type Database = {
           context: Json;
           why?: string;
           question?: string;
-          status?: "new" | "used" | "dismissed";
+          status?: PassageQuoteStatus;
           post_id?: string | null;
           created_at?: string;
+          kind?: PassageKind;
+          occasion?: string;
+          wanted_day?: string | null;
+          day?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["passage_quotes"]["Insert"]>;
+        Relationships: [];
+      };
+      /** migrations/20261204_passage_calendar.sql: one row, the editorial brief. */
+      editorial_brief: {
+        Row: { id: number; body: string; updated_at: string };
+        Insert: { id?: number; body: string; updated_at?: string };
+        Update: Partial<Database["public"]["Tables"]["editorial_brief"]["Insert"]>;
         Relationships: [];
       };
       /** migrations/20261105_room_reads.sql (rooms-spec §5.2): how far a
@@ -906,6 +924,8 @@ export type Database = {
       /** migrations/20261118_admin_weekly_dashboard.sql — shape in lib/metrics/dashboard.ts. */
       admin_weekly_metrics: { Args: { week_start: string }; Returns: Json };
       admin_weekly_readers: { Args: { week_start: string }; Returns: Json };
+      admin_period_metrics: { Args: { p_start: string; p_days: number; c_start: string; c_days: number }; Returns: Json };
+      admin_period_readers: { Args: { p_start: string; p_days: number }; Returns: Json };
       /** Reading Room (migrations/20261012…20261015). Null when the book can't host a room. */
       /** A group room needs `grp` (moderators only) and may carry its `session`. */
       start_room: {

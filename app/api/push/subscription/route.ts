@@ -11,7 +11,9 @@ type SubscribeBody = {
 // reader is optional here on purpose — a visitor can grant notification
 // permission before logging in (see lib/push/send.ts's design note). Once
 // they do log in, the client re-POSTs the same endpoint so it gets attached
-// to their reader_id via the upsert below.
+// to their reader_id via the upsert below. An unsigned save (the service
+// worker's pushsubscriptionchange, a load before the session is read)
+// leaves reader_id as it was rather than clearing it.
 export async function POST(request: Request) {
   const reader = await getAuthenticatedReader(request);
   const body = (await request.json().catch(() => null)) as SubscribeBody | null;
@@ -22,7 +24,7 @@ export async function POST(request: Request) {
   const admin = getSupabaseAdminClient();
   const { error } = await admin.from("push_subscriptions").upsert(
     {
-      reader_id: reader?.readerId ?? null,
+      ...(reader ? { reader_id: reader.readerId } : {}),
       endpoint: body.endpoint,
       p256dh: body.keys.p256dh,
       auth: body.keys.auth,

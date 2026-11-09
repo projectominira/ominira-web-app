@@ -9,6 +9,7 @@ import BookListRow from "./BookListRow";
 import Loader from "@/app/components/Loader";
 import AddBookModal from "./AddBookModal";
 import ContributeBookRow from "./ContributeBookRow";
+import RequestBookRow from "./RequestBookRow";
 import SearchableAppPage from "./SearchableAppPage";
 import type { MaterialSummary } from "@/lib/api/types";
 import type { CategoryContributionStats } from "@/lib/materials/list";
@@ -218,8 +219,10 @@ export default function LibraryView({ materials, initialNextCursor, categories, 
             />
           </div>
 
-          {canUpload && (
+          {canUpload ? (
             <ContributeBookRow category={category} stats={contributionStats} onClick={() => setAddModalOpen(true)} />
+          ) : (
+            isAuthenticated && profile && <RequestBookRow />
           )}
 
           <div className="grid grid-cols-1 shell:grid-cols-2 shell:gap-x-10">

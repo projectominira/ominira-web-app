@@ -106,6 +106,11 @@ function Month({ history, at, loading, onGo }: { history: ReadingHistory; at: nu
       </div>
 
       <div className="flex flex-col p-4 md:p-7 md:pt-8">
+        {/* The calendar's key, at its top right. */}
+        <div className="mx-auto mb-4 flex w-full max-w-lg justify-end gap-x-4 text-ui-xs text-[var(--color-app-text-muted)]">
+          <Key kind="met">Goal met</Key>
+          <Key kind="under">Under goal</Key>
+        </div>
         <div className={`mx-auto grid w-full max-w-lg grid-cols-7 gap-y-2 ${loading ? "animate-pulse" : ""}`}>
           {WEEKDAYS.map((d, i) => (
             <span key={i} className="pb-2 text-center text-ui-xs font-semibold text-[var(--color-app-text-muted)]">
@@ -134,15 +139,9 @@ function Month({ history, at, loading, onGo }: { history: ReadingHistory; at: nu
           })}
         </div>
 
-        {/* The picked day with the legend on its right, its sentence under both. */}
+        {/* The picked day, its sentence under it. */}
         <div className="mx-auto mt-8 w-full max-w-lg md:mt-auto md:pt-8">
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
-            <span className="text-ui-sm font-bold">{picked && dayLabel(picked, true)}</span>
-            <div className="flex flex-none gap-x-3 text-[10px] text-[var(--color-app-text-muted)]">
-              <Key kind="met">Goal met</Key>
-              <Key kind="under">Under goal</Key>
-            </div>
-          </div>
+          <div className="min-h-5 text-ui-sm font-bold">{picked && dayLabel(picked, true)}</div>
           {/* Room for the longest sentence, so picking a day never moves the page. */}
           <p className="m-0 mt-1 min-h-10 text-ui-sm text-pretty text-[var(--color-app-text-secondary)]" aria-live="polite">
             {picked ? note(picked) : <span className="text-[var(--color-app-text-muted)]">Pick a day to see its reading</span>}
@@ -193,7 +192,7 @@ function Mark({ kind, small, children }: { kind: MarkKind; small?: boolean; chil
 
 function Key({ kind, children }: { kind: MarkKind; children: ReactNode }) {
   return (
-    <span className="flex items-center gap-1 whitespace-nowrap">
+    <span className="flex items-center gap-1.5 whitespace-nowrap">
       <Mark kind={kind} small />
       {children}
     </span>

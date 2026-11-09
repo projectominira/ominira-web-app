@@ -51,6 +51,7 @@ const KIND_STYLE: Partial<Record<NotificationKind, { color: string; icon: (props
   broadcast: { color: "var(--color-olive-500)", icon: Megaphone },
   room_live: { color: "var(--color-brand-500)", icon: Mic },
   group_invite: { color: "var(--color-forest-500)", icon: UserPlus },
+  book_request: { color: "var(--color-oxblood-500)", icon: BookOpen },
 };
 
 // notify.ts prefixes push titles with an emoji (✊🏾/💬) because a push has no

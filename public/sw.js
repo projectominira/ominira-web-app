@@ -252,6 +252,36 @@ self.addEventListener("push", (event) => {
   ]));
 });
 
+// The browser replaced this device's subscription (expiry, key rotation):
+// save the new one and drop the old. Sent without a session, so it is saved
+// unlinked; the page's next load (resyncPushSubscription) links the reader.
+self.addEventListener("pushsubscriptionchange", (event) => {
+  const old = event.oldSubscription;
+  const save = (sub) =>
+    fetch("/api/push/subscription", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: sub.endpoint, keys: sub.toJSON().keys }),
+    });
+  event.waitUntil(
+    (event.newSubscription
+      ? Promise.resolve(event.newSubscription)
+      : old
+        ? self.registration.pushManager.subscribe(old.options)
+        : Promise.reject(new Error("No subscription to renew")))
+      .then(save)
+      .then(() =>
+        old &&
+        fetch("/api/push/subscription", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: old.endpoint }),
+        })
+      )
+      .catch(() => {})
+  );
+});
+
 // Focuses the exact destination when it is already open. If the reader is
 // open to another place in the same book, navigate that tab first — merely
 // focusing it would leave the reader at the wrong note/highlight. Handles

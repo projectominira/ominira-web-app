@@ -166,7 +166,7 @@ async function getPassage(): Promise<HomePassage | null> {
   return day && passageView(day);
 }
 
-/** A day's passage as Home shows it (/admin/passage's Today shows the same). */
+/** A day's passage as Home shows it. */
 export async function passageView(day: { post_id: string; question: string }): Promise<HomePassage | null> {
   const { data: post, error: postError } = await getSupabaseAdminClient().from("posts").select("*").eq("id", day.post_id).eq("visibility", "public").maybeSingle();
   if (postError) throw postError;
@@ -175,7 +175,7 @@ export async function passageView(day: { post_id: string; question: string }): P
   const href = item && communityFeedItemHref(item);
   if (!item?.excerpt || !item.material || !href) return null;
   const cite = [item.material.title, item.label].filter(Boolean).join(" · ");
-  return { question: day.question, excerpt: item.excerpt, cite, answers: item.replies.length, href };
+  return { question: day.question, excerpt: item.excerpt, cite, answers: item.replies.length, href, book: { title: item.material.title, author: item.material.author } };
 }
 
 /** Home for a signed-in reader: the rooms live now, your reading and

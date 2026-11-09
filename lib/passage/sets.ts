@@ -8,11 +8,10 @@ import { pdfPageIndexOf } from "@/lib/annotations/pdfSurface";
 import { UUID_RE } from "@/lib/materials/resolve";
 import { loadSectionLabels } from "@/lib/materials/sectionLabels";
 import { RangeSchema } from "@/lib/room/events";
-import { officialReaderIds, passageDay, setPassage, type PassageOutcome } from "@/lib/rooms/passage";
-import { passageView } from "@/lib/rooms/homeView";
+import { officialReaderIds, setPassage, type PassageOutcome } from "@/lib/rooms/passage";
 import { rangesKey } from "@/stores/library-store";
 import { isScanned, loadBookText, locateQuote, MAX_QUOTE_BLOCKS, rangeText } from "./text";
-import { quoteText, type ContextBlock, type DayView, type Page, type QuoteView, type SetView, type TodayView } from "./types";
+import { quoteText, type ContextBlock, type DayView, type Page, type QuoteView, type SetView } from "./types";
 
 // Passage sets (passage-spec §2): what an editor's AI sends in, and what
 // /admin/passage does with it. Tables: migrations/20261119_passage_sets.sql.
@@ -34,6 +33,15 @@ export const CreateSetInput = z.object({
         near: z.union([z.string().max(200), z.int().positive()]).optional(),
         why: z.string().trim().max(2000).default(""),
         question: z.string().trim().max(280).default(""),
+        /** passage-spec §8.1. */
+        kind: z
+          .enum(["anniversary", "topical", "evergreen"])
+          .default("evergreen")
+          .describe("anniversary: tied to a date (pass day). topical: speaks to something happening now. evergreen: any day."),
+        /** Why this, today; admin only. */
+        occasion: z.string().trim().max(200).default("").describe("One line on why this passage, today, e.g. \"Haiti declared independence on this day in 1804\". Shown to editors only."),
+        /** An anniversary's date, YYYY-MM-DD. */
+        day: z.iso.date().optional().describe("For an anniversary: the date it falls on next, YYYY-MM-DD, within the calendar's days."),
       })
     )
     .min(1)
@@ -102,6 +110,9 @@ export async function createSet(raw: CreateSetInput): Promise<CreateSetResult> {
         context: f.context,
         why: q.why,
         question: q.question,
+        kind: q.kind,
+        occasion: q.occasion,
+        wanted_day: q.kind === "anniversary" ? (q.day ?? null) : null,
       }))
     );
   if (quotesError) throw quotesError;
@@ -124,7 +135,13 @@ type QuoteRow = {
   question: string;
   status: QuoteView["status"];
   post_id: string | null;
+  kind: QuoteView["kind"];
+  occasion: string;
+  wanted_day: string | null;
+  day: string | null;
 };
+
+export const QUOTE_COLUMNS = "id, set_id, material_id, ranges, picked_ranges, context, why, question, status, post_id, kind, occasion, wanted_day, day";
 
 /** The latest day each quote was the passage: its own note's, or any of the
  * Ominira account's notes on the same words. */
@@ -161,6 +178,46 @@ async function usedDays(quotes: QuoteRow[]): Promise<Map<string, string>> {
   return out;
 }
 
+/** Quote rows as /admin/passage shows them, by id; a quote whose book is
+ * gone is left out. */
+export async function quoteViews(quotes: QuoteRow[]): Promise<Map<string, QuoteView>> {
+  const out = new Map<string, QuoteView>();
+  if (quotes.length === 0) return out;
+  const [materials, used] = await Promise.all([
+    db().from("materials").select("id, slug, title, author, material_type, json_storage_path").in("id", [...new Set(quotes.map((q) => q.material_id))]),
+    usedDays(quotes),
+  ]);
+  if (materials.error) throw materials.error;
+  const labels = await loadSectionLabels(materials.data);
+  const books = new Map(materials.data.map((m) => [m.id, m]));
+  for (const q of quotes) {
+    const m = books.get(q.material_id);
+    if (!m) continue;
+    const ranges = q.ranges as AnnotationRange[];
+    const first = ranges[0]?.passageId ?? "";
+    const page = pdfPageIndexOf(first);
+    const section = first.match(/^(.+)-p\d+$/)?.[1];
+    out.set(q.id, {
+      id: q.id,
+      status: q.status,
+      ranges,
+      picked: q.picked_ranges as AnnotationRange[],
+      context: q.context as ContextBlock[],
+      why: q.why,
+      question: q.question,
+      book: { id: m.id, slug: m.slug, title: m.title, author: m.author, materialType: m.material_type },
+      chapter: (section && labels.get(m.id)?.get(section)) || null,
+      page: page >= 0 ? page + 1 : null,
+      usedOn: used.get(q.id) ?? null,
+      kind: q.kind,
+      occasion: q.occasion,
+      wantedDay: q.wanted_day,
+      day: q.day,
+    });
+  }
+  return out;
+}
+
 /** Sets newest first, each with its quotes in order. */
 export async function listSets({ cursor }: { cursor: string | null }): Promise<Page<SetView>> {
   let query = db().from("passage_sets").select("id, title, note, created_at").order("created_at", { ascending: false }).order("id", { ascending: false }).limit(SETS_PAGE + 1);
@@ -173,43 +230,13 @@ export async function listSets({ cursor }: { cursor: string | null }): Promise<P
   const nextCursor = rows.length > SETS_PAGE && last ? encodeCursor<Keyset>({ createdAt: last.created_at, id: last.id }) : null;
   if (sets.length === 0) return { items: [], nextCursor };
 
-  const { data: quotes, error: quotesError } = await db()
-    .from("passage_quotes")
-    .select("id, set_id, material_id, ranges, picked_ranges, context, why, question, status, post_id")
-    .in("set_id", sets.map((s) => s.id))
-    .order("position");
+  const { data: quotes, error: quotesError } = await db().from("passage_quotes").select(QUOTE_COLUMNS).in("set_id", sets.map((s) => s.id)).order("position");
   if (quotesError) throw quotesError;
-  const [materials, used] = await Promise.all([
-    db().from("materials").select("id, slug, title, author, material_type, json_storage_path").in("id", [...new Set(quotes.map((q) => q.material_id))]),
-    usedDays(quotes),
-  ]);
-  if (materials.error) throw materials.error;
-  const labels = await loadSectionLabels(materials.data);
-  const books = new Map(materials.data.map((m) => [m.id, m]));
-
+  const views = await quoteViews(quotes);
   const bySet = new Map<string, QuoteView[]>();
   for (const q of quotes) {
-    const m = books.get(q.material_id);
-    if (!m) continue;
-    const ranges = q.ranges as AnnotationRange[];
-    const first = ranges[0]?.passageId ?? "";
-    const page = pdfPageIndexOf(first);
-    const section = first.match(/^(.+)-p\d+$/)?.[1];
-    const list = bySet.get(q.set_id) ?? [];
-    list.push({
-      id: q.id,
-      status: q.status,
-      ranges,
-      picked: q.picked_ranges as AnnotationRange[],
-      context: q.context as ContextBlock[],
-      why: q.why,
-      question: q.question,
-      book: { id: m.id, slug: m.slug, title: m.title, author: m.author, materialType: m.material_type },
-      chapter: (section && labels.get(m.id)?.get(section)) || null,
-      page: page >= 0 ? page + 1 : null,
-      usedOn: used.get(q.id) ?? null,
-    });
-    bySet.set(q.set_id, list);
+    const view = views.get(q.id);
+    if (view) bySet.set(q.set_id, [...(bySet.get(q.set_id) ?? []), view]);
   }
   return {
     items: sets.map((s) => ({ id: s.id, title: s.title, note: s.note, createdAt: s.created_at, quotes: bySet.get(s.id) ?? [] })),
@@ -239,18 +266,9 @@ async function pseudonyms(ids: (string | null)[]): Promise<Map<string, string>> 
   return new Map(data.map((r) => [r.id, r.pseudonym]));
 }
 
-/** Today's passage as members see it, and who set it when. */
-export async function getToday(): Promise<TodayView> {
-  const { data: day, error } = await db().from("daily_passages").select("post_id, question, set_by, created_at").eq("day", passageDay(Date.now())).maybeSingle();
-  if (error) throw error;
-  if (!day) return null;
-  const [passage, names] = await Promise.all([passageView(day), pseudonyms([day.set_by])]);
-  return passage && { passage, postId: day.post_id, setBy: (day.set_by && names.get(day.set_by)) || null, at: day.created_at };
-}
-
 /** Every day's passage, newest first. */
 export async function listDays({ cursor }: { cursor: string | null }): Promise<Page<DayView>> {
-  let query = db().from("daily_passages").select("day, post_id, question, set_by").order("day", { ascending: false }).limit(DAYS_PAGE + 1);
+  let query = db().from("daily_passages").select(DAY_COLUMNS).order("day", { ascending: false }).limit(DAYS_PAGE + 1);
   const before = decodeCursor<{ day: string }>(cursor);
   if (before) query = query.lt("day", before.day);
   const { data: rows, error } = await query;
@@ -260,6 +278,16 @@ export async function listDays({ cursor }: { cursor: string | null }): Promise<P
   const nextCursor = rows.length > DAYS_PAGE && last ? encodeCursor({ day: last.day }) : null;
   if (days.length === 0) return { items: [], nextCursor };
 
+  return { items: await dayViews(days), nextCursor };
+}
+
+type DayRow = { day: string; post_id: string; question: string; set_by: string | null };
+export const DAY_COLUMNS = "day, post_id, question, set_by";
+
+/** daily_passages rows as History shows them: quote, book, answers, who set
+ * it, and the set it came from. */
+export async function dayViews(days: DayRow[]): Promise<DayView[]> {
+  if (days.length === 0) return [];
   const postIds = days.map((d) => d.post_id);
   const [posts, replies, quotes, names] = await Promise.all([
     db().from("posts").select("id, material_id, ranges").in("id", postIds),
@@ -286,8 +314,7 @@ export async function listDays({ cursor }: { cursor: string | null }): Promise<P
   const answers = new Map<string, number>();
   for (const r of replies.data) if (r.parent_id) answers.set(r.parent_id, (answers.get(r.parent_id) ?? 0) + 1);
 
-  return {
-    items: days.map((d) => {
+  return days.map((d) => {
       const post = postById.get(d.post_id);
       return {
         day: d.day,
@@ -299,9 +326,7 @@ export async function listDays({ cursor }: { cursor: string | null }): Promise<P
         setBy: (d.set_by && names.get(d.set_by)) || null,
         fromSet: setOf.get(d.post_id) ?? null,
       };
-    }),
-    nextCursor,
-  };
+  });
 }
 
 // ---- Changing -------------------------------------------------------------
@@ -346,9 +371,10 @@ export async function setQuestion(id: string, question: string): Promise<boolean
   return !!data;
 }
 
-/** Dismisses a quote, or restores it (back to new). */
+/** Dismisses a quote, or restores or unschedules it (back to new); either
+ * way it loses its day. */
 export async function setStatus(id: string, status: "new" | "dismissed"): Promise<boolean> {
-  const { data, error } = await db().from("passage_quotes").update({ status }).eq("id", id).neq("status", "used").select("id").maybeSingle();
+  const { data, error } = await db().from("passage_quotes").update({ status, day: null }).eq("id", id).neq("status", "used").select("id").maybeSingle();
   if (error) throw error;
   return !!data;
 }

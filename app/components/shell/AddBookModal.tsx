@@ -2,11 +2,11 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CloudUpload, Plus, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { useUploadBook } from "@/lib/materials/useUploadBook";
 import type { UploadedBook } from "@/lib/materials/useUploadBook";
 import { useAttachmentMetadataEditor } from "@/lib/materials/useAttachmentMetadataEditor";
-import { ACCEPTED_FILE_TYPES, ADMIN_UPLOAD_LIMITS, MEMBER_UPLOAD_LIMITS, formatBytes, type UploadLimits } from "@/lib/materials/uploadLimits";
+import { ACCEPTED_FILE_TYPES, ADMIN_UPLOAD_LIMITS, MEMBER_UPLOAD_LIMITS, formatBytes } from "@/lib/materials/uploadLimits";
 import { useProfile } from "@/lib/auth/useProfile";
 import { apiFetch } from "@/lib/api/client";
 import type { MaterialSummary } from "@/lib/api/types";
@@ -19,9 +19,6 @@ import { confirmAction } from "@/stores/confirm-store";
 // covered centered card on desktop), so it needs the same real JS check,
 // not just a CSS class.
 const DESKTOP_BREAKPOINT_PX = 640;
-
-// Dropped files bypass the input's `accept` filter, so check them by name.
-const ACCEPTED_EXTENSION = /\.(pdf|epub|docx)$/i;
 
 type FileAttachment = {
   file: File;
@@ -127,11 +124,8 @@ function attachmentFromMaterial(material: MaterialSummary): FileAttachment {
  * curated list it offers (lib/categories/config.ts, threaded down the same
  * way LibraryView already gets it for CategoryPills).
  *
- * `layout="page"` renders the same composer inline instead of as a modal —
- * /admin/library/new's standalone page, with a drag-and-drop zone and a
- * sticky progress footer in place of the modal chrome. `limits` overrides the
- * per-file size/count caps, which otherwise follow the reader (admin or
- * member — the server enforces its own, see lib/materials/uploadLimits.ts).
+ * Size/count caps follow the reader (admin or member — the server enforces
+ * its own, see lib/materials/uploadLimits.ts).
  *
  * `publicOnly` hides the visibility toggle, so every book goes up public: a
  * group's reading list is public (studygroup-spec §4.6).
@@ -144,8 +138,6 @@ export default function AddBookModal({
   editMaterial,
   onMaterialSaved,
   onMaterialDeleted,
-  layout = "modal",
-  limits: limitsProp,
   publicOnly = false,
 }: {
   category?: string;
@@ -156,15 +148,13 @@ export default function AddBookModal({
   editMaterial?: MaterialSummary;
   onMaterialSaved?: (updated: MaterialPatch) => void;
   onMaterialDeleted?: (id: string) => void;
-  layout?: "modal" | "page";
-  limits?: UploadLimits;
   publicOnly?: boolean;
 }) {
   const { upload } = useUploadBook();
-  // Without an explicit `limits`, the reader's own caps (the server enforces
+  // The reader's own caps (the server enforces
   // the same split).
   const { data: profile } = useProfile();
-  const limits = limitsProp ?? (profile?.isAdmin ? ADMIN_UPLOAD_LIMITS : MEMBER_UPLOAD_LIMITS);
+  const limits = profile?.isAdmin ? ADMIN_UPLOAD_LIMITS : MEMBER_UPLOAD_LIMITS;
   const metadataEditor = useAttachmentMetadataEditor();
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<FileAttachment[]>(() => (editMaterial ? [attachmentFromMaterial(editMaterial)] : []));
@@ -172,9 +162,6 @@ export default function AddBookModal({
   const defaultCategories = category === "All" ? [] : [category];
   const editCoverSources = editMaterial ? materialCoverSources(editMaterial) : [];
 
-  // Page layout only — the modal keeps its click-to-pick flow.
-  const [dragging, setDragging] = useState(false);
-  const [dropNotice, setDropNotice] = useState<string | null>(null);
 
   const [isDesktop, setIsDesktop] = useState(false);
   useLayoutEffect(() => {
@@ -416,115 +403,6 @@ export default function AddBookModal({
       />
     );
   });
-
-  if (layout === "page") {
-    const openPicker = () => inputRef.current?.click();
-    const dropzoneTone = dragging
-      ? "border-brand-400 bg-brand-500/5"
-      : "border-[var(--reader-border)] hover:border-brand-300 hover:bg-[var(--reader-surface-hover)]";
-    const slotsLeft = limits.maxFiles - files.length;
-    const settledCount = files.filter((a) => a.status === "done" || a.status === "error").length;
-
-    return (
-      <div
-        className="flex flex-col gap-3"
-        onDragOver={(e) => {
-          if (!canAddMore) return;
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
-        }}
-        onDrop={(e) => {
-          if (!canAddMore) return;
-          e.preventDefault();
-          setDragging(false);
-          const dropped = Array.from(e.dataTransfer.files);
-          const supported = dropped.filter((f) => ACCEPTED_EXTENSION.test(f.name));
-          setDropNotice(supported.length < dropped.length ? "Only EPUB, PDF and DOCX files can be added — the rest were skipped." : null);
-          handleFileChange(supported);
-        }}
-      >
-        {fileInput}
-
-        {files.length === 0 ? (
-          <button
-            type="button"
-            onClick={openPicker}
-            className={`group flex cursor-pointer flex-col items-center justify-center gap-4 rounded-lg border-2 border-dashed bg-transparent px-6 py-16 text-center transition-colors ${dropzoneTone}`}
-          >
-            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/10 text-brand-500 transition-transform group-hover:-translate-y-0.5">
-              <CloudUpload size={26} />
-            </span>
-            <span>
-              <span className="block text-[15px] font-bold text-[var(--reader-text)]">{dragging ? "Drop to upload" : "Drag books here"}</span>
-              <span className="mt-1 block text-[13px] text-[var(--reader-text-muted)]">
-                or <span className="font-semibold text-brand-500 underline-offset-2 group-hover:underline">browse your files</span>
-              </span>
-            </span>
-            <span className="flex items-center gap-1.5">
-              {["EPUB", "PDF", "DOCX"].map((format) => (
-                <span
-                  key={format}
-                  className="rounded-full border border-[var(--reader-border)] px-2.5 py-0.5 text-[11px] font-bold tracking-wide text-[var(--reader-text-muted)]"
-                >
-                  {format}
-                </span>
-              ))}
-            </span>
-            <span className="text-[12px] text-[var(--reader-text-subtle)]">
-              Up to {limits.maxFiles} files · {formatBytes(limits.maxFileSizeBytes)} file size limit
-            </span>
-          </button>
-        ) : (
-          <>
-            {cards}
-            {canAddMore && (
-              <button
-                type="button"
-                onClick={openPicker}
-                className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border-[1.5px] border-dashed bg-transparent py-4 text-[13px] font-semibold text-[var(--reader-text-muted)] transition-colors ${dropzoneTone}`}
-              >
-                <Plus size={16} />
-                {dragging ? "Drop to add" : "Drop more books or browse"}
-                <span className="font-medium text-[var(--reader-text-subtle)]">· {slotsLeft} left</span>
-              </button>
-            )}
-          </>
-        )}
-
-        {dropNotice && (
-          <p role="status" className="m-0 text-[12px] font-semibold text-[var(--reader-text-muted)]">
-            {dropNotice}
-          </p>
-        )}
-
-        {files.length > 0 && (
-          <div className="sticky bottom-4 mt-2 flex items-center gap-4 rounded-lg border border-[var(--reader-border)] bg-[var(--reader-surface)] px-4 py-3 shadow-sm">
-            <div className="min-w-0 flex-1">
-              <p className="m-0 text-[12px] font-semibold text-[var(--reader-text)]">
-                {doneCount} of {files.length} uploaded
-              </p>
-              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--reader-surface-hover)]">
-                <div
-                  className="h-full rounded-full bg-brand-500 transition-[width] duration-300"
-                  style={{ width: `${(settledCount / files.length) * 100}%` }}
-                />
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={flushAndClose}
-              className="h-10 flex-none cursor-pointer rounded-[var(--radius-sm)] border-none bg-brand-500 px-5 text-[13px] font-bold text-white hover:bg-brand-600"
-            >
-              Done
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  }
 
   const body = (
     <>

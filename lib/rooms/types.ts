@@ -250,4 +250,6 @@ export type HomePassage = {
   answers: number;
   /** The reader, at the quote. */
   href: string;
+  /** For the share image. */
+  book: { title: string; author: string };
 };

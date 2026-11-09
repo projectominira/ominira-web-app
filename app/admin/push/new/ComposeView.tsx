@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowRight,
-  BellRing,
   CircleCheck,
-  CornerUpLeft,
   ExternalLink,
   Inbox,
   Loader2,
@@ -15,7 +14,7 @@ import {
   Send,
   Smartphone,
 } from "lucide-react";
-import { formatTimeAgo } from "@/lib/reader/timeAgo";
+import type { Channel } from "../BroadcastHistoryView";
 import AdminPageHeader from "@/app/admin/AdminPageHeader";
 import InfoTip from "@/app/admin/InfoTip";
 import TextField from "@/app/components/auth/TextField";
@@ -33,20 +32,6 @@ import DestinationPicker, {
   type Destination,
 } from "./DestinationPicker";
 
-export type AdminBroadcastRow = {
-  id: string;
-  title: string;
-  body: string;
-  url: string;
-  recipient_count: number;
-  failure_count: number;
-  channels: Channel[];
-  email_recipient_count: number;
-  email_failure_count: number;
-  created_at: string;
-};
-
-type Channel = "push" | "email";
 type Channels = Record<Channel, boolean>;
 const DEFAULT_CHANNELS: Channels = { push: true, email: false };
 
@@ -60,21 +45,25 @@ const primaryButtonClass =
 const n = (count: number) => count.toLocaleString("en");
 const plural = (count: number, word: string, many = `${word}s`) => `${n(count)} ${count === 1 ? word : many}`;
 
-export default function PushAdminView({
-  broadcasts,
+/** /admin/push/new: compose → preview → send, then back to the history. */
+export default function ComposeView({
   audience,
   emailEnabled,
+  reuse,
 }: {
-  broadcasts: AdminBroadcastRow[];
   audience: { members: number; devices: number; emailSubscribers: number };
   /** RESEND_API_KEY is set — otherwise the Email channel is shown disabled. */
   emailEnabled: boolean;
+  /** A past broadcast to start from ("Reuse" in the history). */
+  reuse: { title: string; body: string; url: string; channels: Channel[] } | null;
 }) {
-  const [items, setItems] = useState(() => broadcasts);
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [destination, setDestination] = useState<Destination>(DEFAULT_DESTINATION);
-  const [channels, setChannels] = useState<Channels>(DEFAULT_CHANNELS);
+  const router = useRouter();
+  const [title, setTitle] = useState(reuse?.title ?? "");
+  const [body, setBody] = useState(reuse?.body ?? "");
+  const [destination, setDestination] = useState<Destination>(() => (reuse ? destinationFromUrl(reuse.url) : DEFAULT_DESTINATION));
+  const [channels, setChannels] = useState<Channels>(() =>
+    reuse ? { push: reuse.channels.includes("push"), email: reuse.channels.includes("email") && emailEnabled } : DEFAULT_CHANNELS
+  );
   // Compose → review (previews + send PIN) → send. Sending is only reachable
   // from the review step, so nothing goes out that wasn't previewed first.
   const [step, setStep] = useState<"compose" | "review">("compose");
@@ -82,7 +71,6 @@ export default function PushAdminView({
   const [pinError, setPinError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState<AdminBroadcastRow | null>(null);
 
   const trimmedUrl = destinationUrl(destination);
   const linkValid = isDestinationValid(destination);
@@ -90,26 +78,12 @@ export default function PushAdminView({
   const canReview = title.trim().length > 0 && body.trim().length > 0 && linkValid && hasChannel;
   const selectedChannels = (Object.keys(channels) as Channel[]).filter((c) => channels[c]);
 
-  const edit = <T,>(setter: (value: T) => void) => (value: T) => {
-    setter(value);
-    setSent(null);
-  };
-
   const goTo = (next: "compose" | "review") => {
     setStep(next);
     setPin("");
     setPinError(null);
     setError(null);
-    setSent(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const reuse = (item: AdminBroadcastRow) => {
-    setTitle(item.title);
-    setBody(item.body);
-    setDestination(destinationFromUrl(item.url));
-    setChannels({ push: item.channels.includes("push"), email: item.channels.includes("email") && emailEnabled });
-    goTo("compose");
   };
 
   const onSend = async () => {
@@ -132,13 +106,8 @@ export default function PushAdminView({
         }
         return;
       }
-      setItems((current) => [data.item, ...current]);
-      setTitle("");
-      setBody("");
-      setDestination(DEFAULT_DESTINATION);
-      setChannels(DEFAULT_CHANNELS);
-      goTo("compose");
-      setSent(data.item);
+      router.push(`/admin/push?sent=${data.item.id}`);
+      router.refresh();
     } catch {
       setError("Network error — the broadcast may not have gone out. Check the history before retrying.");
     } finally {
@@ -147,23 +116,10 @@ export default function PushAdminView({
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
-      <AdminPageHeader
-        title="Broadcast"
-        subtitle="Send an announcement to members"
-      />
+    <div>
+      <AdminPageHeader title="New broadcast" subtitle="Send an announcement to members" back={{ href: "/admin/push", label: "Broadcast" }} />
 
       <Stepper step={step} />
-
-      {sent && (
-        <p
-          role="status"
-          className="m-0 mb-3 flex items-center gap-1.5 rounded-sm border border-[var(--reader-border)] px-4 py-3 text-[13px] font-semibold text-[var(--reader-text)]"
-        >
-          <CircleCheck size={15} className="flex-none text-emerald-500" aria-hidden />
-          Sent. {deliverySummary(sent)}.
-        </p>
-      )}
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
         {step === "compose" ? (
@@ -184,7 +140,7 @@ export default function PushAdminView({
                 id="push-title"
                 hint={`${title.length}/${TITLE_MAX}`}
                 value={title}
-                onChange={(e) => edit(setTitle)(e.target.value)}
+                onChange={(e) => setTitle(e.target.value)}
                 maxLength={TITLE_MAX}
                 placeholder="New in the library"
               />
@@ -194,13 +150,13 @@ export default function PushAdminView({
                 id="push-body"
                 hint={`${body.length}/${BODY_MAX}`}
                 value={body}
-                onChange={(e) => edit(setBody)(e.target.value)}
+                onChange={(e) => setBody(e.target.value)}
                 maxLength={BODY_MAX}
                 rows={4}
                 placeholder="Keep it short — most devices show two or three lines before truncating."
               />
 
-              <DestinationPicker value={destination} onChange={edit(setDestination)} />
+              <DestinationPicker value={destination} onChange={setDestination} />
 
               <div>
                 <SelectField
@@ -208,7 +164,7 @@ export default function PushAdminView({
                   id="push-channels"
                   value={channels.push && channels.email ? "both" : channels.email ? "email" : "push"}
                   onChange={(e) =>
-                    edit(setChannels)({ push: e.target.value !== "email", email: e.target.value !== "push" })
+                    setChannels({ push: e.target.value !== "email", email: e.target.value !== "push" })
                   }
                   className="cursor-pointer"
                 >
@@ -349,7 +305,7 @@ export default function PushAdminView({
                   type="button"
                   onClick={() => goTo("compose")}
                   disabled={sending}
-                  className="inline-flex h-9 cursor-pointer items-center rounded-[var(--radius-sm)] border border-[var(--reader-border)] px-3.5 text-[12px] font-bold text-[var(--reader-text)] transition-colors hover:bg-[var(--reader-surface)] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex h-9 cursor-pointer items-center rounded-sm border border-sand-300 px-3.5 text-[12px] font-bold text-[var(--reader-text)] transition-colors hover:bg-[var(--reader-surface)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Back
                 </button>
@@ -397,57 +353,6 @@ export default function PushAdminView({
         </aside>
       </div>
 
-      <section aria-labelledby="history-heading" className="mt-3 overflow-hidden rounded-sm border border-[var(--reader-border)]">
-        <div className="flex items-baseline justify-between gap-2 px-5 py-4">
-          <h2 id="history-heading" className="m-0 text-[14px] font-bold text-[var(--reader-text)]">
-            History
-          </h2>
-          <span className="text-[12px] font-semibold text-[var(--reader-text-muted)]">Last {Math.min(items.length, 50)} sent</span>
-        </div>
-        {items.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 border-t border-[var(--reader-border)] px-5 py-10 text-center">
-            <BellRing size={20} className="text-[var(--reader-text-subtle)]" aria-hidden />
-            <p className="m-0 text-[13px] font-medium text-[var(--reader-text-muted)]">No broadcasts sent yet.</p>
-          </div>
-        ) : (
-          <ul className="m-0 list-none p-0">
-            {items.map((item) => (
-              <li key={item.id} className="border-t border-[var(--reader-border)] px-5 py-4">
-                <div className="flex items-start justify-between gap-3">
-                  <p className="m-0 min-w-0 text-[13px] font-semibold text-[var(--reader-text)]">{item.title}</p>
-                  <time
-                    dateTime={item.created_at}
-                    title={new Date(item.created_at).toLocaleString("en")}
-                    className="flex-none text-[12px] font-medium text-[var(--reader-text-subtle)]"
-                  >
-                    {formatTimeAgo(new Date(item.created_at).getTime())}
-                  </time>
-                </div>
-                <p className="m-0 mt-1 text-[13px] leading-snug text-[var(--reader-text-muted)]">{item.body}</p>
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                  <p className="m-0 min-w-0 text-[12px] font-medium text-[var(--reader-text-subtle)]">
-                    {deliverySummary(item)}
-                    {item.url && (
-                      <>
-                        {" "}
-                        · <span className="break-all">{item.url}</span>
-                      </>
-                    )}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => reuse(item)}
-                    className="inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-[12px] font-semibold text-[var(--reader-text-muted)] hover:text-[var(--reader-text)]"
-                  >
-                    <CornerUpLeft size={13} aria-hidden />
-                    Reuse
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
     </div>
   );
 }
@@ -545,25 +450,6 @@ function FeedPreview({ title, body }: { title: string; body: string }) {
       </span>
     </div>
   );
-}
-
-function deliverySummary(item: AdminBroadcastRow) {
-  const parts: string[] = [];
-  if (item.channels.includes("push")) {
-    parts.push(
-      item.recipient_count === 0
-        ? "Push: no subscribed devices"
-        : `Push: ${n(item.recipient_count - item.failure_count)} of ${plural(item.recipient_count, "device")}`
-    );
-  }
-  if (item.channels.includes("email")) {
-    parts.push(
-      item.email_recipient_count === 0
-        ? "Email: no opted-in members"
-        : `Email: ${n(item.email_recipient_count - item.email_failure_count)} of ${plural(item.email_recipient_count, "inbox", "inboxes")}`
-    );
-  }
-  return parts.join(" · ");
 }
 
 function AudienceRow({ icon, label, value, info }: { icon: React.ReactNode; label: string; value: number; info: string }) {

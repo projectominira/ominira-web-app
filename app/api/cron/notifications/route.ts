@@ -3,6 +3,7 @@ import { sendTargetReminders } from "@/lib/groups/reminders";
 import { sendSessionReminders } from "@/lib/groups/schedule";
 import { sendGroupMilestones } from "@/lib/groups/milestones";
 import { sendStreakRisk } from "@/lib/streaks/reminders";
+import { publishScheduledPassage } from "@/lib/passage/calendar";
 
 // Called every 5 minutes by pg_cron through pg_net
 // (migrations/20261026_notifications_cron_plain.sql). Open, with no secret:
@@ -11,11 +12,13 @@ import { sendStreakRisk } from "@/lib/streaks/reminders";
 // the lib selectors who is due and hands them to lib/notifications, which
 // owns delivery and dedupe. Each selector joins with its phase.
 export async function POST() {
-  const [sessionReminders, targetReminders, streakRisk, groupMilestones] = await Promise.all([
+  const [sessionReminders, targetReminders, streakRisk, groupMilestones, passage] = await Promise.all([
     sendSessionReminders(),
     sendTargetReminders(),
     sendStreakRisk(),
     sendGroupMilestones(),
+    // The day's scheduled passage, from 07:00 Lagos (passage-spec §8.3).
+    publishScheduledPassage(),
   ]);
-  return NextResponse.json({ ok: true, sessionReminders, targetReminders, streakRisk, groupMilestones });
+  return NextResponse.json({ ok: true, sessionReminders, targetReminders, streakRisk, groupMilestones, passage });
 }

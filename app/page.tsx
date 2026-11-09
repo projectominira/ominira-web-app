@@ -10,7 +10,7 @@ import { BUTTON, BUTTON_SM, GUTTER, INVERSE, PRIMARY, SECTION_LINE, SECTION_TITL
 import { slugifyCategory } from "@/lib/categories/slug";
 import { BRAND_TAGLINE, SPLASH_MARK, WORDMARK, WORDMARK_RATIO } from "@/lib/config/brand-assets";
 import { PLATFORM_NAME } from "@/lib/config/platform";
-import { getLandingView } from "@/lib/landing/view";
+import { getLandingView, PRINCIPLES_SLUG } from "@/lib/landing/view";
 
 const HEADLINE = "Thousands of books to raise your Pan-Africanist consciousness.";
 const SUB = "Read, or listen with African voices.";
@@ -34,6 +34,17 @@ const DRIFT = [
 ];
 /** Shelf cover widths, by band: light, or dark (bigger). At most 180px, so
  * the 320px thumbnails stay sharp. */
+/** The MAE principles, in the document's order (its section headings). */
+const PRINCIPLES = [
+  "Pan-Africanism",
+  "Critical Thinking",
+  "Mental Emancipation",
+  "Cultural Renaissance",
+  "Youth Leadership",
+  "Women Leadership",
+  "People-Centred Government & Collective Leadership",
+];
+const PRINCIPLES_HREF = `/library/${PRINCIPLES_SLUG}`;
 const SHELF_COVER = ["w-[132px] md:w-[clamp(132px,11vw,160px)]", "w-40 md:w-[clamp(160px,13vw,180px)]"];
 
 function Wordmark({ className }: { className: string }) {
@@ -48,9 +59,8 @@ function Wordmark({ className }: { className: string }) {
 export default async function LandingPage() {
   const view = await getLandingView();
   // Featured: the first book in the spotlight, the rest in rows of four
-  // beside it (eight at most, whole rows only).
-  const [lead, ...others] = view.featured;
-  const rest = others.length >= 4 ? others.slice(0, Math.min(8, others.length - (others.length % 4))) : others;
+  // beside it (whole rows, eight at most: lib/landing/view).
+  const [lead, ...rest] = view.featured;
   return (
     <>
       <script dangerouslySetInnerHTML={{ __html: HIDE_WHEN_SIGNED_IN }} />
@@ -79,7 +89,7 @@ export default async function LandingPage() {
         <section className="relative bg-sand-950 pt-12 text-sand-25 md:pt-[clamp(48px,6vw,96px)]">
           <div className={`mx-auto flex max-w-[1024px] flex-col items-center gap-5 text-center ${GUTTER}`}>
             <h1 className="m-0 font-serif text-[32px]/[1.08] md:text-[clamp(36px,5.4vw,78px)]/[1.05] font-semibold tracking-[-0.015em] text-balance">
-              The largest collection of books for <span className="text-brand-400">Pan-Africanists</span> online.
+              The largest collection of books online for <span className="text-brand-400">Pan-Africanists</span>.
             </h1>
             <p className="m-0 font-serif text-[17px]/[1.6] text-sand-25/68 md:text-[20px]/[1.7]">{SUB}</p>
             <div className="mt-2 flex flex-wrap justify-center gap-3">
@@ -122,8 +132,31 @@ export default async function LandingPage() {
           </div>
         </section>
 
+        <section className={`border-y border-[var(--color-app-border)] bg-[var(--color-app-surface-muted)] py-12 md:py-[clamp(48px,6vw,96px)] ${GUTTER}`}>
+          <div className="mx-auto flex max-w-[1024px] flex-col items-center gap-5.5 text-center md:gap-[clamp(22px,2.6vw,36px)]">
+            <div className="flex max-w-[760px] flex-col gap-2">
+              <span className={`${EYEBROW} text-[var(--color-app-text-muted)]`}>An initiative of the</span>
+              <h2 className={SECTION_TITLE}>Movement for African Emancipation</h2>
+            </div>
+            <span className={`${EYEBROW} -mb-2 text-[var(--color-app-brand)] md:-mb-3`}>Our principles</span>
+            <ol className="m-0 w-full max-w-[600px] list-none border-b border-[var(--color-app-border)] p-0 text-left">
+              {PRINCIPLES.map((p, i) => (
+                <li key={p} className="flex items-baseline gap-4 border-t border-[var(--color-app-border)] py-3 md:py-3.5">
+                  <span className="w-6 flex-none text-ui-sm tabular-nums text-[var(--color-app-text-muted)]">{String(i + 1).padStart(2, "0")}</span>
+                  <span className="font-serif text-[17px]/[1.3] font-semibold md:text-[20px]/[1.3]">{p}</span>
+                </li>
+              ))}
+            </ol>
+            <div>
+              <Link href={PRINCIPLES_HREF} className={`${BUTTON} ${PRIMARY}`}>
+                Read our principles
+              </Link>
+            </div>
+          </div>
+        </section>
+
         {view.featured.length > 0 && (
-          <section className={`pb-12 md:pb-[clamp(48px,5vw,88px)] ${GUTTER}`}>
+          <section className={`py-12 md:py-[clamp(48px,5vw,88px)] ${GUTTER}`}>
             <div className={`${WRAP} flex flex-col gap-5.5`}>
               <h2 className={SECTION_TITLE}>Featured</h2>
               <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-[clamp(32px,4vw,64px)]">
@@ -212,7 +245,7 @@ export default async function LandingPage() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={SPLASH_MARK.light} alt="" width={64} height={62} className="h-auto w-16" />
           <h2 className="m-0 max-w-[820px] font-serif text-[28px]/[1.1] md:text-[clamp(32px,4.4vw,64px)]/[1.08] font-semibold text-balance">Arise for Freedom</h2>
-          <p className={`${SECTION_LINE} text-sand-25/68`}>Read with comrades across the African continent and the diaspora.</p>
+          <p className={`${SECTION_LINE} text-sand-25/68`}>Read with Africans across the continent and the diaspora.</p>
           <div className="flex flex-wrap justify-center gap-3">
             <Link href="/auth/signup" className={`${BUTTON} ${PRIMARY}`}>
               Join us
@@ -229,14 +262,8 @@ export default async function LandingPage() {
             <Link href="/library" className="text-[var(--color-app-text-secondary)] no-underline hover:underline">
               Library
             </Link>
-            <a href="#voices" className="text-[var(--color-app-text-secondary)] no-underline hover:underline">
-              Narrators
-            </a>
-            <Link href="/auth/login" className="text-[var(--color-app-text-secondary)] no-underline hover:underline">
-              Sign in
-            </Link>
-            <Link href="/auth/signup" className="text-[var(--color-app-text-secondary)] no-underline hover:underline">
-              Join us
+            <Link href={PRINCIPLES_HREF} className="text-[var(--color-app-text-secondary)] no-underline hover:underline">
+              Principles
             </Link>
           </nav>
           <span className="text-ui-caption text-[var(--color-app-text-muted)]">

@@ -1,24 +1,28 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowUpRight, Check, Image as ImageIcon, RotateCcw, Sun, TextSelect, Undo2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowUpRight, CalendarDays, CalendarX, Check, RotateCcw, Sun, Undo2, X } from "lucide-react";
 import RowMenu from "@/app/components/groups/RowMenu";
 import PassageCard from "@/app/components/home/PassageCard";
 import { useShareQuote } from "@/app/components/reader/ShareQuoteModal";
 import type { AnnotationRange } from "@/lib/api/types";
 import { ensureFreshSession } from "@/lib/api/client";
 import { communityFeedItemHref } from "@/lib/community/useCommunityFeed";
-import { quoteText, type ContextBlock, type QuoteView } from "@/lib/passage/types";
+import { quoteText, type CalendarView, type ContextBlock, type QuoteView } from "@/lib/passage/types";
+import DayPicker, { approveDay, dayLabel, KIND_LABEL } from "./DayPicker";
 import { sameRanges } from "@/stores/library-store";
 import { showToast } from "@/stores/toast-store";
 
 export const BUTTON =
-  "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-sm border border-[var(--reader-border)] bg-transparent px-3 text-[13px] font-semibold text-[var(--reader-text)] no-underline transition-colors hover:bg-[var(--reader-surface-hover)] disabled:cursor-default disabled:opacity-50";
+  "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-sm border border-sand-300 bg-transparent px-3 text-[13px] font-semibold text-[var(--reader-text)] no-underline transition-colors hover:bg-[var(--reader-surface-hover)] disabled:cursor-default disabled:opacity-50";
 export const PRIMARY =
   "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-sm border-none bg-brand-500 px-3 text-[13px] font-bold text-white transition-colors hover:bg-brand-600 disabled:cursor-default disabled:opacity-50";
+/** A plain text action: the panel's row of links. */
+const LINK =
+  "inline-flex h-8 cursor-pointer items-center rounded-sm border-none bg-transparent px-2 text-[13px] font-semibold text-[var(--reader-text-muted)] transition-colors hover:text-[var(--reader-text)] disabled:cursor-default disabled:opacity-50";
 /** A quiet text action: icon and label, no border. */
 const GHOST =
-  "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-sm border-none bg-transparent px-2 text-[12px] font-semibold text-[var(--reader-text-muted)] no-underline sm:text-[13px] transition-colors hover:bg-[var(--reader-surface-hover)] hover:text-[var(--reader-text)] disabled:cursor-default disabled:opacity-50";
+  "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-sm border-none bg-transparent px-2 text-[13px] font-semibold text-[var(--reader-text-muted)] no-underline transition-colors hover:bg-[var(--reader-surface-hover)] hover:text-[var(--reader-text)] disabled:cursor-default disabled:opacity-50";
 
 const MAX_BLOCKS = 5;
 
@@ -28,7 +32,7 @@ export const shortDay = (day: string) => new Date(`${day}T00:00:00Z`).toLocaleDa
 /** PDFium's invisible markers (a line-break hyphen is U+FFFE): kept in the
  * text so offsets match, never shown. */
 const MARKERS = /([­​⁠﻿￾￿])/;
-const stripMarkers = (text: string) => text.replace(new RegExp(MARKERS.source, "g"), "");
+export const stripMarkers = (text: string) => text.replace(new RegExp(MARKERS.source, "g"), "");
 
 function Plain({ text }: { text: string }) {
   const parts = text.split(MARKERS);
@@ -153,25 +157,34 @@ async function send(url: string, body: unknown, method = "PATCH", headers: Recor
 }
 
 /**
- * One quote in a set (passage-spec §3): the words first, then where they're
- * from and why. "Edit words" opens the context to reselect; export and set
- * as today's passage sit beside it, the rest in ⋯.
+ * One quote (passage-spec §3, §8.4): why this day, the words, where they're
+ * from and why, and the question members answer. Its main action approves
+ * it for a day ("Approve for Thu 12 Nov"); once approved it can move or be
+ * unscheduled. "Edit words" opens the context to reselect; the rest is in ⋯.
  */
 export default function QuoteCard({
-  quote: initial,
+  quote,
+  onChange: setQuote,
   members,
-  hasToday,
+  calendar,
   onUsed,
+  onScheduled,
 }: {
   quote: QuoteView;
+  /** Updates the quote where it's listed. */
+  onChange: (update: (q: QuoteView) => QuoteView) => void;
   members: number;
-  hasToday: boolean;
+  calendar: CalendarView;
   onUsed: () => void;
+  /** A day was given, changed or taken away: the calendar reloads. */
+  onScheduled: () => void;
 }) {
-  const [quote, setQuote] = useState(initial);
-  const [question, setQuestion] = useState(initial.question);
+  const [question, setQuestion] = useState(quote.question);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [picking, setPicking] = useState<"approve" | "move" | null>(null);
+  const hasToday = !!calendar.days[0].posted;
+  const nextDay = approveDay(quote, calendar);
   const [busy, setBusy] = useState(false);
   const { book } = quote;
   const shareQuote = useShareQuote(book.title, book.author);
@@ -206,10 +219,41 @@ export default function QuoteCard({
   };
 
   const setStatus = async (status: "new" | "dismissed") => {
+    const wasApproved = quote.status === "approved";
     try {
       await send(`/api/admin/passage/quotes/${quote.id}`, { status });
-      setQuote((q) => ({ ...q, status }));
+      setQuote((q) => ({ ...q, status, day: null }));
       if (status === "dismissed") setEditing(false);
+      if (wasApproved) onScheduled();
+    } catch (err) {
+      fail(err);
+    }
+  };
+
+  const approve = async (day?: string) => {
+    setPicking(null);
+    const q = question.trim();
+    if (!q) return showToast("Add a question for members first.");
+    setBusy(true);
+    try {
+      const data = await send(`/api/admin/passage/quotes/${quote.id}/schedule`, { question: q, ...(day ? { day } : {}) }, "POST");
+      setQuote((x) => ({ ...x, status: "approved", day: data.day, question: q }));
+      showToast(`Approved for ${dayLabel(data.day)}${data.bumped ? `. The evergreen passage moved to ${dayLabel(data.bumped.day)}` : ""}.`);
+      onScheduled();
+    } catch (err) {
+      fail(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const move = async (day: string) => {
+    setPicking(null);
+    try {
+      const data = await send(`/api/admin/passage/quotes/${quote.id}`, { day });
+      setQuote((x) => ({ ...x, day: data.day }));
+      showToast(`Moved to ${dayLabel(data.day)}${data.swapped ? ", swapping the two" : ""}.`);
+      onScheduled();
     } catch (err) {
       fail(err);
     }
@@ -233,8 +277,8 @@ export default function QuoteCard({
 
   if (quote.status === "dismissed") {
     return (
-      <div className="flex items-center gap-3 px-4 py-3 sm:px-5">
-        <span className="min-w-0 flex-1 truncate font-serif text-[13px] text-[var(--reader-text-subtle)] line-through decoration-[var(--reader-border)]">
+      <div className="flex items-center gap-3">
+        <span className="min-w-0 flex-1 font-serif text-[15px] text-[var(--reader-text-subtle)] line-through decoration-[var(--reader-border)]">
           {words}
         </span>
         <button type="button" onClick={() => setStatus("new")} className={GHOST}>
@@ -244,30 +288,35 @@ export default function QuoteCard({
     );
   }
 
-  const badge: ReactNode =
-    quote.status === "used" ? (
-      <span className="inline-flex items-center gap-1 rounded-sm bg-brand-500/10 px-1.5 py-0.5 text-ui-xs text-brand-600">
-        <Sun size={11} /> Passage of the day{quote.usedOn ? ` · ${shortDay(quote.usedOn)}` : ""}
-      </span>
-    ) : quote.usedOn ? (
-      <span className="rounded-sm bg-[var(--reader-surface-hover)] px-1.5 py-0.5 text-ui-xs text-[var(--reader-text-muted)]">Used on {shortDay(quote.usedOn)}</span>
-    ) : null;
-
+  const approved = quote.status === "approved";
   return (
-    <article className="flex flex-col gap-3 px-4 py-5 sm:px-5">
-      {badge && <div className="flex">{badge}</div>}
+    <article className="flex flex-col gap-3">
+      {(approved || quote.occasion || quote.kind !== "evergreen") && (
+        <div className="flex flex-col gap-0.5">
+          {approved && quote.day && (
+            <span className="text-ui-xs font-semibold tracking-eyebrow uppercase text-brand-600">
+              Scheduled · {quote.day === calendar.today ? "today" : dayLabel(quote.day)}
+            </span>
+          )}
+          <span className="text-ui-sm text-[var(--reader-text-muted)]">
+            <span className="font-semibold text-[var(--reader-text)]">{KIND_LABEL[quote.kind]}</span>
+            {quote.kind === "anniversary" && quote.wantedDay && <> · {dayLabel(quote.wantedDay)}</>}
+            {quote.occasion && <> · {quote.occasion}</>}
+          </span>
+        </div>
+      )}
 
       <blockquote className="m-0 border-l-2 border-brand-400 pl-3 font-serif text-[15px]/[1.6] text-pretty sm:text-[16px]/[1.65] sm:pl-4 text-[var(--reader-text)]">
         &ldquo;{words}&rdquo;
       </blockquote>
 
-      <p className="m-0 pl-[14px] sm:pl-[18px] text-ui-caption text-[var(--reader-text-muted)]">
+      <p className="m-0 text-ui-caption text-[var(--reader-text-muted)]">
         <span className="font-semibold text-[var(--reader-text)]">{book.title}</span>
         {book.author && <> · {book.author}</>}
         {where && <> · {where}</>}
       </p>
 
-      {quote.why && <p className="m-0 pl-[14px] sm:pl-[18px] text-ui-sm font-normal text-[var(--reader-text-muted)]">{quote.why}</p>}
+      {quote.why && <p className="m-0 text-ui-sm text-[var(--reader-text-muted)]">{quote.why}</p>}
 
       {editing && (
         <div className="overflow-hidden rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)]">
@@ -288,30 +337,63 @@ export default function QuoteCard({
         </div>
       )}
 
-      <div className="-ml-2 flex flex-wrap items-center gap-1">
+      {(quote.status === "new" || approved) && (
+        <label className="flex flex-col gap-1.5">
+          <span className="text-ui-xs tracking-eyebrow uppercase text-[var(--reader-text-subtle)]">Question for members</span>
+          <textarea
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onBlur={saveQuestion}
+            maxLength={280}
+            rows={2}
+            placeholder="What should members answer?"
+            className="resize-none rounded-sm border border-sand-300 bg-[var(--reader-bg)] px-3 py-2 text-ui-sm text-[var(--reader-text)] outline-none focus:border-brand-400"
+          />
+        </label>
+      )}
+
+      <div className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1 pt-1">
         {!editing && (
-          <button type="button" onClick={() => setEditing(true)} className={GHOST}>
-            <TextSelect size={14} /> Edit<span className="hidden sm:inline"> words</span>
+          <button type="button" onClick={() => setEditing(true)} className={LINK}>
+            Edit words
           </button>
         )}
-        <button type="button" onClick={() => shareQuote.share(words)} className={GHOST}>
-          <ImageIcon size={14} /> Export<span className="hidden sm:inline"> image</span>
+        <button type="button" onClick={() => shareQuote.share(words)} className={LINK}>
+          Export
         </button>
-        <button type="button" onClick={() => setConfirming(true)} className={GHOST}>
-          <Sun size={14} /> <span className="sm:hidden">Set for today</span>
-          <span className="hidden sm:inline">Set as today&rsquo;s passage</span>
-        </button>
-        <div className="ml-auto">
-          <RowMenu
-            label="More"
-            items={[
-              ...(href ? [{ label: "Open in reader", icon: <ArrowUpRight size={14} />, onClick: () => window.open(href, "_blank", "noopener") }] : []),
-              ...(quote.status === "new" ? [{ label: "Dismiss", icon: <X size={14} />, onClick: () => setStatus("dismissed") }] : []),
-            ]}
-          />
-        </div>
+        {quote.status === "new" && (
+          <button type="button" disabled={busy} onClick={() => (nextDay ? approve() : setPicking("approve"))} className={`${LINK} text-brand-600 hover:text-brand-700`}>
+            {nextDay ? `Approve for ${nextDay === calendar.today ? "today" : dayLabel(nextDay)}` : "Approve for…"}
+          </button>
+        )}
+        <RowMenu
+          label="More"
+          items={[
+            ...(approved
+              ? [
+                  { label: "Move…", icon: <CalendarDays size={14} />, onClick: () => setPicking("move") },
+                  { label: "Unschedule", icon: <CalendarX size={14} />, onClick: () => setStatus("new") },
+                ]
+              : quote.status === "new" && nextDay
+                ? [{ label: "Approve for another day…", icon: <CalendarDays size={14} />, onClick: () => setPicking("approve") }]
+                : []),
+            { label: "Set for today", icon: <Sun size={14} />, onClick: () => setConfirming(true) },
+            ...(href ? [{ label: "Open in reader", icon: <ArrowUpRight size={14} />, onClick: () => window.open(href, "_blank", "noopener") }] : []),
+            ...(quote.status === "new" ? [{ label: "Dismiss", icon: <X size={14} />, onClick: () => setStatus("dismissed") }] : []),
+          ]}
+        />
       </div>
       {shareQuote.modal}
+      {picking && (
+        <DayPicker
+          calendar={calendar}
+          current={picking === "move" ? quote.day : null}
+          openOnly={picking === "approve"}
+          title={picking === "move" ? "Move to" : "Approve for"}
+          onPick={(day) => (picking === "move" ? move(day) : approve(day))}
+          onClose={() => setPicking(null)}
+        />
+      )}
 
       {confirming && (
         <div onClick={() => !busy && setConfirming(false)} className="fixed inset-0 z-[150] flex items-center justify-center bg-black/45 p-4">
@@ -335,7 +417,7 @@ export default function QuoteCard({
                 rows={2}
                 autoFocus
                 placeholder="What should members answer?"
-                className="resize-none rounded-sm border border-sand-300 bg-[var(--reader-bg)] px-3 py-2 text-[14px] text-[var(--reader-text)] outline-none focus:border-brand-400"
+                className="resize-none rounded-sm border border-sand-300 bg-[var(--reader-bg)] px-3 py-2 text-ui-sm text-[var(--reader-text)] outline-none focus:border-brand-400"
               />
             </label>
             <div className="pointer-events-none">
@@ -346,6 +428,7 @@ export default function QuoteCard({
                   cite: [book.title, quote.chapter ?? (quote.page ? `Page ${quote.page}` : null)].filter(Boolean).join(" · "),
                   answers: 0,
                   href: href ?? "",
+                  book: { title: book.title, author: book.author },
                 }}
               />
             </div>

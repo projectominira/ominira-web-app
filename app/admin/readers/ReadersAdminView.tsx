@@ -1,11 +1,11 @@
 "use client";
 
-import { ChevronDown, Search } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { formatTimeAgo } from "@/lib/reader/timeAgo";
 import { pseudonymToSlug } from "@/lib/reader/profileSlug";
 import AdminPageHeader from "@/app/admin/AdminPageHeader";
+import { AdminSearch, AdminSelect } from "@/app/admin/AdminControls";
 import Switch from "@/app/components/shell/Switch";
 
 export type AdminReaderRow = {
@@ -19,10 +19,6 @@ export type AdminReaderRow = {
 };
 
 type Filter = "all" | "approved" | "unapproved";
-
-// Same input/select styling as LibraryAdminView's toolbar.
-const searchInputClass =
-  "w-full rounded-sm border border-sand-300 bg-[var(--reader-surface)] py-2.5 pl-8 pr-4 font-medium text-[13px] leading-5 text-[var(--reader-text)] outline-none transition-colors placeholder:text-sand-400 focus:border-brand-400";
 
 export default function ReadersAdminView({ readers }: { readers: AdminReaderRow[] }) {
   const [items, setItems] = useState(readers);
@@ -63,33 +59,22 @@ export default function ReadersAdminView({ readers }: { readers: AdminReaderRow[
       <AdminPageHeader
         title="Readers"
         subtitle={`${items.length.toLocaleString("en")} readers · ${approvedCount.toLocaleString("en")} approved to upload`}
+        actions={
+          <>
+            <AdminSearch value={query} onChange={setQuery} placeholder="Search pseudonym, name or email" label="Search readers" />
+            <AdminSelect
+              value={filter}
+              onChange={setFilter}
+              label="Filter by approval"
+              options={[
+                { value: "all", label: "All readers" },
+                { value: "approved", label: "Approved" },
+                { value: "unapproved", label: "Not approved" },
+              ]}
+            />
+          </>
+        }
       />
-
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <label className="relative min-w-[220px] flex-1 sm:max-w-xs">
-          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--reader-text-subtle)]" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search pseudonym, name or email"
-            aria-label="Search readers"
-            className={searchInputClass}
-          />
-        </label>
-        <label className="relative">
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value as Filter)}
-            aria-label="Filter by approval"
-            className="cursor-pointer appearance-none rounded-sm border border-sand-300 bg-[var(--reader-surface)] py-2.5 pl-4 pr-10 font-medium text-[13px] leading-5 text-[var(--reader-text)] outline-none transition-colors focus:border-brand-400"
-          >
-            <option value="all">All readers</option>
-            <option value="approved">Approved</option>
-            <option value="unapproved">Not approved</option>
-          </select>
-          <ChevronDown size={16} className="pointer-events-none absolute inset-y-0 right-3.5 my-auto text-sand-500" />
-        </label>
-      </div>
 
       {error && (
         <p role="status" className="m-0 mb-3 rounded-[var(--radius-sm)] bg-brand-500/10 px-3 py-2.5 text-[12px] font-semibold text-[var(--reader-text)]">

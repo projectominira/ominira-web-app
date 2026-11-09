@@ -54,4 +54,6 @@ export const NOTIFICATION_POLICY: Record<NotificationKind, NotificationPolicy> =
   // The passage of the day, to every reader; no group to mute. One a day,
   // so replacing the day's passage doesn't push again.
   passage: { ...push, dedupe: true },
+  // They asked for it; tell them the moment it's in.
+  book_request: push,
 };

@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export default async function AdminLibraryPage() {
   const admin = getSupabaseAdminClient();
-  const [{ data: books, error: booksError }, categories] = await Promise.all([
+  const [{ data: books, error: booksError }, categories, { count: pendingSuggestions }] = await Promise.all([
     admin
       .from("materials")
       .select(
@@ -21,9 +21,15 @@ export default async function AdminLibraryPage() {
       )
       .order("updated_at", { ascending: false }),
     getCategories(),
+    admin
+      .from("pending_materials")
+      .select("id", { count: "exact", head: true })
+      .eq("submission_type", "suggestion")
+      .eq("status", "pending"),
   ]);
 
   if (booksError) throw new Error(`Could not load library materials: ${booksError.message}`);
+
 
   // Every material, whatever its type or visibility — admins need to reach
   // members' private uploads too (a heavy file, a takedown).
@@ -31,6 +37,7 @@ export default async function AdminLibraryPage() {
     <>
       <LibraryAdminView
         categories={categories}
+        pendingSuggestions={pendingSuggestions ?? 0}
         books={(books ?? []).map(({ google_meta_data, openlibrary_meta_data, cover_source, material_type, file_size_bytes, ...book }) => {
           const google = parseGoogleMetaData(google_meta_data);
           const openlibrary = parseOpenLibraryMetaData(openlibrary_meta_data);

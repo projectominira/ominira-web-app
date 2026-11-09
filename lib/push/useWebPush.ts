@@ -16,6 +16,30 @@ function isSupported() {
   return typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window;
 }
 
+/** This device's subscription (made if missing), saved to the server. The
+ * upsert also refreshes last_seen_at and, when signed in, the reader. */
+async function saveSubscription(registration: ServiceWorkerRegistration) {
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (!publicKey) throw new Error("Missing NEXT_PUBLIC_VAPID_PUBLIC_KEY");
+  const subscription =
+    (await registration.pushManager.getSubscription()) ??
+    (await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    }));
+  const json = subscription.toJSON() as { endpoint: string; keys?: { p256dh?: string; auth?: string } };
+  await apiFetch("/push/subscription", { json: { endpoint: json.endpoint, keys: json.keys } });
+}
+
+/** On each app load: a device that already allowed notifications saves its
+ * subscription again. A broadcast deletes subscriptions the push service
+ * reports gone, and the prompt never shows once permission is "granted", so
+ * without this such a device would drop out for good. */
+export async function resyncPushSubscription(registration: ServiceWorkerRegistration) {
+  if (!("PushManager" in window) || Notification.permission !== "granted") return;
+  await saveSubscription(registration);
+}
+
 /**
  * Reads current permission/subscription state and exposes `subscribe`,
  * called only from a user gesture (a button tap) — never on mount, since
@@ -34,23 +58,11 @@ export function useWebPush() {
 
   const subscribe = useCallback(async () => {
     if (!isSupported()) return false;
-    const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    if (!publicKey) throw new Error("Missing NEXT_PUBLIC_VAPID_PUBLIC_KEY");
-
     const permissionResult = await Notification.requestPermission();
     setPermission(permissionResult);
     if (permissionResult !== "granted") return false;
 
-    const registration = await navigator.serviceWorker.ready;
-    const subscription =
-      (await registration.pushManager.getSubscription()) ??
-      (await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      }));
-
-    const json = subscription.toJSON() as { endpoint: string; keys?: { p256dh?: string; auth?: string } };
-    await apiFetch("/push/subscription", { json: { endpoint: json.endpoint, keys: json.keys } });
+    await saveSubscription(await navigator.serviceWorker.ready);
     return true;
   }, []);
 

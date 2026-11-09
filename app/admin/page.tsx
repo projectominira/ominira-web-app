@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowDownRight, ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import AdminPageHeader from "./AdminPageHeader";
 import InfoTip from "./InfoTip";
-import ActivityChart from "./ActivityChart";
-import AdminMenu from "./AdminMenu";
-import { currentWeekStart, getWeeklyMetrics, getWeeklyReaders, growthRate, type WeekDay } from "@/lib/metrics/dashboard";
+import ActivityCompare, { type ActivityPanel, type BreakdownRow } from "./ActivityCompare";
+import { cookies } from "next/headers";
+import PeriodFilter from "./PeriodFilter";
+import { dashboardToday, getPeriodMetrics, getPeriodReaders, growthRate, type DayFigures } from "@/lib/metrics/dashboard";
+import { daysBetween } from "@/lib/time/zone";
+import { FILTER_HIDDEN_COOKIE, columnsOf, comparisonOf, parsePeriod, periodLabel, periodOf, versusPhrase, type Period, type Versus, type View } from "@/lib/metrics/period";
 import { pseudonymToSlug } from "@/lib/reader/profileSlug";
 import { formatDuration } from "@/lib/time/duration";
-import { addDays, weekdayOf } from "@/lib/time/zone";
+import { daysPlanned } from "@/lib/passage/calendar";
 
 export const dynamic = "force-dynamic";
 
@@ -18,154 +21,142 @@ export const metadata: Metadata = {
 };
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-// Days are calendar dates ("2026-10-20"); format them as UTC so they never shift.
-const dayFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-const weekRange = (start: string) =>
-  dayFormat.formatRange(new Date(`${start}T00:00:00Z`), new Date(`${addDays(start, 6)}T00:00:00Z`));
+const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th"}`;
 
 const formatCount = (n: number) => n.toLocaleString("en");
 const minutes = (seconds: number) => Math.round(seconds / 60);
 /** "30 h 40 min"; nothing read reads "0 min" rather than "<1 min". */
 const duration = (seconds: number) => (seconds ? formatDuration(seconds * 1000) : "0 min");
 
-const sum = (days: WeekDay[], key: "readers" | "seconds" | "newMembers") => days.reduce((n, d) => n + d[key], 0);
+const sum = (days: DayFigures[], key: "readers" | "seconds" | "newMembers") => days.reduce((n, d) => n + d[key], 0);
+const sumRange = (values: number[], from: number, to: number) => values.slice(from, to).reduce((n, v) => n + v, 0);
 
 /** `part` as a whole percentage of `whole`. */
 const share = (part: number, whole: number) => (whole ? Math.round((part / whole) * 100) : 0);
 
-/** `?week=` when it's a Monday no later than this week's, else this week. */
-function weekFrom(param: string | undefined, current: string): string {
-  if (!param || !/^\d{4}-\d{2}-\d{2}$/.test(param) || Number.isNaN(Date.parse(param))) return current;
-  return weekdayOf(param) === 0 && param <= current ? param : current;
-}
+export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ view?: string; period?: string; vs?: string }> }) {
+  const [params, jar] = await Promise.all([searchParams, cookies()]);
+  const filterHidden = jar.get(FILTER_HIDDEN_COOKIE)?.value === "1";
+  const today = dashboardToday();
+  const view: View = params.view === "month" ? "month" : "week";
+  const period = parsePeriod(view, params.period, today) ?? periodOf(view, today);
+  const vs: Versus = params.vs || "prev";
+  const compare = comparisonOf(period, vs, today);
+  const comparing = vs !== "none";
+  const [m, readers, plan] = await Promise.all([getPeriodMetrics(period, compare), getPeriodReaders(period), daysPlanned()]);
 
-export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ week?: string }> }) {
-  const current = currentWeekStart();
-  const week = weekFrom((await searchParams).week, current);
-  const [m, readers] = await Promise.all([getWeeklyMetrics(week), getWeeklyReaders(week)]);
-
-  const lastWeek = m.days.slice(14, 21);
-  const thisWeek = m.days.slice(21);
-  // While a week runs, compare only the days that have begun with the same weekdays last week.
-  const partial = m.elapsed < 7;
-  const soFar = thisWeek.slice(0, m.elapsed);
-  const sameDaysLastWeek = lastWeek.slice(0, m.elapsed);
-  const through = WEEKDAYS[m.elapsed - 1];
-  const lastWeekDetail = (n: string) => (partial ? `${n} by ${through} last week` : `${n} last week`);
+  const soFar = m.days.slice(0, m.elapsed);
+  const compared = m.compareDays.slice(0, m.compared);
+  // While the period runs, the comparison covers only as many of its first days.
+  const partial = m.elapsed < period.days;
+  const versus = versusPhrase(period, vs, compare);
+  const through = period.view === "week" ? WEEKDAYS[m.elapsed - 1] : `the ${ordinal(m.elapsed)}`;
+  const nowCaption = `${periodLabel(period, true)}${partial ? " · so far" : ""}`;
+  const thenCaption = `${periodLabel(compare, true)}${partial ? ` · by ${through}` : ""}`;
 
   const seconds = sum(soFar, "seconds");
-  const secondsPrev = sum(sameDaysLastWeek, "seconds");
+  const secondsCompare = sum(compared, "seconds");
   const joined = sum(soFar, "newMembers");
-  // Share of members who read: this week against last week's members, who are
-  // everyone that had joined by this week's start.
+  const joinedCompare = sum(compared, "newMembers");
   const reading = share(m.readers, m.members);
-  const readingPrev = share(m.readersPrev, m.membersAtStart);
+  const readingCompare = share(m.readersCompare, m.membersCompare);
 
-  const rows = [
-    { label: "Readers", value: (d: WeekDay) => formatCount(d.readers), week: formatCount(m.readers) },
-    { label: "Time read", value: (d: WeekDay) => duration(d.seconds), week: duration(seconds) },
-    { label: "New members", value: (d: WeekDay) => formatCount(d.newMembers), week: formatCount(joined) },
-  ];
+  // The comparison's own panel shows all of it that has begun.
+  const compareElapsed = Math.max(0, Math.min(compare.days, daysBetween(compare.start, today) + 1));
+  const panel = (p: Period, days: DayFigures[], elapsed: number, weekReaders: number[], readersAll: number, tone: ActivityPanel["tone"]): ActivityPanel => {
+    // Week: a row per day. Month: per 7-day stretch, readers counted once per stretch.
+    const rows: BreakdownRow[] = columnsOf(p).map((c, i) => {
+      if (c.from >= elapsed) return { label: c.label, readers: null, time: null, joined: null };
+      const span = days.slice(c.from, Math.min(c.to, elapsed));
+      return {
+        label: c.label,
+        readers: formatCount(p.view === "month" ? weekReaders[i] : sum(span, "readers")),
+        time: duration(sum(span, "seconds")),
+        joined: formatCount(sum(span, "newMembers")),
+      };
+    });
+    const begun = days.slice(0, elapsed);
+    return {
+      title: periodLabel(p),
+      caption: tone === "accent" ? (elapsed < p.days ? `${elapsed} of ${p.days} days so far` : "") : "Compared with",
+      tone,
+      points: days.map((d, i) => ({
+        day: d.day,
+        label: p.view === "week" ? WEEKDAYS[i] : String(i + 1),
+        readers: i < elapsed ? d.readers : null,
+        minutes: i < elapsed ? minutes(d.seconds) : null,
+      })),
+      rows,
+      total: { label: "Total", readers: formatCount(readersAll), time: duration(sum(begun, "seconds")), joined: formatCount(sum(begun, "newMembers")) },
+    };
+  };
+  const panels = [panel(period, m.days, m.elapsed, m.weekReaders, m.readers, "accent")];
+  if (comparing) panels.push(panel(compare, m.compareDays, compareElapsed, m.compareWeekReaders, m.compareReadersAll, "neutral"));
+  const ticks = period.view === "week" ? [0, 1, 2, 3, 4, 5, 6] : [0, 7, 14, 21, 28];
+  const columns = columnsOf(period);
+  const started = (c: { from: number }) => c.from < m.elapsed;
+  const unit = period.view === "week" ? "Week" : "Month";
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
-      <AdminPageHeader
-        title="Dashboard"
-        back={null}
-        actions={
-          <>
-            <nav aria-label="Week" className="mr-2 flex items-center gap-1">
-              <WeekLink href={`/admin?week=${addDays(week, -7)}`} label="Previous week" icon={<ChevronLeft size={16} />} />
-              <span className="px-1 text-[14px] font-bold text-[var(--reader-text)]">{weekRange(week)}</span>
-              <WeekLink
-                href={week < current ? (addDays(week, 7) === current ? "/admin" : `/admin?week=${addDays(week, 7)}`) : null}
-                label="Next week"
-                icon={<ChevronRight size={16} />}
-              />
-            </nav>
-            <AdminMenu />
-          </>
-        }
-      />
+    <div>
+      <AdminPageHeader title="Overview" actions={<PeriodFilter period={period} compare={compare} vs={vs} today={today} hidden={filterHidden} />} />
 
+      {/* Passages running low (passage-spec §8.4). */}
+      {plan.count < 7 && (
+        <p className="m-0 mb-4 rounded-sm bg-[var(--reader-surface-hover)] px-4 py-2.5 text-ui-sm text-[var(--reader-text)]">
+          {plan.through
+            ? `Passages planned to ${new Date(`${plan.through}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })} · ${plan.count} day${plan.count === 1 ? "" : "s"} left · `
+            : "No passage planned for tomorrow · "}
+          <Link href="/admin/connector" className="font-semibold text-brand-500 no-underline hover:underline">
+            Ask your AI for more
+          </Link>
+        </p>
+      )}
 
       {/* One card divided into cells by hairlines. Each cell draws its own
           right + bottom border; the grid overhangs by 1px so the outer
-          edge's are clipped. */}
-      <section aria-label="This week" className="overflow-hidden rounded-sm border border-[var(--reader-border)]">
+          edge's are clipped. Each cell sets the period beside its comparison. */}
+      <section aria-label={periodLabel(period)} className="overflow-hidden rounded-sm border border-[var(--reader-border)]">
         <div className="-mr-px -mb-px grid grid-cols-1 sm:grid-cols-3">
           <Tile
-            label="Members"
-            info="Everyone who has created an account, as of the end of this week, and how much that grew over the week."
-            value={formatCount(m.members)}
-            detail={`+${formatCount(m.members - m.membersAtStart)} this week, from ${formatCount(m.membersAtStart)}`}
-            change={growthRate(m.members, m.membersAtStart)}
+            label="New members"
+            info={`Accounts created this ${period.view}, against the same days of the comparison. Below: everyone with an account by then.`}
+            now={{ caption: nowCaption, value: formatCount(joined), note: `${formatCount(m.members)} members in all` }}
+            then={comparing ? { caption: thenCaption, value: formatCount(joinedCompare), note: `${formatCount(m.membersCompare)} members by then` } : undefined}
+            change={comparing ? growthRate(joined, joinedCompare) : null}
+            versus={versus}
           />
           <Tile
             label="Members reading"
-            info="The share of members who read on at least one day this week."
-            value={`${reading}%`}
-            detail={`${formatCount(m.readers)} of ${formatCount(m.members)} · ${lastWeekDetail(`${readingPrev}%`)}`}
-            change={m.membersAtStart ? (reading - readingPrev) / 100 : null}
+            info={`The share of members who read on at least one day this ${period.view}, against the same days of the comparison.`}
+            now={{ caption: nowCaption, value: `${reading}%`, note: `${formatCount(m.readers)} of ${formatCount(m.members)}` }}
+            then={comparing ? { caption: thenCaption, value: `${readingCompare}%`, note: `${formatCount(m.readersCompare)} of ${formatCount(m.membersCompare)}` } : undefined}
+            change={comparing && m.membersCompare ? (reading - readingCompare) / 100 : null}
+            versus={versus}
             points
           />
           <Tile
             label="Time read"
-            info="Total time members spent reading or listening this week."
-            value={duration(seconds)}
-            detail={lastWeekDetail(duration(secondsPrev))}
-            change={growthRate(seconds, secondsPrev)}
+            info={`Total time members spent reading or listening this ${period.view}, against the same days of the comparison.`}
+            now={{ caption: nowCaption, value: duration(seconds) }}
+            then={comparing ? { caption: thenCaption, value: duration(secondsCompare) } : undefined}
+            change={comparing ? growthRate(seconds, secondsCompare) : null}
+            versus={versus}
           />
         </div>
       </section>
 
-      <section aria-labelledby="days-heading" className="mt-3 rounded-sm border border-[var(--reader-border)] p-5">
-        <h2 id="days-heading" className="m-0 mb-4 text-[14px] font-bold text-[var(--reader-text)]">
-          Reading activity
-        </h2>
-        <ActivityChart
-          weekStart={week}
-          data={m.days.map((d, i) => ({
-            day: d.day,
-            readers: i < 21 + m.elapsed ? d.readers : null,
-            minutes: i < 21 + m.elapsed ? minutes(d.seconds) : null,
-          }))}
-        />
-
-        <div className="-mx-5 mt-5 overflow-x-auto border-t border-[var(--reader-border)] px-5">
-          <table className="w-full min-w-[560px] border-collapse text-[13px] tabular-nums">
-            <thead>
-              <tr className="text-[12px] font-semibold text-[var(--reader-text-muted)]">
-                <th scope="col" className="py-3 text-left font-semibold">
-                  <span className="sr-only">Figure</span>
-                </th>
-                {WEEKDAYS.map((d) => (
-                  <th key={d} scope="col" className="py-3 text-right font-semibold">
-                    {d}
-                  </th>
-                ))}
-                <th scope="col" className="py-3 pl-4 text-right font-semibold">
-                  Week
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <Row key={row.label} {...row} days={thisWeek} elapsed={m.elapsed} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <ActivityCompare panels={panels} ticks={ticks} />
 
       <section aria-labelledby="readers-heading" className="mt-3 rounded-sm border border-[var(--reader-border)] p-5">
         <div className="flex items-start justify-between gap-2">
           <h2 id="readers-heading" className="m-0 text-[14px] font-bold text-[var(--reader-text)]">
-            Readers this week
+            Readers this {period.view}
             <span className="ml-2 font-semibold text-[var(--reader-text-muted)]">{formatCount(readers.length)}</span>
           </h2>
-          <InfoTip label="Readers this week">Everyone who read this week and their time read each day, most time read first.</InfoTip>
+          <InfoTip label={`Readers this ${period.view}`}>
+            {`Everyone who read this ${period.view} and their time read ${period.view === "week" ? "each day" : "in each 7-day stretch"}, most time read first.`}
+          </InfoTip>
         </div>
         {readers.length ? (
           <div className="-mx-5 mt-4 overflow-x-auto border-t border-[var(--reader-border)] px-5">
@@ -175,13 +166,13 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
                   <th scope="col" className="py-3 text-left font-semibold">
                     Reader
                   </th>
-                  {WEEKDAYS.map((d) => (
-                    <th key={d} scope="col" className="py-3 text-right font-semibold">
-                      {d}
+                  {columns.map((c) => (
+                    <th key={c.label} scope="col" className="py-3 text-right font-semibold">
+                      {c.label}
                     </th>
                   ))}
                   <th scope="col" className="py-3 pl-4 text-right font-semibold">
-                    Week
+                    {unit}
                   </th>
                 </tr>
               </thead>
@@ -193,11 +184,14 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
                         {r.pseudonym}
                       </Link>
                     </th>
-                    {r.seconds.map((s, i) => (
-                      <td key={WEEKDAYS[i]} className="py-2.5 text-right">
-                        {i >= m.elapsed || !s ? <span className="text-[var(--reader-text-subtle)]">–</span> : duration(s)}
-                      </td>
-                    ))}
+                    {columns.map((c) => {
+                      const s = sumRange(r.seconds, c.from, c.to);
+                      return (
+                        <td key={c.label} className="py-2.5 text-right">
+                          {!started(c) || !s ? <Dash /> : duration(s)}
+                        </td>
+                      );
+                    })}
                     <td className="py-2.5 pl-4 text-right font-bold">{duration(r.total)}</td>
                   </tr>
                 ))}
@@ -205,88 +199,68 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
             </table>
           </div>
         ) : (
-          <p className="m-0 mt-3 text-[13px] text-[var(--reader-text-muted)]">No one has read this week yet.</p>
+          <p className="m-0 mt-3 text-[13px] text-[var(--reader-text-muted)]">No one has read this {period.view} yet.</p>
         )}
       </section>
     </div>
   );
 }
 
-/** A figure for each day of the week, then its week total; days yet to come show a dash. */
-function Row({ label, value, week, days, elapsed }: { label: string; value: (d: WeekDay) => string; week: string; days: WeekDay[]; elapsed: number }) {
-  return (
-    <tr className="border-t border-[var(--reader-border)] text-[var(--reader-text)]">
-      <th scope="row" className="py-2.5 text-left font-semibold">
-        {label}
-      </th>
-      {days.map((d, i) => (
-        <td key={d.day} className="py-2.5 text-right">
-          {i < elapsed ? value(d) : <span className="text-[var(--reader-text-subtle)]">–</span>}
-        </td>
-      ))}
-      <td className="py-2.5 pl-4 text-right font-bold">{week}</td>
-    </tr>
-  );
-}
+const Dash = () => <span className="text-[var(--reader-text-subtle)]">–</span>;
 
-/** A ‹ or › step; without an `href` (no later week) it stays in place, disabled. */
-function WeekLink({ href, label, icon }: { href: string | null; label: string; icon: React.ReactNode }) {
-  const base = "inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--reader-border)]";
-  if (!href) {
-    return (
-      <span aria-label={label} aria-disabled="true" className={`${base} text-[var(--reader-text-subtle)]`}>
-        {icon}
-      </span>
-    );
-  }
-  return (
-    <Link href={href} aria-label={label} className={`${base} text-[var(--reader-text)] hover:bg-[var(--reader-surface-hover)]`}>
-      {icon}
-    </Link>
-  );
-}
+type Figure = { caption: string; value: string; note?: string };
 
 function Tile({
   label,
   info,
-  value,
-  detail,
+  now,
+  then,
   change,
+  versus,
   points,
 }: {
   label: string;
   info: string;
-  value: string;
-  detail: string;
-  change?: number | null;
+  now: Figure;
+  /** The comparison's figure; none when nothing is compared. */
+  then?: Figure;
+  change: number | null;
+  /** What `change` is against, for screen readers: "last week". */
+  versus: string;
   /** `change` is a difference of percentages, shown in points rather than as a growth rate. */
   points?: boolean;
 }) {
-  const hasChange = change !== undefined && change !== null;
-
   return (
     <div className="flex min-w-0 flex-col border-r border-b border-[var(--reader-border)] p-4 shell:p-5">
       <div className="flex items-start justify-between gap-2">
         <span className="text-[13px] font-semibold text-[var(--reader-text-muted)]">{label}</span>
         <InfoTip label={label}>{info}</InfoTip>
       </div>
-      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2">
-        <span className="text-[26px] font-serif font-semibold leading-tight tracking-tight text-[var(--reader-text)]">{value}</span>
-        {hasChange && (
-          <span className="inline-flex items-center gap-0.5 text-[12px] font-semibold text-[var(--reader-text)]">
-            {change >= 0 ? (
-              <ArrowUpRight size={13} className="text-emerald-500" aria-hidden />
-            ) : (
-              <ArrowDownRight size={13} className="text-[var(--reader-accent)]" aria-hidden />
-            )}
-            {change >= 0 ? "+" : ""}
-            {Math.round(change * 100)}
-            {points ? " pts" : "%"}
-            <span className="sr-only"> vs last week</span>
-          </span>
-        )}
+      <div className={`mt-3 grid gap-3 ${then ? "grid-cols-2" : "grid-cols-1"}`}>
+        <FigureCell figure={now} strong />
+        {then && <FigureCell figure={then} />}
       </div>
-      <span className="mt-1 text-[12px] font-medium leading-snug text-[var(--reader-text-muted)]">{detail}</span>
+      {change !== null && (
+        <span className="mt-3 inline-flex items-center gap-0.5 text-[12px] font-semibold text-[var(--reader-text)]">
+          {change >= 0 ? <ArrowUpRight size={13} className="text-emerald-500" aria-hidden /> : <ArrowDownRight size={13} className="text-[var(--reader-accent)]" aria-hidden />}
+          {change >= 0 ? "+" : ""}
+          {Math.round(change * 100)}
+          {points ? " pts" : "%"}
+          <span className="font-medium text-[var(--reader-text-muted)]">&nbsp;{versus}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function FigureCell({ figure, strong }: { figure: Figure; strong?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <p className="m-0 truncate text-[11px] font-semibold text-[var(--reader-text-subtle)]">{figure.caption}</p>
+      <p className={`m-0 mt-0.5 font-serif leading-tight font-semibold tracking-tight ${strong ? "text-[24px] text-[var(--reader-text)]" : "text-[24px] text-[var(--reader-text-muted)]"}`}>
+        {figure.value}
+      </p>
+      {figure.note && <p className="m-0 mt-0.5 truncate text-[12px] font-medium text-[var(--reader-text-muted)]">{figure.note}</p>}
     </div>
   );
 }

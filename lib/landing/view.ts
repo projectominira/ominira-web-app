@@ -22,6 +22,8 @@ import { isPlainCover } from "./plain";
 /** Covers in the hero's wall: three rows. */
 const WALL_ROW = 12;
 const MOST_READ = 9;
+/** Left out of Most read (by title); the next most read takes the place. */
+const MOST_READ_SKIP = ["Twenty Enemy Forces"];
 /** Books on a shelf at most. */
 const SHELF = 12;
 /** The shelves, in order: the library category, its name here and line. */
@@ -81,8 +83,13 @@ const PASSAGE_TITLE = "The Wretched of the Earth";
 const HIDDEN = ["Kwame Nkrumah's Contribution to Pan-African Agency", "Making the Revolution Global", "Malcolm X Speaks Selected Speeches and Statements"];
 /** Always on the hero wall, in its first row (by title). */
 const WALL_PINNED = ["The Autobiography of Malcolm X"];
+/** The MAE principles: the landing gives them their own section, so they
+ * stay off the wall, out of Featured and out of Most read. */
+export const PRINCIPLES_SLUG = "mae-principles";
 /** Featured's spotlight, whatever its place in the editors' list. */
 const FEATURED_LEAD = "The Little Red Book";
+/** Featured's covers beside the spotlight at most: two rows of four. */
+const FEATURED_BESIDE = 8;
 
 export type LandingBook = Pick<MaterialSummary, "id" | "slug" | "title" | "author"> & {
   cover: string | null;
@@ -172,9 +179,28 @@ export async function getLandingView(): Promise<LandingView> {
   const passage = titled(PASSAGE_TITLE);
 
   const hidden = new Set(HIDDEN.map(titleKey));
+  const mostReadSkip = new Set(MOST_READ_SKIP.map(titleKey));
   const pinned = WALL_PINNED.flatMap((t) => titled(t) ?? []);
-  const at = featured.findIndex((f) => titleKey(f.material.title) === titleKey(FEATURED_LEAD));
-  const picks = at > 0 ? [featured[at], ...featured.filter((_, i) => i !== at)] : featured;
+  const editors = featured.filter((f) => f.material.slug !== PRINCIPLES_SLUG);
+  const at = editors.findIndex((f) => titleKey(f.material.title) === titleKey(FEATURED_LEAD));
+  const editorsPicks = at > 0 ? [editors[at], ...editors.filter((_, i) => i !== at)] : editors;
+  // Featured: the spotlight, then whole rows of four beside it (two at
+  // most); a short row is topped up with the most read good covers.
+  const featuredOnce = async () => {
+    const beside = editorsPicks.length - 1;
+    const short = beside > 0 ? Math.min(FEATURED_BESIDE, Math.ceil(beside / 4) * 4) - beside : 0;
+    const chosen = new Set(editorsPicks.map((f) => titleKey(f.material.title)));
+    const extra = short > 0 ? await good(ranked.filter((m) => m.materialType === "book" && m.slug !== PRINCIPLES_SLUG && !chosen.has(titleKey(m.title))), short) : [];
+    const picks = [...editorsPicks, ...extra.map((material) => ({ material, blurb: "" }))];
+    const books = await typesetPlain(
+      picks.map((f) => f.material),
+      1
+    );
+    return books.map((b, i) => {
+      const m = picks[i].material;
+      return { ...b, blurb: picks[i].blurb || m.googleDescription || m.openlibraryDescription || m.description || undefined };
+    });
+  };
   // A book on several shelves shows on one: pinned and hand-picked books
   // are claimed first, then the narrower shelves (later in SHELVES) claim
   // theirs, Pan-Africanism, the broadest, last.
@@ -194,15 +220,12 @@ export async function getLandingView(): Promise<LandingView> {
   };
   const [wall, shelves, featuredBooks, mostRead, sampleBooks] = await Promise.all([
     good(
-      ranked.filter((m) => m.materialType === "book" && !hidden.has(titleKey(m.title)) && !pinned.includes(m)),
+      ranked.filter((m) => m.materialType === "book" && m.slug !== PRINCIPLES_SLUG && !hidden.has(titleKey(m.title)) && !pinned.includes(m)),
       WALL_ROW * 3
     ),
     shelvesOnce(),
-    typesetPlain(
-      picks.map((f) => f.material),
-      1
-    ),
-    typesetPlain(ranked.filter((m) => readers(m) > 0).slice(0, MOST_READ)),
+    featuredOnce(),
+    typesetPlain(ranked.filter((m) => readers(m) > 0 && m.slug !== PRINCIPLES_SLUG && !mostReadSkip.has(titleKey(m.title))).slice(0, MOST_READ)),
     good(
       [...new Set([...SAMPLE_TITLES.flatMap((t) => titled(t) ?? []), ...ranked.filter((m) => m.materialType === "book")])],
       SAMPLE_TITLES.length
@@ -212,10 +235,7 @@ export async function getLandingView(): Promise<LandingView> {
   return {
     // The pinned books a few covers in, where the wall's fade has cleared.
     wall: [0, 1, 2].map((i) => [...wall.slice(0, 3), ...pinned, ...wall.slice(3)].slice(i * WALL_ROW, (i + 1) * WALL_ROW).map((m) => view(m))),
-    featured: featuredBooks.map((b, i) => {
-      const m = picks[i].material;
-      return { ...b, blurb: picks[i].blurb || m.googleDescription || m.openlibraryDescription || m.description || undefined };
-    }),
+    featured: featuredBooks,
     mostRead,
     shelves: shelves.filter((s) => s.books.length >= SHELF_MIN),
     passage: passage ? view(passage, true) : null,

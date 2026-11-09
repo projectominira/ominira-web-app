@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { apiFetch } from "@/lib/api/client";
+import { bookTitle } from "@/lib/materials/cleanTitle";
 import { isUploadImageName } from "@/lib/materials/uploadPaths";
 import type { BookDocument, Section } from "@/lib/book/schema";
 
@@ -165,8 +166,7 @@ export function useUploadBook() {
           const buffer = await file.arrayBuffer();
           const { book, coverPath, imagePaths } = await parseEpub(buffer, { slugHint: fileBaseName(file) });
           materialType = "book";
-          title = book.metadata.title;
-          author = book.metadata.author || "";
+          ({ title, author } = bookTitle(file.name, book.metadata.title, book.metadata.author));
           opts.onMetadata?.({ title, author });
           const zip = await ZipReader.open(buffer);
           // The EPUB's own declared cover, pulled straight out of the same
@@ -206,8 +206,7 @@ export function useUploadBook() {
           const buffer = await file.arrayBuffer();
           const { metadata, thumbnail } = await parsePdf(buffer);
           materialType = "pdf";
-          title = metadata.title || fileBaseName(file);
-          author = metadata.author || "";
+          ({ title, author } = bookTitle(file.name, metadata.title, metadata.author));
           pageCount = metadata.pageCount;
           thumbnailBlob = new Blob([thumbnail.slice().buffer], { type: "image/png" });
           opts.onThumbnail?.(URL.createObjectURL(thumbnailBlob));
@@ -217,8 +216,7 @@ export function useUploadBook() {
           const buffer = await file.arrayBuffer();
           const metadata = await parseDocx(buffer);
           materialType = "docx";
-          title = metadata.title || fileBaseName(file);
-          author = metadata.author || "";
+          ({ title, author } = bookTitle(file.name, metadata.title, metadata.author));
           opts.onMetadata?.({ title, author });
         } else {
           throw new Error("Only EPUB, PDF, and DOCX files can be added to library.");

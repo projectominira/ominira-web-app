@@ -7,6 +7,7 @@ import type { BookDocument } from "@/lib/book/schema";
 import { useMaterialsSearch } from "@/lib/materials/useMaterialsSearch";
 import { buildBookIndex, searchBook, type SearchResult } from "@/lib/search/bookIndex";
 import BookResultRow, { BookResultSkeleton, highlight } from "@/app/components/shared/BookResultRow";
+import RequestFromSearch from "@/app/components/shared/RequestFromSearch";
 
 type Props = {
   /** Omitted on the home page, which has no single book in scope — see the
@@ -125,17 +126,7 @@ export default function SearchModal({ book, onNavigate, onClose }: Props) {
               {!isSearching && query.trim() && libraryResults.length === 0 && (
                 <div className="py-10 text-center">
                   <NoResults className="m-0" message={`No results for "${query}"`} />
-                  {/* <p className="mt-2 mb-4 text-sm text-[var(--reader-text-muted)]">
-                    Can&rsquo;t find this book? Suggest it for the library.
-                  </p>
-                  <a
-                    href="https://t.me/africanyeast"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-sand-25 no-underline transition-opacity hover:opacity-90"
-                  >
-                    Suggest
-                  </a> */}
+                  <RequestFromSearch key={query.trim().toLowerCase()} query={query} />
                 </div>
               )}
             </>

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ExternalLink, Loader2, Lock, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { ExternalLink, Lightbulb, Loader2, Lock, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
@@ -10,6 +10,7 @@ import { formatBytes } from "@/lib/materials/uploadLimits";
 import TopicPickerTrigger, { TopicChips, type PickableItem } from "@/app/components/home/TopicPicker";
 import BookCover from "@/app/components/shared/BookCover";
 import AdminPageHeader from "@/app/admin/AdminPageHeader";
+import { AdminMenu, AdminSearch, AdminSidePanel } from "@/app/admin/AdminControls";
 import TextField from "@/app/components/auth/TextField";
 import TextAreaField from "@/app/components/auth/TextAreaField";
 
@@ -65,11 +66,15 @@ const thumbnailOf = (book: AdminBookRow) =>
   }) ?? undefined;
 
 // Matches TextField's input styling — the search box has no visible label, so
-// it can't use TextField itself.
-const searchInputClass =
-  "w-full rounded-sm border border-sand-300 bg-[var(--reader-surface)] py-2.5 pl-8 pr-4 font-medium text-[13px] leading-5 text-[var(--reader-text)] outline-none transition-colors placeholder:text-sand-400 focus:border-brand-400";
-
-export default function LibraryAdminView({ books, categories }: { books: AdminBookRow[]; categories: string[] }) {
+export default function LibraryAdminView({
+  books,
+  categories,
+  pendingSuggestions,
+}: {
+  books: AdminBookRow[];
+  categories: string[];
+  pendingSuggestions: number;
+}) {
   const router = useRouter();
   const [refreshing, startRefresh] = useTransition();
   const [items, setItems] = useState(() => books);
@@ -82,17 +87,13 @@ export default function LibraryAdminView({ books, categories }: { books: AdminBo
   }
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [format, setFormat] = useState("all");
-
-  const formats = useMemo(() => Array.from(new Set(books.map((b) => b.materialType))).sort(), [books]);
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items.filter(
       (b) =>
-        (format === "all" || b.materialType === format) &&
-        (!q || b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q) || b.categories.some((c) => c.toLowerCase().includes(q)))
+        !q || b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q) || b.categories.some((c) => c.toLowerCase().includes(q))
     );
-  }, [items, query, format]);
+  }, [items, query]);
 
   const selectedBook = items.find((book) => book.id === selectedId) ?? null;
 
@@ -106,62 +107,32 @@ export default function LibraryAdminView({ books, categories }: { books: AdminBo
   };
 
   return (
-    <div className={`transition-[padding] ${selectedBook ? "xl:pr-[440px]" : ""}`}>
+    <div>
       <AdminPageHeader
         title="Library"
         subtitle={`${items.length.toLocaleString("en")} materials`}
         actions={
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => startRefresh(() => router.refresh())}
-              disabled={refreshing}
-              aria-label="Refresh"
-              title="Refresh"
-              className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-[var(--radius-sm)] border border-[var(--reader-border)] bg-transparent text-[var(--reader-text-muted)] transition-colors hover:bg-[var(--reader-surface-hover)] hover:text-[var(--reader-text)] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw size={14} className={refreshing ? "animate-spin" : undefined} />
-            </button>
-            <Link
-              href="/admin/library/new"
-              className="inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--reader-border)] px-3.5 text-[12px] font-bold text-[var(--reader-text)] transition-colors hover:bg-[var(--reader-surface-hover)]"
-            >
-              <Plus size={14} />
-              Add books
-            </Link>
-          </div>
+          <>
+            <AdminSearch value={query} onChange={setQuery} placeholder="Search title, author or tag" label="Search materials" />
+            <AdminMenu
+              items={[
+                { label: "Add books", icon: <Plus size={14} />, onClick: () => router.push("/admin/library/new") },
+                {
+                  label: pendingSuggestions ? `Book requests (${pendingSuggestions})` : "Book requests",
+                  icon: <Lightbulb size={14} />,
+                  onClick: () => router.push("/admin/library/suggestions"),
+                },
+                {
+                  label: refreshing ? "Refreshing…" : "Refresh",
+                  icon: <RefreshCw size={14} className={refreshing ? "animate-spin" : undefined} />,
+                  disabled: refreshing,
+                  onClick: () => startRefresh(() => router.refresh()),
+                },
+              ]}
+            />
+          </>
         }
       />
-
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <label className="relative min-w-[220px] flex-1 sm:max-w-xs">
-          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--reader-text-subtle)]" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search title, author or tag"
-            aria-label="Search materials"
-            className={searchInputClass}
-          />
-        </label>
-        {/* Same styling as SelectField, minus its visible label. */}
-        <label className="relative">
-          <select
-            value={format}
-            onChange={(e) => setFormat(e.target.value)}
-            aria-label="Filter by format"
-            className="cursor-pointer appearance-none rounded-sm border border-sand-300 bg-[var(--reader-surface)] py-2.5 pl-4 pr-10 font-medium text-[13px] leading-5 text-[var(--reader-text)] outline-none transition-colors focus:border-brand-400"
-          >
-            <option value="all">All formats</option>
-            {formats.map((f) => (
-              <option key={f} value={f}>
-                {formatLabel(f)}
-              </option>
-            ))}
-          </select>
-          <ChevronDown size={16} className="pointer-events-none absolute inset-y-0 right-3.5 my-auto text-sand-500" />
-        </label>
-      </div>
 
       <div className="overflow-x-auto rounded-sm border border-[var(--reader-border)]">
         {visible.length === 0 ? (
@@ -230,23 +201,16 @@ export default function LibraryAdminView({ books, categories }: { books: AdminBo
       </div>
 
       {selectedBook && (
-        <>
-          {/* Below xl the panel overlays the table, so give it a backdrop to dismiss. */}
-          <div className="fixed inset-0 z-40 bg-black/30 xl:hidden" onClick={() => setSelectedId(null)} aria-hidden />
-          <aside
-            aria-label="Edit material"
-            className="fixed inset-y-0 right-0 z-50 w-full overflow-y-auto border-l border-[var(--reader-border)] bg-[var(--reader-surface)] shadow-xl sm:w-[440px] xl:shadow-none"
-          >
-            <BookEditPanel
-              key={selectedBook.id}
-              book={selectedBook}
-              availableCategories={categories}
-              onSaved={updateBook}
-              onDeleted={removeBook}
-              onClose={() => setSelectedId(null)}
-            />
-          </aside>
-        </>
+        <AdminSidePanel label="Edit material" onClose={() => setSelectedId(null)}>
+          <BookEditPanel
+            key={selectedBook.id}
+            book={selectedBook}
+            availableCategories={categories}
+            onSaved={updateBook}
+            onDeleted={removeBook}
+            onClose={() => setSelectedId(null)}
+          />
+        </AdminSidePanel>
       )}
     </div>
   );

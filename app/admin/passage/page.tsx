@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { countMembers, countNewQuotes, getToday, listDays, listSets } from "@/lib/passage/sets";
+import { getCalendar } from "@/lib/passage/calendar";
+import { countMembers, countNewQuotes, listDays, listSets } from "@/lib/passage/sets";
 import PassageAdminView, { type Tab } from "./PassageAdminView";
 
 export const dynamic = "force-dynamic";
@@ -12,18 +12,15 @@ export const metadata: Metadata = {
 
 export default async function AdminPassagePage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { tab } = await searchParams;
-  const initial: Tab = tab === "history" ? "history" : "sets";
-  // The open tab's first page comes with the page; the others load when opened.
-  const [today, newQuotes, members, firstSets, firstDays] = await Promise.all([
-    getToday(),
+  const initial: Tab = tab === "history" || tab === "review" ? tab : "calendar";
+  // The calendar always comes with the page; the open tab's first page too,
+  // the others load when opened.
+  const [calendar, newQuotes, members, firstSets, firstDays] = await Promise.all([
+    getCalendar(),
     countNewQuotes(),
     countMembers(),
-    initial === "sets" ? listSets({ cursor: null }) : null,
+    initial === "review" ? listSets({ cursor: null }) : null,
     initial === "history" ? listDays({ cursor: null }) : null,
   ]);
-  // The connector link (passage-spec §6.2), on whichever host this is.
-  const token = process.env.PASSAGE_CONNECTOR_TOKEN?.trim();
-  const h = await headers();
-  const connectorUrl = token ? `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}/api/mcp/${token}` : null;
-  return <PassageAdminView connectorUrl={connectorUrl} tab={initial} today={today} newQuotes={newQuotes} members={members} firstSets={firstSets} firstDays={firstDays} />;
+  return <PassageAdminView tab={initial} calendar={calendar} newQuotes={newQuotes} members={members} firstSets={firstSets} firstDays={firstDays} />;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { resyncPushSubscription } from "@/lib/push/useWebPush";
 
 export default function ServiceWorkerRegistration() {
   useEffect(() => {
@@ -16,6 +17,7 @@ export default function ServiceWorkerRegistration() {
         // instead of relying solely on the browser's navigation-triggered check,
         // which can be delayed by HTTP caching of sw.js itself.
         reg.update().catch(() => {});
+        resyncPushSubscription(reg).catch(() => {});
       })
       .catch(() => {});
 

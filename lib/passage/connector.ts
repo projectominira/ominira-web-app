@@ -1,21 +1,44 @@
 import "server-only";
 
+import { revalidateTag } from "next/cache";
 import { z } from "zod";
+import { CATEGORIES_CACHE_TAG } from "@/lib/categories/config";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { fetchMaterialManifest } from "@/lib/materials/manifest";
 import { UUID_RE } from "@/lib/materials/resolve";
 import type { TocSection } from "@/lib/api/types";
 import { createSet, CreateSetInput, listDays } from "./sets";
+import { getBrief, getCalendar } from "./calendar";
+import { passageDay } from "@/lib/rooms/passage";
+import { addDays } from "@/lib/time/zone";
 import { isScanned, loadBookText, normalise, type BookText, type TextBlock } from "./text";
 
-// The tools the passage connector (passage-spec §6) gives an editor's AI:
+// The tools the Ominira connector (passage-spec §6) gives an editor's AI:
 // browse the library, read and search a book's text, see recent passages,
-// and send a set to /admin/passage. Text comes straight from each book's
+// and send a set to /admin/passage; and tag books with categories, adding
+// new categories where none fits. Text comes straight from each book's
 // file (lib/passage/text.ts); nothing is indexed.
 
 const db = () => getSupabaseAdminClient();
 
-export const INSTRUCTIONS = `You help an Ominira editor find short, quotable passages in Ominira's library of books, for sharing as images or as the passage of the day (a quote plus a question members answer).
+export const INSTRUCTIONS = `You help an Ominira editor with two jobs in Ominira's library of books: finding short, quotable passages, and tagging books with categories.
+
+## Passages
+
+Passages are shared as images or as the passage of the day (a quote plus a question members answer). Each morning at 07:00 Lagos time Ominira posts the day's approved passage on its own, from a calendar of the next 30 days.
+
+### Planning the calendar
+
+When the editor asks you to plan or fill days ("plan the next 30 days", "fill next week"), work on your own, without asking for themes:
+1. Call \`calendar\` first. Follow its editorial brief: it is the editors' taste and their list of key dates.
+2. Anniversaries: find the dates in the open days that matter to Pan-African and emancipatory history (the brief's key dates first). Confirm each date with a web search before using it. Send each with \`kind: "anniversary"\` and its \`day\`.
+3. Topical: work from what the editor raises, or search the news when asked. Use a passage only when it sheds light on the moment, not because it shares a word. \`kind: "topical"\`.
+4. Evergreen: fill the remaining open days with strong passages. Use what readers already love as a taste guide (Goodreads quotes, well-known speeches, wherever Pan-Africanist thought is shared), then find those words, or better ones, in Ominira's own edition: only the library's text can be sent.
+5. Spread books and authors: avoid the ones \`calendar\` lists as featured recently, and don't repeat a book within the same batch.
+6. Give every quote an \`occasion\`: one line on why this passage, that day.
+7. A month is a lot of reading for one chat: plan anniversaries and topical days first, then evergreen, and send each batch with \`send_to_ominira\` as its own set once it's ready: asking you to plan is asking you to send. Editors approve each quote in Ominira; nothing is posted without them.
+
+### Finding passages for an idea
 
 How to work:
 1. Understand the editor's idea (a theme, an anniversary, a conversation in the news).
@@ -24,11 +47,22 @@ How to work:
 4. Discuss the candidates with the editor.
 5. Call \`send_to_ominira\` only when the editor asks you to.
 
-Rules:
+### Every quote
 - Quote word for word from \`read\` output. A quote that isn't found verbatim in the book is rejected.
 - Keep quotes short (one to three sentences) and self-contained: they must make sense without what comes before.
 - For each quote, pass \`near\` (the block id or page number \`read\` showed), say why it fits, and suggest one open question members can answer from their own life.
-- Check \`recent_passages\` and avoid repeating recent quotes, books or questions.`;
+- Check \`recent_passages\` and avoid repeating recent quotes, books or questions.
+
+## Tagging books
+
+Categories are how members browse the library and pick their interests, so each one should be a topic a reader would look for.
+
+How to work:
+1. Call \`categories\` to see every category and how many books it has.
+2. Call \`books_to_tag\` for the books with no category yet (page through with \`offset\`), or with \`untagged: false\` to review existing tags.
+3. Give each book one to three categories that say what it is about, preferring existing categories.
+4. Propose a new category only when no existing one fits and several books in the library belong in it. Keep its name short and in the style of the existing ones (e.g. "Marxism & Socialism"). Agree new categories with the editor first.
+5. Call \`tag_books\` when the editor asks. It replaces each book's categories, so pass the full list for every book.`;
 
 /** About 4 characters a token. */
 const tokens = (chars: number) => Math.ceil(chars / 4);
@@ -249,6 +283,114 @@ async function find({ books, terms, limit }: z.infer<typeof Find>) {
   return { results: hits.slice(0, limit).map((h) => ({ book: h.book, at: h.at, chapter: h.chapter, snippet: h.snippet })), total: hits.length, ...(skipped.length ? { skipped } : {}) };
 }
 
+const Categories = z.object({});
+
+/** Published public books (any type) with their categories. */
+async function publicBooks() {
+  const { data, error } = await db()
+    .from("materials")
+    .select("id, slug, title, author, published_year, categories, description")
+    .eq("status", "published")
+    .eq("visibility", "public")
+    .order("title");
+  if (error) throw error;
+  return data.map((m) => ({ ...m, categories: Array.isArray(m.categories) ? (m.categories as string[]) : [] }));
+}
+
+async function categoryNames(): Promise<string[]> {
+  const { data, error } = await db().from("categories").select("name").order("position");
+  if (error) throw error;
+  return data.map((c) => c.name);
+}
+
+async function listCategories() {
+  const [names, books] = await Promise.all([categoryNames(), publicBooks()]);
+  const count = new Map<string, number>();
+  for (const b of books) for (const c of b.categories) count.set(c, (count.get(c) ?? 0) + 1);
+  return { categories: names.map((name) => ({ name, books: count.get(name) ?? 0 })), books: books.length, untagged: books.filter((b) => !b.categories.length).length };
+}
+
+const ToTag = z.object({
+  untagged: z.boolean().default(true).describe("Only books with no category yet. False lists every book, to review existing tags."),
+  offset: z.int().min(0).default(0),
+  limit: z.int().min(1).max(100).default(50),
+});
+
+async function booksToTag({ untagged, offset, limit }: z.infer<typeof ToTag>) {
+  const books = (await publicBooks()).filter((b) => !untagged || !b.categories.length);
+  return {
+    total: books.length,
+    books: books.slice(offset, offset + limit).map((b) => ({
+      slug: b.slug,
+      title: b.title,
+      author: b.author,
+      year: b.published_year,
+      categories: b.categories,
+      description: b.description?.slice(0, 500) ?? null,
+    })),
+    next: offset + limit < books.length ? offset + limit : null,
+  };
+}
+
+const CategoryName = z.string().trim().min(2).max(40);
+
+const Tag = z.object({
+  books: z.array(z.object({ book: BookKey, categories: z.array(CategoryName).min(1).max(5) })).min(1).max(100),
+  new_categories: z
+    .array(CategoryName)
+    .max(10)
+    .default([])
+    .describe("Categories to create. A category that is neither existing nor listed here is rejected, so a typo can't make a near-duplicate."),
+});
+
+async function tagBooks({ books, new_categories }: z.infer<typeof Tag>, origin: string) {
+  // Names match case-insensitively and are stored as already spelled.
+  const names = await categoryNames();
+  const canonical = new Map(names.map((n) => [n.toLowerCase(), n]));
+  const fresh = new Map<string, string>();
+  for (const n of new_categories) if (!canonical.has(n.toLowerCase())) fresh.set(n.toLowerCase(), n);
+  const unknown = new Set<string>();
+  const wanted = books.map(({ book, categories }) => ({
+    book,
+    categories: [
+      ...new Set(
+        categories.map((c) => {
+          const name = canonical.get(c.toLowerCase()) ?? fresh.get(c.toLowerCase());
+          if (!name) unknown.add(c);
+          return name ?? c;
+        })
+      ),
+    ],
+  }));
+  if (unknown.size) throw new ToolError(`Unknown categories: ${[...unknown].join(", ")}. Use an existing name from categories, or list it in new_categories.`);
+
+  const byKey = new Map<string, { id: string; slug: string }>();
+  for (const b of await publicBooks()) byKey.set(b.slug, b).set(b.id, b);
+  const skipped = wanted.filter((w) => !byKey.has(w.book)).map((w) => `${w.book}: no public book with this slug`);
+  const found = wanted.filter((w) => byKey.has(w.book));
+
+  // Only categories some book actually uses are created.
+  const used = new Set(found.flatMap((w) => w.categories));
+  const created = [...fresh.values()].filter((n) => used.has(n));
+  if (created.length) {
+    const { error } = await db()
+      .from("categories")
+      .insert(created.map((name, i) => ({ name, position: names.length + i })));
+    if (error) throw error;
+    revalidateTag(CATEGORIES_CACHE_TAG, "max");
+  }
+
+  for (let i = 0; i < found.length; i += 10) {
+    await Promise.all(
+      found.slice(i, i + 10).map(async (w) => {
+        const { error } = await db().from("materials").update({ categories: w.categories }).eq("id", byKey.get(w.book)!.id);
+        if (error) throw error;
+      })
+    );
+  }
+  return { tagged: found.length, created, ...(skipped.length ? { skipped } : {}), review: `${origin}/admin/library` };
+}
+
 const Recent = z.object({ days: z.int().min(1).max(365).default(30) });
 
 async function recentPassages({ days }: z.infer<typeof Recent>) {
@@ -261,6 +403,43 @@ async function recentPassages({ days }: z.infer<typeof Recent>) {
     cursor = page.items.at(-1)?.day && page.items.at(-1)!.day >= since ? page.nextCursor : null;
   } while (cursor);
   return { passages: out };
+}
+
+const CalendarInput = z.object({});
+
+/** What planning needs (passage-spec §8.5): the brief, the next 30 days,
+ * what's waiting for review, and the books and authors used lately. */
+async function calendar() {
+  const since = addDays(passageDay(Date.now()), -60);
+  const [brief, cal, recent] = await Promise.all([
+    getBrief(),
+    getCalendar(),
+    db().from("daily_passages").select("post_id").gte("day", since),
+  ]);
+  if (recent.error) throw recent.error;
+  const posts = recent.data.length
+    ? await db().from("posts").select("material_id").in("id", recent.data.map((r) => r.post_id))
+    : { data: [], error: null };
+  if (posts.error) throw posts.error;
+  const ids = [...new Set(posts.data.flatMap((p) => (p.material_id ? [p.material_id] : [])))];
+  const books = ids.length ? await db().from("materials").select("slug, title, author").in("id", ids) : { data: [], error: null };
+  if (books.error) throw books.error;
+  const featured = new Map(books.data.map((b) => [b.slug, { slug: b.slug, title: b.title, author: b.author }]));
+  for (const d of cal.days) if (d.quote) featured.set(d.quote.book.slug, { slug: d.quote.book.slug, title: d.quote.book.title, author: d.quote.book.author });
+
+  return {
+    brief: brief.body,
+    today: cal.today,
+    days: cal.days.map((d) => {
+      const weekday = new Date(`${d.day}T00:00:00Z`).toLocaleDateString("en", { weekday: "short", timeZone: "UTC" });
+      if (d.posted) return { day: d.day, weekday, status: "posted", book: d.posted.book };
+      if (d.quote) return { day: d.day, weekday, status: "planned", kind: d.quote.kind, occasion: d.quote.occasion, book: d.quote.book.title };
+      return { day: d.day, weekday, status: "open" };
+    }),
+    waiting_for_review: cal.waiting.map((q) => ({ kind: q.kind, occasion: q.occasion, day_wanted: q.wantedDay, book: q.book.title })),
+    featured_recently: [...featured.values()],
+    note: "Plan the open days. Waiting quotes will likely fill some of them once approved; don't duplicate their occasions.",
+  };
 }
 
 const Send = CreateSetInput;
@@ -281,6 +460,12 @@ async function send(input: z.infer<typeof Send>, origin: string) {
 type Tool = { description: string; input: z.ZodType; run: (input: never, origin: string) => Promise<unknown>; readOnly: boolean };
 
 const TOOLS: Record<string, Tool> = {
+  calendar: {
+    description: "Call first when planning passages: the editorial brief, the next 30 days (posted, planned or open), quotes waiting for review, and books featured recently.",
+    input: CalendarInput,
+    run: calendar,
+    readOnly: true,
+  },
   catalog: { description: "List the library's public books (EPUBs and text PDFs), or filter them by a query.", input: Catalog, run: catalog, readOnly: true },
   contents: { description: "A book's chapters (EPUB) or page groups (PDF), each with its size in tokens.", input: Contents, run: contents, readOnly: true },
   read: {
@@ -291,6 +476,19 @@ const TOOLS: Record<string, Tool> = {
   },
   find: { description: "Search up to 10 books for words or phrases. Returns matching blocks, best first, with a snippet.", input: Find, run: find, readOnly: true },
   recent_passages: { description: "Recent passages of the day: quote, book and question. Avoid repeating them.", input: Recent, run: recentPassages, readOnly: true },
+  categories: { description: "Every category, in order, with how many public books it has, plus how many books have none.", input: Categories, run: listCategories, readOnly: true },
+  books_to_tag: {
+    description: "Public books to tag: slug, title, author, year, current categories and description. Untagged books only by default; pages of up to 100.",
+    input: ToTag,
+    run: booksToTag,
+    readOnly: true,
+  },
+  tag_books: {
+    description: "Set the categories of up to 100 books, replacing what each had. New categories must be listed in new_categories. Only call this when the editor asks.",
+    input: Tag,
+    run: tagBooks,
+    readOnly: false,
+  },
   send_to_ominira: {
     description: "Send a set of quotes to Ominira for the editor to review. Only call this when the editor asks. Quotes not found word for word are rejected with a reason; the rest save.",
     input: Send,
