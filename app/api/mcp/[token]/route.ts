@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { safeEqual } from "@/lib/admin/pin";
+import { markSeen } from "@/lib/passage/activity";
 import { callTool, INSTRUCTIONS, listTools } from "@/lib/passage/connector";
 
 // The passage connector (passage-spec §6): a stateless MCP server over
@@ -22,6 +23,7 @@ async function handle(msg: Message, origin: string) {
   if (msg.id === undefined) return null;
   switch (msg.method) {
     case "initialize": {
+      await markSeen();
       const asked = msg.params?.protocolVersion;
       return result(msg.id, {
         protocolVersion: typeof asked === "string" && PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],

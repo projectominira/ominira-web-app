@@ -7,8 +7,10 @@ import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { fetchMaterialManifest } from "@/lib/materials/manifest";
 import { UUID_RE } from "@/lib/materials/resolve";
 import type { TocSection } from "@/lib/api/types";
+import type { Database } from "@/lib/supabase/database.types";
 import { createSet, CreateSetInput, listDays } from "./sets";
 import { getBrief, getCalendar } from "./calendar";
+import { logCategories, logEdits, logPassages, logTags, type BookEdit, type CategoryChange } from "./activity";
 import { passageDay } from "@/lib/rooms/passage";
 import { addDays } from "@/lib/time/zone";
 import { isScanned, loadBookText, normalise, type BookText, type TextBlock } from "./text";
@@ -21,7 +23,9 @@ import { isScanned, loadBookText, normalise, type BookText, type TextBlock } fro
 
 const db = () => getSupabaseAdminClient();
 
-export const INSTRUCTIONS = `You help an Ominira editor with two jobs in Ominira's library of books: finding short, quotable passages, and tagging books with categories.
+type MaterialUpdate = Database["public"]["Tables"]["materials"]["Update"];
+
+export const INSTRUCTIONS = `You help an Ominira editor with two jobs in Ominira's library of books: finding short, quotable passages, and looking after the books (their categories and details).
 
 ## Passages
 
@@ -62,7 +66,23 @@ How to work:
 2. Call \`books_to_tag\` for the books with no category yet (page through with \`offset\`), or with \`untagged: false\` to review existing tags.
 3. Give each book one to three categories that say what it is about, preferring existing categories.
 4. Propose a new category only when no existing one fits and several books in the library belong in it. Keep its name short and in the style of the existing ones (e.g. "Marxism & Socialism"). Agree new categories with the editor first.
-5. Call \`tag_books\` when the editor asks. It replaces each book's categories, so pass the full list for every book.`;
+5. Call \`tag_books\` when the editor asks. It replaces each book's categories, so pass the full list for every book.
+6. To rename, merge or remove a category, use \`edit_categories\` when the editor asks. It updates every book and reader at once; don't retag books by hand for this.
+
+## Tidying book details
+
+Titles and authors come from uploads and are often messy: all caps, file names, "Unknown", subtitles run together, an editor's name where the author should be.
+
+When the editor asks in any words ("fix books with wrong details", "tidy the authors"), work on your own, without asking them to name books or confirm each fix:
+1. Call \`books_to_fix\` and page through it. It lists books showing signs of a problem, each with its hints. Hints are leads, not verdicts: fix what is wrong, leave what is right. With \`all: true\` it lists every book, for a full check or when the editor asks about something hints can't see (a misspelled name, the wrong author).
+2. Use each book's published form:
+   - Title as printed, in title case, with a subtitle after a colon ("Technofeudalism: What Killed Capitalism"). Drop series names in brackets and stray punctuation (" -- ", " : ").
+   - Authors by their usual full name, first name first, joined with commas ("Cheikh Anta Diop", "W. E. B. Du Bois", "Toyin Falola, Jessica Achberger"), spelled the same on every book.
+   - Year: fill a missing one with the year the work was first published. Leave existing years alone unless plainly wrong.
+   - Description: fill a missing one only with a short, factual summary you are sure of.
+   Check with a web search when unsure. If still unsure, leave the book and say so.
+3. Send the fixes with \`edit_books\` as you go, up to 100 a call, passing only the fields that change.
+4. Finish with a short report: how many books you fixed, a few examples, and any you left for the editor. Every change, before and after, is kept in the Connector history.`;
 
 /** About 4 characters a token. */
 const tokens = (chars: number) => Math.ceil(chars / 4);
@@ -332,6 +352,52 @@ async function booksToTag({ untagged, offset, limit }: z.infer<typeof ToTag>) {
   };
 }
 
+const ToFix = z.object({
+  all: z.boolean().default(false).describe("Every book instead of only those with hints."),
+  offset: z.int().min(0).default(0),
+  limit: z.int().min(1).max(100).default(100),
+});
+
+/** Signs a book's details need a look; the AI decides. */
+function hints(b: { title: string; author: string; published_year: number | null; description: string | null }): string[] {
+  const out: string[] = [];
+  const { title, author } = b;
+  const letters = title.replace(/[^A-Za-z]/g, "");
+  if (letters.length > 3 && (letters === letters.toUpperCase() || letters === letters.toLowerCase())) out.push("title all upper or lower case");
+  if (/[_]|\.(pdf|epub|txt)$|--|\s[-–:]\s|\s:/i.test(title)) out.push("title has file-name or odd punctuation");
+  if (/[([]/.test(title)) out.push("title has brackets (series or edition?)");
+  if (!author.trim() || /unknown|anonymous|various/i.test(author)) out.push("author missing or unknown");
+  const authorLetters = author.replace(/[^A-Za-z]/g, "");
+  if (authorLetters.length > 3 && authorLetters === authorLetters.toUpperCase()) out.push("author all upper case");
+  if (author.includes(",")) out.push("author has a comma (surname first, or several names?)");
+  if (/\.$/.test(author.trim()) || /\.[A-Za-z]/.test(author) || /\b[A-Z]\b(?!\.)/.test(author)) out.push("author initials or punctuation look off");
+  if (/\b(ed\.|eds\.|editor|translated|trans\.)/i.test(author)) out.push("author may be an editor or translator");
+  if (b.published_year === null) out.push("no year");
+  if (!b.description?.trim()) out.push("no description");
+  return out;
+}
+
+async function booksToFix({ all, offset, limit }: z.infer<typeof ToFix>) {
+  // Title and author problems first; a missing year or description after.
+  const minor = (h: string) => h === "no year" || h === "no description";
+  const books = (await publicBooks())
+    .map((b) => ({ b, hints: hints(b) }))
+    .filter((x) => all || x.hints.length)
+    .sort((x, y) => Number(x.hints.every(minor)) - Number(y.hints.every(minor)));
+  return {
+    total: books.length,
+    books: books.slice(offset, offset + limit).map(({ b, hints }) => ({
+      slug: b.slug,
+      title: b.title,
+      author: b.author,
+      year: b.published_year,
+      description: b.description?.slice(0, 300) ?? null,
+      hints,
+    })),
+    next: offset + limit < books.length ? offset + limit : null,
+  };
+}
+
 const CategoryName = z.string().trim().min(2).max(40);
 
 const Tag = z.object({
@@ -364,7 +430,7 @@ async function tagBooks({ books, new_categories }: z.infer<typeof Tag>, origin: 
   }));
   if (unknown.size) throw new ToolError(`Unknown categories: ${[...unknown].join(", ")}. Use an existing name from categories, or list it in new_categories.`);
 
-  const byKey = new Map<string, { id: string; slug: string }>();
+  const byKey = new Map<string, { id: string; slug: string; title: string }>();
   for (const b of await publicBooks()) byKey.set(b.slug, b).set(b.id, b);
   const skipped = wanted.filter((w) => !byKey.has(w.book)).map((w) => `${w.book}: no public book with this slug`);
   const found = wanted.filter((w) => byKey.has(w.book));
@@ -373,9 +439,11 @@ async function tagBooks({ books, new_categories }: z.infer<typeof Tag>, origin: 
   const used = new Set(found.flatMap((w) => w.categories));
   const created = [...fresh.values()].filter((n) => used.has(n));
   if (created.length) {
+    const last = await db().from("categories").select("position").order("position", { ascending: false }).limit(1).maybeSingle();
+    if (last.error) throw last.error;
     const { error } = await db()
       .from("categories")
-      .insert(created.map((name, i) => ({ name, position: names.length + i })));
+      .insert(created.map((name, i) => ({ name, position: (last.data?.position ?? 0) + 1 + i })));
     if (error) throw error;
     revalidateTag(CATEGORIES_CACHE_TAG, "max");
   }
@@ -388,7 +456,111 @@ async function tagBooks({ books, new_categories }: z.infer<typeof Tag>, origin: 
       })
     );
   }
+  if (found.length) {
+    await logTags(
+      found.map((w) => {
+        const b = byKey.get(w.book)!;
+        return { title: b.title, slug: b.slug, categories: w.categories };
+      }),
+      created
+    );
+  }
   return { tagged: found.length, created, ...(skipped.length ? { skipped } : {}), review: `${origin}/admin/library` };
+}
+
+const Edit = z.object({
+  books: z
+    .array(
+      z.object({
+        book: BookKey,
+        title: z.string().trim().min(1).max(500).optional(),
+        author: z.string().trim().min(1).max(300).optional(),
+        year: z.int().min(0).max(3000).nullable().optional().describe("Year the work was first published; null clears it."),
+        description: z.string().trim().max(10_000).nullable().optional().describe("Null clears it."),
+      })
+    )
+    .min(1)
+    .max(100),
+});
+
+/** Fixes books' details; the slug (the book's link) never changes. */
+async function editBooks({ books }: z.infer<typeof Edit>, origin: string) {
+  const byKey = new Map<string, Awaited<ReturnType<typeof publicBooks>>[number]>();
+  for (const b of await publicBooks()) byKey.set(b.slug, b).set(b.id, b);
+  const skipped: string[] = [];
+  const edits: (BookEdit & { id: string; update: MaterialUpdate })[] = [];
+  for (const w of books) {
+    const b = byKey.get(w.book);
+    if (!b) {
+      skipped.push(`${w.book}: no public book with this slug`);
+      continue;
+    }
+    const fields = [
+      ["title", "title", w.title, b.title],
+      ["author", "author", w.author, b.author],
+      ["year", "published_year", w.year, b.published_year],
+      ["description", "description", w.description, b.description],
+    ] as const;
+    const changes: BookEdit["changes"] = [];
+    const update: Record<string, unknown> = {};
+    for (const [field, column, to, from] of fields) {
+      if (to === undefined || to === from) continue;
+      update[column] = to;
+      changes.push({ field, from: from === null ? null : String(from), to: to === null ? null : String(to) });
+    }
+    if (changes.length) edits.push({ id: b.id, slug: b.slug, title: w.title ?? b.title, changes, update: update as MaterialUpdate });
+  }
+  for (let i = 0; i < edits.length; i += 10) {
+    await Promise.all(
+      edits.slice(i, i + 10).map(async (e) => {
+        const { error } = await db().from("materials").update(e.update).eq("id", e.id);
+        if (error) throw error;
+      })
+    );
+  }
+  if (edits.length) await logEdits(edits.map(({ slug, title, changes }) => ({ slug, title, changes })));
+  return { edited: edits.length, unchanged: books.length - edits.length - skipped.length, ...(skipped.length ? { skipped } : {}), review: `${origin}/admin/library` };
+}
+
+const EditCategories = z.object({
+  changes: z
+    .array(
+      z.object({
+        category: z.string().trim().min(1).max(40),
+        to: CategoryName.nullable().describe("A new name renames it; an existing category's name merges it into that one; null removes it from every book."),
+      })
+    )
+    .min(1)
+    .max(20),
+});
+
+/** Renames, merges or removes categories everywhere at once (books, readers'
+ * interests, Home's topic): rename_category in
+ * migrations/20261206_rename_category.sql. */
+async function editCategories({ changes }: z.infer<typeof EditCategories>) {
+  const done: CategoryChange[] = [];
+  const problems: string[] = [];
+  for (const c of changes) {
+    // Run in order, so each change sees the names the last one left.
+    const canonical = new Map((await categoryNames()).map((n) => [n.toLowerCase(), n]));
+    const from = canonical.get(c.category.toLowerCase());
+    if (!from) {
+      problems.push(`${c.category}: no such category`);
+      continue;
+    }
+    const existing = c.to === null ? undefined : canonical.get(c.to.toLowerCase());
+    // A case-only fix is a rename, not a merge into itself.
+    const to = c.to === null ? null : existing && existing !== from ? existing : c.to;
+    if (to === from) continue;
+    const { data, error } = await db().rpc("rename_category", { old_name: from, new_name: to });
+    if (error) throw error;
+    done.push({ from, to, merged: !!existing && existing !== from, books: data ?? 0 });
+  }
+  if (done.length) {
+    revalidateTag(CATEGORIES_CACHE_TAG, "max");
+    await logCategories(done);
+  }
+  return { changed: done, ...(problems.length ? { problems } : {}) };
 }
 
 const Recent = z.object({ days: z.int().min(1).max(365).default(30) });
@@ -446,6 +618,7 @@ const Send = CreateSetInput;
 
 async function send(input: z.infer<typeof Send>, origin: string) {
   const result = await createSet(input);
+  if (result.setId) await logPassages(result.setId, input.title, result.saved);
   return {
     ...result,
     review: result.setId ? `${origin}/admin/passage` : null,
@@ -478,9 +651,29 @@ const TOOLS: Record<string, Tool> = {
   recent_passages: { description: "Recent passages of the day: quote, book and question. Avoid repeating them.", input: Recent, run: recentPassages, readOnly: true },
   categories: { description: "Every category, in order, with how many public books it has, plus how many books have none.", input: Categories, run: listCategories, readOnly: true },
   books_to_tag: {
-    description: "Public books to tag: slug, title, author, year, current categories and description. Untagged books only by default; pages of up to 100.",
+    description: "Public books with their slug, title, author, year, categories and description, to tag or tidy. Untagged books only by default; pages of up to 100.",
     input: ToTag,
     run: booksToTag,
+    readOnly: true,
+  },
+  edit_books: {
+    description:
+      "Fix books' details: title, author, year first published, description. Pass only the fields to change; the book's slug stays the same. Up to 100 books a call. When the editor asks you to fix or tidy books, apply the fixes you are sure of without asking first; every change is kept in the Connector history.",
+    input: Edit,
+    run: editBooks,
+    readOnly: false,
+  },
+  edit_categories: {
+    description:
+      "Rename a category, merge it into another (give an existing name), or remove it (null). Changes every book and reader's interests at once. Only call this when the editor asks.",
+    input: EditCategories,
+    run: editCategories,
+    readOnly: false,
+  },
+  books_to_fix: {
+    description: "Public books whose title, author, year or description show signs of a problem, each with hints; all: true lists every book. Pages of up to 100.",
+    input: ToFix,
+    run: booksToFix,
     readOnly: true,
   },
   tag_books: {

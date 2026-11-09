@@ -14,6 +14,8 @@
 import type { NotificationKind } from "@/lib/notifications/types";
 import type { RoomKind } from "@/lib/rooms/types";
 
+export type ConnectorActivityKind = "tags" | "passages" | "edits" | "categories";
+
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type GroupEventKind = "joined" | "target_set" | "book_current" | "book_added" | "session_scheduled" | "room_started";
@@ -888,6 +890,20 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["editorial_brief"]["Insert"]>;
         Relationships: [];
       };
+      /** migrations/20261205_connector_activity.sql: each change the connector made. */
+      connector_activity: {
+        Row: { id: string; created_at: string; kind: ConnectorActivityKind; detail: Json };
+        Insert: { id?: string; created_at?: string; kind: ConnectorActivityKind; detail: Json };
+        Update: Partial<Database["public"]["Tables"]["connector_activity"]["Insert"]>;
+        Relationships: [];
+      };
+      /** migrations/20261205_connector_activity.sql: one row, when an AI app last connected. */
+      connector_status: {
+        Row: { id: number; last_seen_at: string };
+        Insert: { id?: number; last_seen_at?: string };
+        Update: Partial<Database["public"]["Tables"]["connector_status"]["Insert"]>;
+        Relationships: [];
+      };
       /** migrations/20261105_room_reads.sql (rooms-spec §5.2): how far a
        * reader has read a room; `room_id` is a group's or a material's. */
       room_reads: {
@@ -919,6 +935,8 @@ export type Database = {
     // `never` rather than erroring loudly, which is its own trap.
     Views: Record<string, never>;
     Functions: {
+      /** migrations/20261206_rename_category.sql: rename, merge (an existing new_name) or remove (null); returns books changed. */
+      rename_category: { Args: { old_name: string; new_name: string | null }; Returns: number };
       /** migrations/20261005_admin_dashboard.sql — shape in lib/metrics/dashboard.ts. */
       admin_dashboard_metrics: { Args: Record<string, never>; Returns: Json };
       /** migrations/20261118_admin_weekly_dashboard.sql — shape in lib/metrics/dashboard.ts. */
