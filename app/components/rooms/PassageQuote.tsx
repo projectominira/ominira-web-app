@@ -90,7 +90,7 @@ export default function PassageQuote({
 export function BookCite({ title, author, where }: { title: string; author?: string | null; where?: string | null }) {
   return (
     <>
-      <span className="block text-[13px] font-semibold text-[var(--color-app-text)]">{title}</span>
+      <span className="mt-1.5 block text-[13px] font-semibold text-[var(--color-app-text)]">{title}</span>
       <span className="block">{[author, where].filter(Boolean).join(" · ")}</span>
     </>
   );
