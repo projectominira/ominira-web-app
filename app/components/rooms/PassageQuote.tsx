@@ -17,8 +17,14 @@ export default function PassageQuote({
   cite,
   href,
   onClick,
+  size = "text-[16px]/[1.65]",
+  highlight = false,
 }: {
   excerpt: string;
+  /** The quote's text size and leading (Home's passage of the day sizes it by length). */
+  size?: string;
+  /** Marks the quote as highlighted in the book. */
+  highlight?: boolean;
   /** The chapter, when there is one: "Ch. 1". */
   cite?: string | null;
   href?: string | null;
@@ -43,8 +49,16 @@ export default function PassageQuote({
             />
           )}
         </span>
-        <span className="block font-serif text-[16px]/[1.65] text-pretty text-[var(--color-app-text)]">
-          {expanded ? excerpt : shown}
+        <span className={`block font-serif text-pretty text-[var(--color-app-text)] ${size}`}>
+          {highlight ? (
+            <span className="bg-[color-mix(in_srgb,var(--color-brand-400)_22%,transparent)] px-[3px] py-[2px] [box-decoration-break:clone] [-webkit-box-decoration-break:clone]">
+              {expanded ? excerpt : shown}
+            </span>
+          ) : expanded ? (
+            excerpt
+          ) : (
+            shown
+          )}
           {isTruncated && !expanded && (
             <>
               {" "}

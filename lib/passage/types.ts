@@ -63,6 +63,10 @@ export type TodayView = { passage: HomePassage; postId: string; setBy: string | 
 
 export type Page<T> = { items: T[]; nextCursor: string | null };
 
+/** The passage's day as its card heads it: "Tuesday, 10 November". */
+export const passageDayLabel = (day: string) =>
+  new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).replace(" ", ", ");
+
 /** The line of context members see above the passage: its occasion, led
  * by "Anniversary" for an anniversary. Null when the editors gave none. */
 export const passageContext = (kind: PassageKind, occasion: string) =>

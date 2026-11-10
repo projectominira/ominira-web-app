@@ -19,7 +19,7 @@ import { buildStrip, byLatest, chapterLine, previewText, READING_NOW_MS, STRIP_M
 import { BOOK_ROOMS } from "@/lib/config/features";
 import { forYouBooks } from "@/lib/recommend/books";
 import { withCurrentReaders } from "@/lib/materials/list";
-import { passageContext } from "@/lib/passage/types";
+import { passageContext, passageDayLabel } from "@/lib/passage/types";
 import type { CurrentBook, HomePassage, HomeView, RoomRowView, StatusItem } from "./types";
 
 // Home (home-spec §5.2) in one call, for the thin app/api/auth/me/home
@@ -184,10 +184,10 @@ export async function passageView(postId: string, day: string): Promise<HomePass
   const m = item.material;
   return {
     excerpt: item.excerpt,
-    day: new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }),
+    day: passageDayLabel(day),
     context: quote ? passageContext(quote.kind, quote.occasion) : null,
     href,
-    book: { title: m.title, author: m.author, cover: resolveBookCoverSrc(m), materialType: m.materialType },
+    book: { title: m.title, author: m.author },
     where: item.label,
   };
 }

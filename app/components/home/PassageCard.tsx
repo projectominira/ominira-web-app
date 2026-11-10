@@ -1,8 +1,8 @@
 "use client";
 
-import { Share } from "lucide-react";
+import { ArrowUpRight, Share } from "lucide-react";
 import ReaderLink from "@/app/components/ReaderLink";
-import BookCover from "@/app/components/shared/BookCover";
+import PassageQuote from "@/app/components/rooms/PassageQuote";
 import type { HomePassage } from "@/lib/rooms/types";
 import { useShareQuote } from "@/app/components/reader/ShareQuoteModal";
 
@@ -13,65 +13,51 @@ function quoteSize(n: number) {
   return "text-[19px]/[1.52] shell:text-[23px]/[1.5]";
 }
 
+const ICON_BUTTON =
+  "inline-flex h-8 w-8 flex-none cursor-pointer items-center justify-center rounded-sm border-none bg-transparent text-[var(--color-app-text-secondary)] transition-colors hover:bg-[var(--color-app-inset)] hover:text-[var(--color-app-text)]";
+
 /**
- * The passage of the day on Home (home-spec §2 Home 3): the quote alone, as
- * it sits on the page in the book (highlighted, on a page panel), with its
- * day and line of context above and the book below. The quote, the book and
- * "Read in the book" all open the reader at the passage; Share makes the
- * quote an image.
+ * The passage of the day on Home (home-spec §2 Home 3): its day with Share
+ * and Read in the book as icons, the context (an anniversary's label on its
+ * own row), the quote in the rooms' passage card (PassageQuote), highlighted
+ * and sized by length, and the book. The quote and the book open the reader
+ * at the passage too; Share makes the quote an image.
  */
 export default function PassageCard({ passage }: { passage: HomePassage }) {
   const { book } = passage;
-  const shareQuote = useShareQuote(book.title, book.author, book.cover);
+  const shareQuote = useShareQuote(book.title, book.author);
   return (
-    <article className="flex flex-col gap-4 rounded-sm border border-[var(--color-app-border)] bg-[var(--reader-bg)] p-5 text-[var(--color-app-text)] shell:gap-5 shell:p-7">
-      <header className="flex flex-wrap items-baseline gap-2">
-        <span className="text-ui-xs tracking-eyebrow uppercase text-[var(--color-app-brand)]">Passage of the day</span>
-        <span className="text-ui-caption text-[var(--color-app-text-muted)]">{passage.day}</span>
+    <article className="flex flex-col gap-4 rounded-sm border border-[var(--color-app-border)] bg-[var(--reader-bg)] p-4 text-[var(--color-app-text)] shell:p-5">
+      <header className="-my-1.5 -mr-1.5 flex items-center justify-between gap-2">
+        <span className="flex min-w-0 flex-wrap items-baseline gap-2">
+          <span className="text-ui-xs tracking-eyebrow uppercase text-[var(--color-app-brand)]">Passage of the day</span>
+          <span className="text-ui-caption text-[var(--color-app-text-muted)]">{passage.day}</span>
+        </span>
+        <span className="flex flex-none items-center">
+          <button type="button" aria-label="Share" title="Share" onClick={() => shareQuote.share(passage.excerpt)} className={ICON_BUTTON}>
+            <Share size={16} aria-hidden />
+          </button>
+          <ReaderLink href={passage.href} aria-label="Read in the book" title="Read in the book" className={`${ICON_BUTTON} no-underline`}>
+            <ArrowUpRight size={16} aria-hidden />
+          </ReaderLink>
+        </span>
       </header>
 
       {passage.context && (
-        <p className="m-0 max-w-[62ch] text-[14px]/[1.5] text-pretty text-[var(--color-app-text-secondary)]">
-          {passage.context.label && <span className="font-bold text-[var(--color-app-text)]">{passage.context.label} · </span>}
-          {passage.context.text}
-        </p>
+        <div className="flex max-w-[62ch] flex-col gap-0.5 text-[14px]/[1.5] text-pretty text-[var(--color-app-text-secondary)]">
+          {passage.context.label && <span className="font-bold text-[var(--color-app-text)]">{passage.context.label}</span>}
+          <span>{passage.context.text}</span>
+        </div>
       )}
 
-      <ReaderLink href={passage.href} className="block rounded-sm bg-[var(--color-app-inset)] px-5 py-5 text-[var(--color-app-text)] no-underline shell:px-8 shell:py-7">
-        <span aria-hidden className="-mt-0.5 mb-1.5 block h-7 font-serif text-[56px]/none font-semibold text-brand-500 select-none shell:h-8 shell:text-[64px]">
-          &ldquo;
-        </span>
-        <span className={`block font-serif text-pretty ${quoteSize(passage.excerpt.length)}`}>
-          <span className="bg-[color-mix(in_srgb,var(--color-brand-400)_22%,transparent)] px-[3px] py-[2px] [box-decoration-break:clone] [-webkit-box-decoration-break:clone]">
-            {passage.excerpt}
-          </span>
-        </span>
+      <ReaderLink href={passage.href} className="block no-underline">
+        <PassageQuote excerpt={passage.excerpt} size={quoteSize(passage.excerpt.length)} highlight />
       </ReaderLink>
 
-      <div className="flex flex-col gap-4">
-        <ReaderLink href={passage.href} className="flex min-w-0 items-center gap-3 text-inherit no-underline">
-          <BookCover src={book.cover} alt="" materialType={book.materialType} iconSize={16} className="aspect-2/3 w-10 flex-none rounded-xs ring-1 ring-sand-950/8" />
-          <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="line-clamp-2 text-[14px]/[1.3] font-semibold text-pretty text-[var(--color-app-text)]">{book.title}</span>
-            <span className="text-ui-caption text-[var(--color-app-text-secondary)]">{[book.author, passage.where].filter(Boolean).join(" · ")}</span>
-          </span>
-        </ReaderLink>
-        <div className="flex gap-2 whitespace-nowrap">
-          <ReaderLink
-            href={passage.href}
-            className="inline-flex h-9 flex-1 items-center justify-center rounded-sm bg-brand-500 shell:flex-none px-4 text-[13px] font-bold text-white no-underline transition-colors hover:bg-brand-600"
-          >
-            Read in the book
-          </ReaderLink>
-          <button
-            type="button"
-            onClick={() => shareQuote.share(passage.excerpt)}
-            className="inline-flex h-9 flex-1 cursor-pointer items-center shell:flex-none justify-center gap-1.5 rounded-sm border border-[var(--color-app-border)] bg-transparent px-4 text-[13px] font-semibold text-[var(--color-app-text)] transition-colors hover:bg-[var(--color-app-inset)]"
-          >
-            <Share size={15} /> Share
-          </button>
-        </div>
-      </div>
+      <ReaderLink href={passage.href} className="flex min-w-0 flex-col gap-0.5 text-inherit no-underline">
+        <span className="line-clamp-2 text-[14px]/[1.3] font-semibold text-pretty text-[var(--color-app-text)]">{book.title}</span>
+        <span className="text-ui-caption text-[var(--color-app-text-secondary)]">{[book.author, passage.where].filter(Boolean).join(" · ")}</span>
+      </ReaderLink>
       {shareQuote.modal}
     </article>
   );

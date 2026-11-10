@@ -8,7 +8,7 @@ import { useShareQuote } from "@/app/components/reader/ShareQuoteModal";
 import type { AnnotationRange } from "@/lib/api/types";
 import { ensureFreshSession } from "@/lib/api/client";
 import { communityFeedItemHref } from "@/lib/community/useCommunityFeed";
-import { passageContext, quoteText, type CalendarView, type ContextBlock, type QuoteView } from "@/lib/passage/types";
+import { passageContext, passageDayLabel, quoteText, type CalendarView, type ContextBlock, type QuoteView } from "@/lib/passage/types";
 import DayPicker, { approveDay, dayLabel, KIND_LABEL } from "./DayPicker";
 import { sameRanges } from "@/stores/library-store";
 import { showToast } from "@/stores/toast-store";
@@ -386,10 +386,10 @@ export default function QuoteCard({
               <PassageCard
                 passage={{
                   excerpt: words,
-                  day: dayLabel(calendar.today),
+                  day: passageDayLabel(calendar.today),
                   context: passageContext(quote.kind, quote.occasion),
                   href: href ?? "",
-                  book: { title: book.title, author: book.author, cover: null, materialType: book.materialType },
+                  book: { title: book.title, author: book.author },
                   where: quote.chapter ?? (quote.page ? `Page ${quote.page}` : null),
                 }}
               />

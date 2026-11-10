@@ -10,8 +10,6 @@ type Props = {
   quote: string;
   author?: string;
   bookTitle: string;
-  /** The book's cover, beside its title and author; none, the text alone. */
-  cover?: string | null;
   onClose: () => void;
 };
 
@@ -78,15 +76,13 @@ async function renderBlob(node: HTMLElement): Promise<Blob> {
 }
 
 
-export default function ShareQuoteModal({ quote, author, bookTitle, cover, onClose }: Props) {
+export default function ShareQuoteModal({ quote, author, bookTitle, onClose }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const spaceRef = useRef<HTMLDivElement>(null);
   const blockRef = useRef<HTMLDivElement>(null);
   const quoteRef = useRef<HTMLParagraphElement>(null);
   const [fit, setFit] = useState(1);
-  // A cover that won't load (or can't be fetched for the export) is left out.
-  const [coverOk, setCoverOk] = useState(true);
 
   const [busy, setBusy] = useState<"download" | "share" | null>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -125,7 +121,7 @@ export default function ShareQuoteModal({ quote, author, bookTitle, cover, onClo
     return () => {
       live = false;
     };
-  }, [quote, author, bookTitle, cover, coverOk]);
+  }, [quote, author, bookTitle]);
 
   // Scale the fixed-size card down to the square's on-screen width.
   useEffect(() => {
@@ -248,25 +244,11 @@ export default function ShareQuoteModal({ quote, author, bookTitle, cover, onClo
                     >
                       {quote}
                     </p>
-                    {/* The book, as the passage of the day shows it: the cover
-                        (when there is one) beside the title and author. The
-                        title wraps to at most two lines, so a long one never
-                        reshapes the card. */}
-                    <div className="mt-7 flex items-center gap-4">
-                      {cover && coverOk && (
-                        // eslint-disable-next-line @next/next/no-img-element -- book cover, inlined by the export
-                        <img
-                          src={cover}
-                          alt=""
-                          crossOrigin="anonymous"
-                          onError={() => setCoverOk(false)}
-                          className="h-[72px] w-12 flex-none rounded-[4px] object-cover ring-1 ring-black/10"
-                        />
-                      )}
-                      <div className="flex min-w-0 flex-col gap-1 font-sans">
-                        <span className="line-clamp-2 text-[16px] leading-[1.3] font-semibold text-[var(--color-sand-900)]">{bookTitle}</span>
-                        {author && <span className="truncate text-[14px] leading-[1.4] text-[var(--color-sand-600)]">{cleanAuthor(author)}</span>}
-                      </div>
+                    {/* The book's title over its author. The title wraps to at
+                        most two lines, so a long one never reshapes the card. */}
+                    <div className="mt-7 flex min-w-0 flex-col gap-1 font-sans">
+                      <span className="line-clamp-2 text-[16px] leading-[1.3] font-semibold text-[var(--color-sand-900)]">{bookTitle}</span>
+                      {author && <span className="truncate text-[14px] leading-[1.4] text-[var(--color-sand-600)]">{cleanAuthor(author)}</span>}
                     </div>
                   </div>
                 </div>
@@ -292,14 +274,14 @@ export default function ShareQuoteModal({ quote, author, bookTitle, cover, onClo
 /** The quote card, for the selection menu's Share, the notes panel's and
  * /admin/passage's Export image — `share(quote)` opens it; render `modal`
  * once anywhere (it's fixed). */
-export function useShareQuote(title: string, author?: string, cover?: string | null): { share: (quote: string) => void; modal: ReactNode } {
+export function useShareQuote(title: string, author?: string): { share: (quote: string) => void; modal: ReactNode } {
   const [quote, setQuote] = useState<string | null>(null);
   return {
     share: setQuote,
     modal:
       quote !== null ? (
         <div className="fixed inset-0 z-[80]">
-          <ShareQuoteModal quote={quote} author={author} bookTitle={title} cover={cover} onClose={() => setQuote(null)} />
+          <ShareQuoteModal quote={quote} author={author} bookTitle={title} onClose={() => setQuote(null)} />
         </div>
       ) : null,
   };

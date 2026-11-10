@@ -244,7 +244,7 @@ export type HomeView = {
  * context when the editors gave one. */
 export type HomePassage = {
   excerpt: string;
-  /** Its day: "Tue 10 Nov". */
+  /** Its day: "Tuesday, 10 November". */
   day: string;
   /** The editors' line: "Anniversary" (label) and "Ken Saro-Wiwa and eight
    * other Ogoni men were executed on 10 November 1995.", or a line on the
@@ -252,7 +252,7 @@ export type HomePassage = {
   context: { label: string | null; text: string } | null;
   /** The reader, at the quote. */
   href: string;
-  book: { title: string; author: string; cover: string | null; materialType: string };
+  book: { title: string; author: string };
   /** Where in the book: "Ch. 4, p. 81", "Page 79"; null when unknown. */
   where: string | null;
 };
