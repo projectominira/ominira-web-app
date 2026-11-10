@@ -7,7 +7,8 @@ export const DASHBOARD_TIME_ZONE = "Africa/Lagos";
 
 export const dashboardToday = (now = Date.now()): LocalDay => localDay(now, DASHBOARD_TIME_ZONE);
 
-export type DayFigures = { day: LocalDay; readers: number; seconds: number; newMembers: number };
+/** `listenSeconds` is the listened part of `seconds`; null on days before it was measured. */
+export type DayFigures = { day: LocalDay; readers: number; seconds: number; listenSeconds: number | null; newMembers: number };
 
 export type PeriodMetrics = {
   /** Days of the period that have begun: all of a past one, 1+ of this one. */
@@ -26,6 +27,8 @@ export type PeriodMetrics = {
   /** Distinct readers over the elapsed days, and the compared days. */
   readers: number;
   readersCompare: number;
+  /** Each narrator's listened seconds and listeners over the elapsed days, most listened first. */
+  voices: { voice: string; seconds: number; listeners: number }[];
   /** Members who had joined by the period's end and start, and by the end of the compared days. */
   members: number;
   membersAtStart: number;
@@ -45,8 +48,10 @@ export async function getPeriodMetrics(period: Period, compare: Period): Promise
   return data as unknown as PeriodMetrics;
 }
 
-/** A reader of the period: seconds read on each of its days, and in all. */
-export type PeriodReader = { pseudonym: string; seconds: number[]; total: number };
+/** A reader of the period: seconds read on each of its days, and in all, the
+ * part of it listened (null when none of their days was measured) and the
+ * voice they listened in most. */
+export type PeriodReader = { pseudonym: string; seconds: number[]; total: number; listened: number | null; voice: string | null };
 
 /** Everyone who read in the period, most time read first — public.admin_period_readers(). */
 export async function getPeriodReaders(period: Period): Promise<PeriodReader[]> {

@@ -46,9 +46,10 @@ const recordReadDay = dayRecorder(true);
  * Also flags today's row as a reading day (`read`, migrations/
  * 20261009_reader_active_days_read.sql), counts the reader's local day
  * toward their streak and credits their reading time to the day and
- * `materialId` (lib/streaks). Called when a reading position is saved.
+ * `materialId` (lib/streaks), as listened in `voice` when `listening`.
+ * Called when a reading position is saved.
  */
-export function recordReadingDay(readerId: string, materialId: string): void {
+export function recordReadingDay(readerId: string, materialId: string, listening: boolean, voice: string | null): void {
   recordReadDay(readerId);
-  recordReadingActivity(readerId, materialId);
+  recordReadingActivity(readerId, materialId, listening, voice);
 }

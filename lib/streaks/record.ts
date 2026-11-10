@@ -108,9 +108,10 @@ const timeSent = new Map<string, number>();
  * Credits the time since the reader's last save to today's minutes (their
  * local day) and the saved book, and counts today toward their streak once
  * its goal is met. Called only by recordReadingDay, when a reading position
- * is saved (listening saves them too). Runs after the response.
+ * is saved (listening saves them too); the time goes to listening when the
+ * save is the player's, and to its `voice`. Runs after the response.
  */
-export function recordReadingActivity(readerId: string, materialId: string): void {
+export function recordReadingActivity(readerId: string, materialId: string, listening: boolean, voice: string | null): void {
   const now = Date.now();
   const day = new Date(now).toISOString().slice(0, 10);
   if (day !== utcDay) {
@@ -134,6 +135,8 @@ export function recordReadingActivity(readerId: string, materialId: string): voi
         today,
         at: new Date(now).toISOString(),
         idle_seconds: IDLE_SECONDS,
+        listening,
+        voice_id: voice,
       });
       if (error) throw error;
       if (recorded.get(readerId) === today || data.day_seconds < data.day_goal * 60) return;

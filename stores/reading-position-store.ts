@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import { useSessionStore, isSessionValid } from "@/stores/session-store";
+import { useAudioStore } from "@/stores/audio-store";
 import { isLocator, isReaderMode, type Locator, type ReaderMode } from "@/lib/reader/locator";
 import type { CurrentReadingEntry } from "@/lib/api/types";
 
@@ -92,6 +93,8 @@ function syncPositionNow(materialId: string, opts: { keepalive?: boolean } = {})
     mode: position.mode,
     audioTimeMs: position.audioTimeMs,
     progressPercent: position.progressPercent,
+    // The narrator listened in, for /admin's voice figures.
+    ...(position.mode === "listen" && { voice: useAudioStore.getState().voice }),
   };
 
   if (opts.keepalive) {

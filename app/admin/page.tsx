@@ -12,6 +12,7 @@ import { FILTER_HIDDEN_COOKIE, columnsOf, comparisonOf, parsePeriod, periodLabel
 import { pseudonymToSlug } from "@/lib/reader/profileSlug";
 import { formatDuration } from "@/lib/time/duration";
 import { daysPlanned } from "@/lib/passage/calendar";
+import { voiceById } from "@/lib/audio/voices";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,11 @@ const sumRange = (values: number[], from: number, to: number) => values.slice(fr
 
 /** `part` as a whole percentage of `whole`. */
 const share = (part: number, whole: number) => (whole ? Math.round((part / whole) * 100) : 0);
+
+/** "40% listening": the listened share of `days`' time, or nothing before listening was measured. */
+const listeningNote = (days: DayFigures[]) =>
+  days.some((d) => d.listenSeconds !== null) ? `${share(days.reduce((n, d) => n + (d.listenSeconds ?? 0), 0), sum(days, "seconds"))}% listening` : undefined;
+const voiceName = (id: string) => voiceById(id)?.label ?? id;
 
 export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ view?: string; period?: string; vs?: string }> }) {
   const [params, jar] = await Promise.all([searchParams, cookies()]);
@@ -58,6 +64,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   const secondsCompare = sum(compared, "seconds");
   const joined = sum(soFar, "newMembers");
   const joinedCompare = sum(compared, "newMembers");
+  const voicesTotal = m.voices.reduce((n, v) => n + v.seconds, 0);
   const reading = share(m.readers, m.members);
   const readingCompare = share(m.readersCompare, m.membersCompare);
 
@@ -137,9 +144,9 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
           />
           <Tile
             label="Time read"
-            info={`Total time members spent reading or listening this ${period.view}, against the same days of the comparison.`}
-            now={{ caption: nowCaption, value: duration(seconds) }}
-            then={comparing ? { caption: thenCaption, value: duration(secondsCompare) } : undefined}
+            info={`Total time members spent reading or listening this ${period.view}, against the same days of the comparison, and the share of it spent listening.`}
+            now={{ caption: nowCaption, value: duration(seconds), note: listeningNote(soFar) }}
+            then={comparing ? { caption: thenCaption, value: duration(secondsCompare), note: listeningNote(compared) } : undefined}
             change={comparing ? growthRate(seconds, secondsCompare) : null}
             versus={versus}
           />
@@ -155,7 +162,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
             <span className="ml-2 font-semibold text-[var(--reader-text-muted)]">{formatCount(readers.length)}</span>
           </h2>
           <InfoTip label={`Readers this ${period.view}`}>
-            {`Everyone who read this ${period.view} and their time read ${period.view === "week" ? "each day" : "in each 7-day stretch"}, most time read first.`}
+            {`Everyone who read this ${period.view} and their time read ${period.view === "week" ? "each day" : "in each 7-day stretch"}, most time read first, with the share of it spent listening and the voice listened to most.`}
           </InfoTip>
         </div>
         {readers.length ? (
@@ -192,7 +199,14 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
                         </td>
                       );
                     })}
-                    <td className="py-2.5 pl-4 text-right font-bold">{duration(r.total)}</td>
+                    <td className="py-2.5 pl-4 text-right whitespace-nowrap">
+                      <span className="font-bold">{duration(r.total)}</span>
+                      {!!r.listened && (
+                        <span className="ml-1.5 text-[var(--reader-text-muted)]">
+                          ({share(r.listened, r.total)}% listening{r.voice ? ` · ${voiceById(r.voice)?.name ?? r.voice}` : ""})
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -202,6 +216,46 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
           <p className="m-0 mt-3 text-[13px] text-[var(--reader-text-muted)]">No one has read this {period.view} yet.</p>
         )}
       </section>
+
+      {m.voices.length > 0 && (
+        <section aria-labelledby="voices-heading" className="mt-3 rounded-sm border border-[var(--reader-border)] p-5">
+          <div className="flex items-start justify-between gap-2">
+            <h2 id="voices-heading" className="m-0 text-[14px] font-bold text-[var(--reader-text)]">
+              Voices this {period.view}
+            </h2>
+            <InfoTip label={`Voices this ${period.view}`}>{`The narrators members listened in this ${period.view}: time listened, its share of all listening, and how many listened in each.`}</InfoTip>
+          </div>
+          <table className="mt-4 w-full border-collapse border-t border-[var(--reader-border)] text-[13px] tabular-nums">
+            <thead>
+              <tr className="text-[12px] font-semibold text-[var(--reader-text-muted)]">
+                <th scope="col" className="py-3 text-left font-semibold">
+                  Voice
+                </th>
+                <th scope="col" className="py-3 text-right font-semibold">
+                  Listened
+                </th>
+                <th scope="col" className="py-3 pl-4 text-right font-semibold">
+                  Listeners
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {m.voices.map((v) => (
+                <tr key={v.voice} className="border-t border-[var(--reader-border)] text-[var(--reader-text)]">
+                  <th scope="row" className="py-2.5 text-left font-semibold">
+                    {voiceName(v.voice)}
+                  </th>
+                  <td className="py-2.5 text-right whitespace-nowrap">
+                    {duration(v.seconds)}
+                    <span className="ml-1.5 text-[var(--reader-text-muted)]">({share(v.seconds, voicesTotal)}%)</span>
+                  </td>
+                  <td className="py-2.5 pl-4 text-right">{formatCount(v.listeners)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
     </div>
   );
 }

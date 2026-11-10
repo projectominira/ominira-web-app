@@ -3,6 +3,7 @@ import { recordReadingDay } from "@/lib/metrics/activeDays";
 import { unauthorized, validationError } from "@/lib/api/errors";
 import { deleteReaderActivity, saveReaderActivity } from "@/lib/reader/activity";
 import { isLocator, isReaderMode } from "@/lib/reader/locator";
+import { voiceById } from "@/lib/audio/voices";
 
 type Body = {
   materialId?: string;
@@ -10,6 +11,8 @@ type Body = {
   mode?: unknown;
   audioTimeMs?: number;
   progressPercent?: number;
+  /** The narrator, on the player's saves. */
+  voice?: unknown;
 };
 
 export async function PUT(request: Request) {
@@ -33,7 +36,9 @@ export async function PUT(request: Request) {
   });
 
   if (!saved) return validationError("Could not save reading position.");
-  recordReadingDay(reader.readerId, body.materialId);
+  const listening = body.mode === "listen";
+  const voice = listening && typeof body.voice === "string" && voiceById(body.voice) ? body.voice : null;
+  recordReadingDay(reader.readerId, body.materialId, listening, voice);
   return new Response(null, { status: 204 });
 }
 

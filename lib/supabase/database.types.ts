@@ -777,17 +777,25 @@ export type Database = {
       /** migrations/20261107_reading_time.sql (rooms-spec §5.7): seconds read
        * per local day, credited by record_reading_time. */
       reader_reading_time: {
-        Row: { reader_id: string; day: string; seconds: number; last_at: string; goal_minutes: number | null };
-        Insert: { reader_id: string; day: string; seconds?: number; last_at: string; goal_minutes?: number | null };
+        Row: { reader_id: string; day: string; seconds: number; last_at: string; goal_minutes: number | null; listen_seconds: number | null };
+        Insert: { reader_id: string; day: string; seconds?: number; last_at: string; goal_minutes?: number | null; listen_seconds?: number | null };
         Update: Partial<Database["public"]["Tables"]["reader_reading_time"]["Insert"]>;
         Relationships: [];
       };
       /** migrations/20261111_reading_history.sql: each book's seconds per
        * local day, credited with the day's total by record_reading_time. */
       reader_book_time: {
-        Row: { reader_id: string; day: string; material_id: string; seconds: number };
-        Insert: { reader_id: string; day: string; material_id: string; seconds?: number };
+        Row: { reader_id: string; day: string; material_id: string; seconds: number; listen_seconds: number | null };
+        Insert: { reader_id: string; day: string; material_id: string; seconds?: number; listen_seconds?: number | null };
         Update: Partial<Database["public"]["Tables"]["reader_book_time"]["Insert"]>;
+        Relationships: [];
+      };
+      /** migrations/20261209_listening_voices.sql: listened seconds per
+       * local day and narrator (lib/audio/voices.ts id). */
+      reader_voice_time: {
+        Row: { reader_id: string; day: string; voice: string; seconds: number };
+        Insert: { reader_id: string; day: string; voice: string; seconds?: number };
+        Update: Partial<Database["public"]["Tables"]["reader_voice_time"]["Insert"]>;
         Relationships: [];
       };
       reader_milestones: {
@@ -989,7 +997,7 @@ export type Database = {
       reorder_group_books: { Args: { grp: string; materials: string[] }; Returns: undefined };
       /** migrations/20261111_reading_history.sql: one reading-position save, and its book. */
       record_reading_time: {
-        Args: { reader: string; material: string; today: string; at: string; idle_seconds: number };
+        Args: { reader: string; material: string; today: string; at: string; idle_seconds: number; listening?: boolean; voice_id?: string | null };
         Returns: { day_seconds: number; day_goal: number };
       };
       /** A reader's seconds per book per month (`month` is its first day). */
