@@ -6,6 +6,7 @@ import NoResults from "@/app/components/shared/NoResults";
 import { useNoteThread } from "@/lib/rooms/hooks";
 import { useNow } from "@/lib/time/useNow";
 import { useSessionStore } from "@/stores/session-store";
+import PassageCard from "@/app/components/home/PassageCard";
 import NoteBubble from "./NoteBubble";
 import { quoteReaderHref } from "./PassageQuote";
 import RoomScreen, { ScreenHead } from "./RoomScreen";
@@ -37,6 +38,9 @@ export default function NoteView({ noteId }: { noteId: string }) {
             </div>
           ) : !n ? (
             <NoResults message="This note isn't available — it may have been deleted, or it's private." />
+          ) : n.passage ? (
+            // A passage of the day: Home's card, as it was on Home.
+            <PassageCard passage={n.passage} />
           ) : (
             <NoteBubble
               note={n}

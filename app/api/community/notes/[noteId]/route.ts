@@ -10,6 +10,7 @@ import { isModerator } from "@/lib/groups/membership";
 import { readerGroupsWithBook } from "@/lib/groups/books";
 import { officialReaderIds, pagePassages } from "@/lib/rooms/passage";
 import { toRoomNote } from "@/lib/rooms/timeline";
+import { passageView } from "@/lib/rooms/homeView";
 import type { NoteThread } from "@/lib/rooms/types";
 import type { NoteContent } from "@/lib/api/types";
 import { deleteMaterialAssets } from "@/lib/materials/deleteMaterialAssets";
@@ -46,18 +47,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ note
 
   const now = Date.now();
   const groupId = rootRow.group_id;
-  const [[item], officialIds, passages, moderators, group] = await Promise.all([
+  const [[item], officialIds, passages, moderators, group, passageDay] = await Promise.all([
     enrichFeedItems([rootRow], viewer),
     officialReaderIds(),
     pagePassages([rootRow], now),
     groupId ? admin.from("group_members").select("reader_id").eq("group_id", groupId).eq("role", "moderator") : null,
     groupId ? admin.from("groups").select("pinned_post_id").eq("id", groupId).maybeSingle() : null,
+    admin.from("daily_passages").select("day").eq("post_id", rootRow.id).order("day").limit(1).maybeSingle(),
   ]);
   if (!item) return notFound();
+  if (passageDay.error) throw passageDay.error;
+  const passage = passageDay.data && (await passageView(rootRow.id, passageDay.data.day, reader?.readerId ?? null));
 
   const teamIds = new Set(moderators?.data?.map((m) => m.reader_id) ?? []);
   const note = toRoomNote(item, { now, pinnedId: group?.data?.pinned_post_id ?? null, teamIds, officialIds, passages, alsoIn: false });
-  const body: NoteThread = { ...note, focusId: row.parent_id ? row.id : null, moderator: !!reader && teamIds.has(reader.readerId) };
+  const body: NoteThread = { ...note, focusId: row.parent_id ? row.id : null, moderator: !!reader && teamIds.has(reader.readerId), passage: passage ?? null };
   return NextResponse.json(body);
 }
 

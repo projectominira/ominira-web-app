@@ -1,46 +1,42 @@
 "use client";
 
-import { ArrowUpRight, Share } from "lucide-react";
-import ReaderLink from "@/app/components/ReaderLink";
-import PassageQuote from "@/app/components/rooms/PassageQuote";
+import { useState } from "react";
+import { Share } from "lucide-react";
+import { readerHref } from "@/app/components/ReaderLink";
+import PassageQuote, { BookCite } from "@/app/components/rooms/PassageQuote";
+import FistReaction from "@/app/components/rooms/FistReaction";
+import { RoomCard } from "@/app/components/rooms/RoomCard";
+import { apiFetch } from "@/lib/api/client";
 import type { HomePassage } from "@/lib/rooms/types";
 import { useShareQuote } from "@/app/components/reader/ShareQuoteModal";
 
-/** The quote's size by its length: a short line large, a long one smaller. */
-function quoteSize(n: number) {
-  if (n < 100) return "text-[22px]/[1.42] shell:text-[28px]/[1.4]";
-  if (n > 260) return "text-[17px]/[1.6] shell:text-[19px]/[1.6]";
-  return "text-[19px]/[1.52] shell:text-[23px]/[1.5]";
-}
-
-const ICON_BUTTON =
-  "inline-flex h-8 w-8 flex-none cursor-pointer items-center justify-center rounded-sm border-none bg-transparent text-[var(--color-app-text-secondary)] transition-colors hover:bg-[var(--color-app-inset)] hover:text-[var(--color-app-text)]";
-
 /**
- * The passage of the day on Home (home-spec §2 Home 3): its day with Share
- * and Read in the book as icons, the context (an anniversary's label on its
- * own row), the quote in the rooms' passage card (PassageQuote), highlighted
- * and sized by length, and the book. The quote and the book open the reader
- * at the passage too; Share makes the quote an image.
+ * The passage of the day on Home (home-spec §2 Home 3), as its note shows
+ * in a room (NoteBubble): the room card, "Passage of the day" with its day
+ * and Share, the context (an anniversary's label on its own row), the quote
+ * (PassageQuote, its ↗ opening the reader at the passage) with the book
+ * under it, and the note's fist. Share makes the quote an image. Also the
+ * note's own page (NoteView).
  */
 export default function PassageCard({ passage }: { passage: HomePassage }) {
   const { book } = passage;
   const shareQuote = useShareQuote(book.title, book.author);
   return (
-    <article className="flex flex-col gap-4 rounded-sm border border-[var(--color-app-border)] bg-[var(--reader-bg)] p-4 text-[var(--color-app-text)] shell:p-5">
-      <header className="-my-1.5 -mr-1.5 flex items-center justify-between gap-2">
-        <span className="flex min-w-0 flex-wrap items-baseline gap-2">
-          <span className="text-ui-xs tracking-eyebrow uppercase text-[var(--color-app-brand)]">Passage of the day</span>
+    <RoomCard priv={false}>
+      <header className="-my-2 -mr-2 flex items-center justify-between gap-2">
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span className="font-sans text-[11px]/[1.3] font-extrabold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Passage of the day</span>
           <span className="text-ui-caption text-[var(--color-app-text-muted)]">{passage.day}</span>
         </span>
-        <span className="flex flex-none items-center">
-          <button type="button" aria-label="Share" title="Share" onClick={() => shareQuote.share(passage.excerpt)} className={ICON_BUTTON}>
-            <Share size={16} aria-hidden />
-          </button>
-          <ReaderLink href={passage.href} aria-label="Read in the book" title="Read in the book" className={`${ICON_BUTTON} no-underline`}>
-            <ArrowUpRight size={16} aria-hidden />
-          </ReaderLink>
-        </span>
+        <button
+          type="button"
+          aria-label="Share"
+          title="Share"
+          onClick={() => shareQuote.share(passage.excerpt)}
+          className="flex size-9 flex-none cursor-pointer items-center justify-center rounded-sm text-[var(--color-app-text-muted)] hover:bg-[var(--color-app-surface-muted)]"
+        >
+          <Share size={16} strokeWidth={1.75} aria-hidden />
+        </button>
       </header>
 
       {passage.context && (
@@ -50,15 +46,32 @@ export default function PassageCard({ passage }: { passage: HomePassage }) {
         </div>
       )}
 
-      <ReaderLink href={passage.href} className="block no-underline">
-        <PassageQuote excerpt={passage.excerpt} size={quoteSize(passage.excerpt.length)} highlight />
-      </ReaderLink>
+      <PassageQuote
+        excerpt={passage.excerpt}
+        href={readerHref(passage.href)}
+        cite={<BookCite title={book.title} author={book.author} where={passage.where} />}
+      />
 
-      <ReaderLink href={passage.href} className="flex min-w-0 flex-col gap-0.5 text-inherit no-underline">
-        <span className="line-clamp-2 text-[14px]/[1.3] font-semibold text-pretty text-[var(--color-app-text)]">{book.title}</span>
-        <span className="text-ui-caption text-[var(--color-app-text-secondary)]">{[book.author, passage.where].filter(Boolean).join(" · ")}</span>
-      </ReaderLink>
+      {passage.reaction && <Fist {...passage.reaction} />}
       {shareQuote.modal}
-    </article>
+    </RoomCard>
+  );
+}
+
+/** The note's fist: flips at once, settles on the server's count, and
+ * flips back if the save fails. */
+function Fist({ postId, count: initialCount, on: initialOn }: NonNullable<HomePassage["reaction"]>) {
+  const [state, setState] = useState({ count: initialCount, on: initialOn });
+  const toggle = () => {
+    const before = state;
+    setState({ count: before.count + (before.on ? -1 : 1), on: !before.on });
+    apiFetch<{ reactedByMe: boolean; reactionCount: number }>(`/community/notes/${postId}/reactions`, { method: "POST" })
+      .then((r) => setState({ count: r.reactionCount, on: r.reactedByMe }))
+      .catch(() => setState(before));
+  };
+  return (
+    <div className="flex items-center">
+      <FistReaction count={state.count} on={state.on} onToggle={toggle} />
+    </div>
   );
 }

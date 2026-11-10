@@ -161,15 +161,16 @@ async function activeCount(roomId: string): Promise<number> {
 
 /** Today's passage of the day (rooms-spec §5.5): the quote and its line of
  * context. Null when none is set today. */
-async function getPassage(): Promise<HomePassage | null> {
+async function getPassage(readerId: string): Promise<HomePassage | null> {
   const today = passageDay(Date.now());
   const { data: day, error } = await getSupabaseAdminClient().from("daily_passages").select("post_id").eq("day", today).maybeSingle();
   if (error) throw error;
-  return day && passageView(day.post_id, today);
+  return day && passageView(day.post_id, today, readerId);
 }
 
-/** A day's passage as Home shows it. `day` is YYYY-MM-DD. */
-export async function passageView(postId: string, day: string): Promise<HomePassage | null> {
+/** A day's passage as Home shows it to `readerId` (signed out: no fist).
+ * `day` is YYYY-MM-DD. Also its note's page (/note/[id]). */
+export async function passageView(postId: string, day: string, readerId: string | null): Promise<HomePassage | null> {
   const admin = getSupabaseAdminClient();
   const [{ data: post, error: postError }, { data: quote, error: quoteError }] = await Promise.all([
     admin.from("posts").select("*").eq("id", postId).eq("visibility", "public").maybeSingle(),
@@ -178,7 +179,8 @@ export async function passageView(postId: string, day: string): Promise<HomePass
   if (postError) throw postError;
   if (quoteError) throw quoteError;
   if (!post) return null;
-  const [item] = await enrichFeedItems([post], null);
+  // A public post: the viewer only decides their own fist.
+  const [item] = await enrichFeedItems([post], readerId ? { readerId, mentionedPostIds: [], groupIds: [] } : null);
   const href = item && communityFeedItemHref(item);
   if (!item?.excerpt || !item.material || !href) return null;
   const m = item.material;
@@ -189,6 +191,7 @@ export async function passageView(postId: string, day: string): Promise<HomePass
     href,
     book: { title: m.title, author: m.author },
     where: item.label,
+    ...(readerId && { reaction: { postId, count: item.note.reactionCount, on: item.note.reactedByMe } }),
   };
 }
 
@@ -211,7 +214,7 @@ export async function getHomeView(readerId: string): Promise<HomeView> {
     BOOK_ROOMS ? getBookRooms(readerId) : [],
     // Who's reading each, for the shelf's "N reading now".
     forYouP.then(async (f) => (await withCurrentReaders({ items: f.books, nextCursor: null })).items),
-    getPassage(),
+    getPassage(readerId),
   ]);
   return { strip, ...reading, streak, today, groups, rooms, start, forYou, passage };
 }

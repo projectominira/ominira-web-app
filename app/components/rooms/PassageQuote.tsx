@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { communityFeedItemHref } from "@/lib/community/useCommunityFeed";
@@ -17,16 +17,10 @@ export default function PassageQuote({
   cite,
   href,
   onClick,
-  size = "text-[16px]/[1.65]",
-  highlight = false,
 }: {
   excerpt: string;
-  /** The quote's text size and leading (Home's passage of the day sizes it by length). */
-  size?: string;
-  /** Marks the quote as highlighted in the book. */
-  highlight?: boolean;
-  /** The chapter, when there is one: "Ch. 1". */
-  cite?: string | null;
+  /** Under the quote: the chapter, "Ch. 1", or a passage's BookCite. */
+  cite?: ReactNode;
   href?: string | null;
   onClick?: () => void;
 }) {
@@ -49,16 +43,8 @@ export default function PassageQuote({
             />
           )}
         </span>
-        <span className={`block font-serif text-pretty text-[var(--color-app-text)] ${size}`}>
-          {highlight ? (
-            <span className="bg-[color-mix(in_srgb,var(--color-brand-400)_22%,transparent)] px-[3px] py-[2px] [box-decoration-break:clone] [-webkit-box-decoration-break:clone]">
-              {expanded ? excerpt : shown}
-            </span>
-          ) : expanded ? (
-            excerpt
-          ) : (
-            shown
-          )}
+        <span className="block font-serif text-[16px]/[1.65] text-pretty text-[var(--color-app-text)]">
+          {expanded ? excerpt : shown}
           {isTruncated && !expanded && (
             <>
               {" "}
@@ -97,6 +83,17 @@ export default function PassageQuote({
       </button>
     );
   return <div className={cls}>{body}</div>;
+}
+
+/** A passage of the day's cite: the book's title, then its author and
+ * where in it ("Ch. 4"), in Home's passage card. */
+export function BookCite({ title, author, where }: { title: string; author?: string | null; where?: string | null }) {
+  return (
+    <>
+      <span className="block text-[13px] font-semibold text-[var(--color-app-text)]">{title}</span>
+      <span className="block">{[author, where].filter(Boolean).join(" · ")}</span>
+    </>
+  );
 }
 
 /** Where a quote opens: the reader over the room, as plain as main's quote
