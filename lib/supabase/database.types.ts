@@ -921,6 +921,9 @@ export type Database = {
           /** { slug, why }[] (migrations/20261212_author_pages.sql) */
           alongside: Json;
           approved_at: string | null;
+          /** Wikimedia Commons only (migrations/20261213_author_images.sql). */
+          image_url: string | null;
+          image_credit: string;
           created_at: string;
           updated_at: string;
         };
@@ -938,6 +941,8 @@ export type Database = {
           places?: string;
           alongside?: Json;
           approved_at?: string | null;
+          image_url?: string | null;
+          image_credit?: string;
           created_at?: string;
           updated_at?: string;
         };

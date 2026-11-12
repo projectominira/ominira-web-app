@@ -81,9 +81,10 @@ When the editor asks ("write the author pages", "draft Fanon's page"), work on y
 1. Call \`authors_to_write\` for authors with no draft yet, most books first, or take the authors the editor names.
 2. Check the facts on Wikipedia and Wikidata (and a reliable biography when they disagree): dates, places, works, roles. Leave out anything you can't verify. Pass the Wikidata item only when you're sure it is this person.
 3. Write the bio in your own words, 80–150 words, never copied or closely paraphrased. Open with who they were and why they matter, then the life: concrete names, dates and places, the books in the library where they fit. Plain English, no filler ("delve", "tapestry", "testament to", "rich legacy", "journey", "powerful", "seminal"), no closing sermon. It should read as a well-read Pan-Africanist editor wrote it for a friend.
-4. Read alongside: up to 4 books by other authors in the library (find them with \`catalog\`), each with one specific sentence on the link: a teacher, a reply, the same struggle elsewhere. Skip it rather than pad it.
-5. Send each author with \`write_author\` as soon as it's done. Sending again replaces the draft.
-6. Finish with a short report: authors drafted, and any you skipped and why.
+4. Portrait: take the image on their Wikidata item (P18), which lives on Wikimedia Commons. Pass the thumbnail URL Commons gives for the file (its API: action=query&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=400, the thumburl), with its credit from the file's Commons page: "Photo: <author>, <licence>, via Wikimedia Commons", or "Public domain, via Wikimedia Commons". No image from anywhere else, and none when you're not sure it shows this person.
+5. Read alongside: up to 4 books by other authors in the library (find them with \`catalog\`), each with one specific sentence on the link: a teacher, a reply, the same struggle elsewhere. Skip it rather than pad it.
+6. Send each author with \`write_author\` as soon as it's done. Sending again replaces the draft.
+7. Finish with a short report: authors drafted, and any you skipped and why.
 
 ## Tagging books
 
@@ -773,7 +774,7 @@ const TOOLS: Record<string, Tool> = {
   },
   write_author: {
     description:
-      "Save a draft of an author's page: bio (80–150 words, own words, checked facts), sources, birth and death years, role, places, Wikidata item and books to read alongside. An editor approves it before it shows. Replaces any earlier draft.",
+      "Save a draft of an author's page: bio (80–150 words, own words, checked facts), sources, birth and death years, role, places, Wikidata item, portrait (Wikimedia Commons, with credit) and books to read alongside. An editor approves it before it shows. Replaces any earlier draft.",
     input: WriteAuthorInput,
     run: draftAuthor,
     readOnly: false,

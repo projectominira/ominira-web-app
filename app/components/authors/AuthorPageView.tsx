@@ -3,7 +3,7 @@ import SearchableAppPage from "@/app/components/shell/SearchableAppPage";
 import BookListRow from "@/app/components/shell/BookListRow";
 import ShareButton from "@/app/components/materials/ShareButton";
 import { Chip, QuoteCard } from "@/app/components/quotes/QuotesDirectory";
-import type { AuthorPage } from "@/lib/authors/authors";
+import { lifespan, type AuthorPage } from "@/lib/authors/authors";
 import { slugifyCategory } from "@/lib/categories/slug";
 import { PLATFORM_NAME, PLATFORM_URL } from "@/lib/config/platform";
 import JoinBar from "./JoinBar";
@@ -14,8 +14,21 @@ import JoinBar from "./JoinBar";
 // facts, the approved bio with its sources, their books, a few quotes,
 // books to read alongside, and their topics.
 
-export const lifespan = (a: { born: number | null; died: number | null }) =>
-  a.born && a.died ? `${a.born}–${a.died}` : a.born ? `Born ${a.born}` : a.died ? `Died ${a.died}` : null;
+/** An author's portrait (Wikimedia Commons), or their initials. */
+export function Portrait({ src, name, className }: { src: string | null; name: string; className: string }) {
+  const initials = name
+    .split(/\s+/)
+    .filter((w) => /^\p{Lu}/u.test(w))
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("");
+  return (
+    <span className={`flex flex-none items-center justify-center overflow-hidden rounded-full bg-[var(--color-app-surface-muted)] font-serif text-[15px] font-semibold text-[var(--color-app-text-muted)] ${className}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {src ? <img src={src} alt={name} loading="lazy" className="block size-full object-cover object-top" /> : initials}
+    </span>
+  );
+}
 
 /** A section under the header, as the quote directory's "Quotes by author". */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -44,6 +57,7 @@ export default function AuthorPageView({ a }: { a: AuthorPage }) {
       url,
       ...(a.bio && { description: a.bio }),
       ...(a.role && { jobTitle: a.role }),
+      ...(a.image && { image: a.image }),
       ...(a.born && { birthDate: String(a.born) }),
       ...(a.died && { deathDate: String(a.died) }),
       sameAs: [a.wikidataId && `https://www.wikidata.org/wiki/${a.wikidataId}`, wikipedia].filter(Boolean),
@@ -70,18 +84,23 @@ export default function AuthorPageView({ a }: { a: AuthorPage }) {
         </nav>
 
         <header className="flex max-w-[720px] flex-col gap-3">
-          <span className="text-[11px] font-bold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Author</span>
-          <h1 className="m-0 font-serif text-[24px]/[1.25] font-semibold text-balance md:text-[28px]/[1.2] text-[var(--color-app-text)]">{a.name}</h1>
-          {facts.length > 0 && (
-            <p className="m-0 flex flex-wrap gap-x-2 gap-y-1 text-[13px]/[1.4] font-medium text-[var(--color-app-text-muted)]">
-              {facts.map((f, i) => (
-                <span key={f} className="contents">
-                  {i > 0 && <span aria-hidden>·</span>}
-                  <span>{f}</span>
-                </span>
-              ))}
-            </p>
-          )}
+          <div className="flex items-center gap-4 md:gap-5">
+            {a.image && <Portrait src={a.image} name={a.name} className="size-20 md:size-24" />}
+            <div className="flex min-w-0 flex-col gap-2">
+              <span className="text-[11px] font-bold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Author</span>
+              <h1 className="m-0 font-serif text-[24px]/[1.25] font-semibold text-balance md:text-[28px]/[1.2] text-[var(--color-app-text)]">{a.name}</h1>
+              {facts.length > 0 && (
+                <p className="m-0 flex flex-wrap gap-x-2 gap-y-1 text-[13px]/[1.4] font-medium text-[var(--color-app-text-muted)]">
+                  {facts.map((f, i) => (
+                    <span key={f} className="contents">
+                      {i > 0 && <span aria-hidden>·</span>}
+                      <span>{f}</span>
+                    </span>
+                  ))}
+                </p>
+              )}
+            </div>
+          </div>
           {a.bio && <p className="m-0 text-[15px]/[1.6] text-pretty whitespace-pre-line text-[var(--color-app-text-secondary)]">{a.bio}</p>}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <ShareButton title={`${a.name} on ${PLATFORM_NAME}`} text={`Books and quotes by ${a.name} on ${PLATFORM_NAME}.`} ariaLabel="Share this page" />
@@ -96,6 +115,7 @@ export default function AuthorPageView({ a }: { a: AuthorPage }) {
                     </a>
                   </span>
                 ))}
+                {a.imageCredit && <> · Portrait: {a.imageCredit}</>}
               </span>
             )}
           </div>

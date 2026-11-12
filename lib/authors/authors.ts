@@ -46,6 +46,19 @@ export const WriteAuthorInput = z.object({
     .nullable()
     .default(null)
     .describe("Their Wikidata item (Q…), when you're sure it's this person."),
+  image_url: z
+    .url()
+    .regex(/^https:\/\/(upload|thumb)\.wikimedia\.org\//, "Only Wikimedia Commons images (upload.wikimedia.org or thumb.wikimedia.org).")
+    .max(600)
+    .nullable()
+    .default(null)
+    .describe("Their portrait: the Wikidata item's image (P18), as the thumburl Commons gives for it (imageinfo, iiurlwidth=400). Null when there's none you're sure shows this person."),
+  image_credit: z
+    .string()
+    .trim()
+    .max(200)
+    .default("")
+    .describe('Required with an image: author and licence from its Commons page, "Photo: Jane Doe, CC BY-SA 4.0, via Wikimedia Commons" (or "Public domain, via Wikimedia Commons").'),
   alongside: z
     .array(z.object({ book: z.string().trim().min(1).max(200).describe("A book's slug, by another author."), why: z.string().trim().min(20).max(240) }))
     .max(4)
@@ -54,9 +67,26 @@ export const WriteAuthorInput = z.object({
 });
 export type WriteAuthorInput = z.input<typeof WriteAuthorInput>;
 
+/** Commons images ask for credit: no image without one. */
+const imageError = (url: string | null, credit: string) => (url && !credit.trim() ? "An image needs its image_credit (author and licence from its Commons page)." : null);
+
+/** The URL serves an image (a wrong Commons path would show broken). */
+async function isImage(url: string): Promise<boolean> {
+  try {
+    // Wikimedia asks automated clients for a descriptive User-Agent.
+    const res = await fetch(url, { method: "HEAD", headers: { "User-Agent": "OminiraBot/1.0 (https://www.projectominira.org)" }, signal: AbortSignal.timeout(8000) });
+    return res.ok && (res.headers.get("content-type") ?? "").startsWith("image/");
+  } catch {
+    return false;
+  }
+}
+
 /** Saves the connector's draft of an author page for an editor to approve. */
 export async function writeAuthor(raw: WriteAuthorInput): Promise<{ slug: string; name: string } | string> {
   const input = WriteAuthorInput.parse(raw);
+  const noCredit = imageError(input.image_url, input.image_credit);
+  if (noCredit) return noCredit;
+  if (input.image_url && !(await isImage(input.image_url))) return `The image doesn't load: ${input.image_url}. Use the file's URL from its Commons page.`;
   const { data: author, error } = await db().from("authors").select("id, slug, name").eq("slug", input.author).maybeSingle();
   if (error) throw error;
   if (!author) return `No author "${input.author}". Use a slug from authors_to_write.`;
@@ -86,6 +116,8 @@ export async function writeAuthor(raw: WriteAuthorInput): Promise<{ slug: string
       role: input.role,
       places: input.places,
       wikidata_id: input.wikidata_id,
+      image_url: input.image_url,
+      image_credit: input.image_url ? input.image_credit : "",
       alongside: input.alongside.map((a) => ({ slug: a.book, why: a.why })),
       bio_status: "draft",
       approved_at: null,
@@ -132,6 +164,8 @@ export type AuthorPage = {
   role: string;
   places: string;
   wikidataId: string | null;
+  image: string | null;
+  imageCredit: string;
   approvedAt: string | null;
   /** As the library lists them, with who is reading each. */
   books: MaterialSummary[];
@@ -200,6 +234,8 @@ export async function getAuthorPage(slug: string): Promise<AuthorPage | null> {
     role: approved ? a.role : "",
     places: approved ? a.places : "",
     wikidataId: approved ? a.wikidata_id : null,
+    image: approved ? a.image_url : null,
+    imageCredit: approved ? a.image_credit : "",
     approvedAt: a.approved_at,
     books: rows.map(withReaders),
     quotes,
@@ -213,12 +249,33 @@ export async function getAuthorPage(slug: string): Promise<AuthorPage | null> {
   };
 }
 
-/** Indexable author pages, for the sitemap and llms.txt. */
-export async function indexableAuthors(): Promise<{ slug: string; name: string }[]> {
+export type ListedAuthor = { slug: string; name: string; books: number; image: string | null; bio: string; lifespan: string | null };
+
+/** The start of a bio, cut at a word: the /authors listing's teaser. */
+const excerpt = (bio: string, max = 220) => (bio.length <= max ? bio : `${bio.slice(0, max).replace(/\s+\S*$/, "")}…`);
+
+/** Indexable author pages, A to Z: the /authors listing (portrait and the
+ * start of the bio once approved) and the sitemap. */
+export async function indexableAuthors(): Promise<ListedAuthor[]> {
   const { data, error } = await db().rpc("author_stats");
   if (error) throw error;
-  return data.filter(isIndexable).map((a) => ({ slug: a.slug, name: a.name })).sort((x, y) => x.name.localeCompare(y.name));
+  const listed = data.filter(isIndexable);
+  const approvedIds = listed.filter((a) => a.bio_status === "approved").map((a) => a.id);
+  const { data: details, error: detailError } = approvedIds.length
+    ? await db().from("authors").select("id, bio, image_url, born, died").in("id", approvedIds)
+    : { data: [], error: null };
+  if (detailError) throw detailError;
+  const byId = new Map(details.map((d) => [d.id, d]));
+  return listed
+    .map((a) => {
+      const d = byId.get(a.id);
+      return { slug: a.slug, name: a.name, books: a.books, image: d?.image_url ?? null, bio: d ? excerpt(d.bio) : "", lifespan: d ? lifespan(d) : null };
+    })
+    .sort((x, y) => x.name.localeCompare(y.name));
 }
+
+export const lifespan = (a: { born: number | null; died: number | null }) =>
+  a.born && a.died ? `${a.born}–${a.died}` : a.born ? `Born ${a.born}` : a.died ? `Died ${a.died}` : null;
 
 // ---- Admin ------------------------------------------------------------------
 
@@ -234,6 +291,8 @@ export type AdminAuthor = {
   role: string;
   places: string;
   wikidataId: string | null;
+  image: string | null;
+  imageCredit: string;
   alongside: { slug: string; why: string }[];
   updatedAt: string;
 };
@@ -254,6 +313,8 @@ export async function adminAuthors(status: "draft" | "approved"): Promise<AdminA
     role: a.role,
     places: a.places,
     wikidataId: a.wikidata_id,
+    image: a.image_url,
+    imageCredit: a.image_credit,
     alongside: (a.alongside as AdminAuthor["alongside"] | null) ?? [],
     updatedAt: a.updated_at,
   }));
@@ -265,20 +326,24 @@ export const AuthorEdit = z.object({
   places: z.string().trim().max(120).optional(),
   born: Year.nullable().optional(),
   died: Year.nullable().optional(),
+  image_url: z.union([z.url().regex(/^https:\/\/(upload|thumb)\.wikimedia\.org\//).max(600), z.literal("")]).nullable().optional(),
+  image_credit: z.string().trim().max(200).optional(),
   /** approve: publish it; draft: take it back off the page; none: discard the draft. */
   status: z.enum(["approved", "draft", "none"]).optional(),
-});
+}).refine((e) => !e.image_url || !!e.image_credit?.trim(), { message: "An image needs its credit.", path: ["image_credit"] });
 
 /** An editor's edit and/or approval. False when there's no such author. */
 export async function editAuthor(id: string, edit: z.infer<typeof AuthorEdit>): Promise<boolean> {
   const now = new Date().toISOString();
-  const { status, ...fields } = edit;
+  const { status, image_url, ...fields } = edit;
+  const image = image_url === undefined ? {} : { image_url: image_url || null };
   const { data, error } = await db()
     .from("authors")
     .update({
       ...fields,
+      ...image,
       ...(status && { bio_status: status, approved_at: status === "approved" ? now : null }),
-      ...(status === "none" && { bio: "", bio_sources: [], role: "", places: "", born: null, died: null, alongside: [] }),
+      ...(status === "none" && { bio: "", bio_sources: [], role: "", places: "", born: null, died: null, alongside: [], image_url: null, image_credit: "" }),
       updated_at: now,
     })
     .eq("id", id)

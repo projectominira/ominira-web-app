@@ -61,6 +61,8 @@ function AuthorCard({ author: a, approved, onDone }: { author: AdminAuthor; appr
   const [places, setPlaces] = useState(a.places);
   const [born, setBorn] = useState(a.born?.toString() ?? "");
   const [died, setDied] = useState(a.died?.toString() ?? "");
+  const [image, setImage] = useState(a.image ?? "");
+  const [credit, setCredit] = useState(a.imageCredit);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -73,7 +75,7 @@ function AuthorCard({ author: a, approved, onDone }: { author: AdminAuthor; appr
       const response = await fetch(`/api/admin/authors/${a.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(status === "none" ? { status } : { bio, role, places, born: year(born), died: year(died), ...(status && { status }) }),
+        body: JSON.stringify(status === "none" ? { status } : { bio, role, places, born: year(born), died: year(died), image_url: image.trim() || null, image_credit: credit, ...(status && { status }) }),
       });
       const result = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) throw new Error(result?.error || "Please try again.");
@@ -89,8 +91,14 @@ function AuthorCard({ author: a, approved, onDone }: { author: AdminAuthor; appr
 
   return (
     <article className="flex flex-col gap-4 rounded-sm border border-[var(--reader-border)] p-5">
-      <header className="flex items-baseline justify-between gap-3">
-        <h2 className="m-0 font-serif text-[20px] font-semibold text-[var(--reader-text)]">{a.name}</h2>
+      <header className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-3">
+          <span className="flex size-14 flex-none items-center justify-center overflow-hidden rounded-full bg-[var(--reader-surface-hover)] text-[11px] font-semibold text-[var(--reader-text-muted)]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {image.trim() ? <img src={image.trim()} alt="" className="size-full object-cover object-top" /> : "No image"}
+          </span>
+          <h2 className="m-0 font-serif text-[20px] font-semibold text-[var(--reader-text)]">{a.name}</h2>
+        </span>
         <Link href={`/authors/${a.slug}`} target="_blank" className="inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--reader-text-muted)] hover:text-[var(--reader-text)]">
           Page <ExternalLink size={12} />
         </Link>
@@ -100,6 +108,10 @@ function AuthorCard({ author: a, approved, onDone }: { author: AdminAuthor; appr
         <TextField label="Died" inputMode="numeric" value={died} onChange={(e) => setDied(e.target.value)} />
         <TextField label="Role" value={role} onChange={(e) => setRole(e.target.value)} />
         <TextField label="Places" value={places} onChange={(e) => setPlaces(e.target.value)} />
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <TextField label="Image" hint="Wikimedia Commons" value={image} onChange={(e) => setImage(e.target.value)} />
+        <TextField label="Image credit" value={credit} onChange={(e) => setCredit(e.target.value)} />
       </div>
       <TextAreaField label="Bio" hint={`${words(bio)} words`} rows={7} value={bio} onChange={(e) => setBio(e.target.value)} />
       <div className="flex flex-col gap-1 text-[12px] font-medium text-[var(--reader-text-muted)]">
