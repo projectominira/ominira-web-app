@@ -5,6 +5,8 @@ import { allRows } from "@/lib/supabase/allRows";
 import { slugifyCategory } from "@/lib/categories/slug";
 import { quoteFacets } from "@/lib/quotes/directory";
 import { indexableAuthors } from "@/lib/authors/authors";
+import { listTopics } from "@/lib/topics/guides";
+import { listReadingLists } from "@/lib/readingLists/lists";
 
 /** An author's quote page is listed once it has a few quotes (not thin). */
 const MIN_AUTHOR_QUOTES = 3;
@@ -35,6 +37,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.error("[sitemap] authors", err);
     return [];
   });
+  // Topic pages: guides and categories worth indexing (seo-spec C3), and their hub.
+  const topics = await listTopics().catch((err) => {
+    console.error("[sitemap] topics", err);
+    return [];
+  });
+  // Live monthly reading lists (seo-spec C1), and their hub.
+  const lists = await listReadingLists().catch((err) => {
+    console.error("[sitemap] reading lists", err);
+    return [];
+  });
+  const topicPaths = topics.length ? ["/topics", ...topics.map((t) => `/topics/${t.slug}`)] : [];
   const authorPaths = authors.length ? ["/authors", ...authors.map((a) => `/authors/${a.slug}`)] : [];
 
   const quotes = [
@@ -46,6 +59,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     { url: `${PLATFORM_URL}/`, changeFrequency: "daily", priority: 1 },
     { url: `${PLATFORM_URL}/library`, changeFrequency: "daily", priority: 0.9 },
+    ...(lists.length ? [{ url: `${PLATFORM_URL}/reading-lists`, changeFrequency: "weekly" as const, priority: 0.8 }] : []),
+    ...lists.map((l) => ({ url: `${PLATFORM_URL}/reading-lists/${l.slug}`, lastModified: l.day, changeFrequency: "monthly" as const, priority: 0.8 })),
+    ...topicPaths.map((path) => ({ url: `${PLATFORM_URL}${path}`, changeFrequency: "weekly" as const, priority: 0.8 })),
     ...authorPaths.map((path) => ({ url: `${PLATFORM_URL}${path}`, changeFrequency: "weekly" as const, priority: 0.8 })),
     ...quotes.map((path) => ({ url: `${PLATFORM_URL}${path}`, changeFrequency: "weekly" as const, priority: 0.7 })),
     ...books.map((book) => ({

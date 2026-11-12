@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import SearchableAppPage from "@/app/components/shell/SearchableAppPage";
 import { slugifyCategory } from "@/lib/categories/slug";
 import { PLATFORM_URL } from "@/lib/config/platform";
+import { breadcrumbs, JsonLd } from "@/lib/seo/jsonLd";
 import type { DirectoryQuote } from "@/lib/quotes/directory";
 import type { HomePassage } from "@/lib/rooms/types";
 import QuoteShare from "./QuoteShare";
@@ -49,7 +50,7 @@ export default function QuotesDirectory(v: DirectoryView) {
   };
   return (
     <SearchableAppPage className="pb-16">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
+      <JsonLd data={[jsonLd, breadcrumbs([["Quotes", "/quotes"], ...(v.crumb ? [[v.crumb, v.path] as [string, string]] : [])])]} />
       <div className="mx-auto flex max-w-[980px] flex-col gap-5">
         <nav className="flex items-center gap-2 pt-2 text-[13px] font-medium text-[var(--color-app-text-muted)]">
           <Link href="/library" className="text-inherit">Library</Link>
@@ -158,7 +159,7 @@ function PageLink({ href, rel, children }: { href: string; rel: string; children
   );
 }
 
-function Cover({ src, className }: { src: string | null; className: string }) {
+export function Cover({ src, className }: { src: string | null; className: string }) {
   return (
     <span className={`block flex-none overflow-hidden rounded-[3px] bg-[var(--color-app-surface-muted)] shadow-[0_1px_2px_rgba(20,17,14,.12)] ${className}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}

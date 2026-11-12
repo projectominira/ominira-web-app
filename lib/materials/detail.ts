@@ -54,6 +54,8 @@ export type MaterialDetail = {
   reactionCount: number;
   /** Each author, in order, for links to their pages (seo-spec C2). */
   authors: { slug: string; name: string }[];
+  /** Library categories, each linking to its topic page (seo-spec C3). */
+  categories: string[];
 };
 
 const DETAIL_FIELDS = [
@@ -137,5 +139,6 @@ export async function getMaterialDetail(slug: string): Promise<MaterialDetail> {
     contributor,
     reactionCount: row.reaction_count ?? 0,
     authors: ((authors.data ?? []) as unknown as { authors: { slug: string; name: string } }[]).map((a) => a.authors),
+    categories: Array.isArray(row.categories) ? (row.categories as string[]) : [],
   };
 }

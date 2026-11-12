@@ -51,7 +51,7 @@ export default async function AuthorsPage() {
         <header className="flex max-w-[720px] flex-col gap-3 pt-2">
           <span className="text-[11px] font-bold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Library</span>
           <h1 className="m-0 font-serif text-[24px]/[1.25] font-semibold md:text-[28px]/[1.2] text-[var(--color-app-text)]">Authors</h1>
-          <p className="m-0 text-[15px]/[1.6] text-[var(--color-app-text-secondary)]">{DESCRIPTION}</p>
+          <p className="m-0 text-[14px] text-[var(--color-app-text-secondary)]">{DESCRIPTION}</p>
         </header>
         <nav aria-label="Letters" className="flex flex-wrap gap-x-3 gap-y-1 text-[13px] font-semibold">
           {[...groups.keys()].map((letter) => (

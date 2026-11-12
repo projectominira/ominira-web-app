@@ -14,7 +14,7 @@
 import type { NotificationKind } from "@/lib/notifications/types";
 import type { RoomKind } from "@/lib/rooms/types";
 
-export type ConnectorActivityKind = "tags" | "passages" | "edits" | "categories" | "quotes" | "authors";
+export type ConnectorActivityKind = "tags" | "passages" | "edits" | "categories" | "quotes" | "authors" | "topics" | "lists";
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
@@ -900,6 +900,72 @@ export type Database = {
           topics?: string[];
         };
         Update: Partial<Database["public"]["Tables"]["passage_quotes"]["Insert"]>;
+        Relationships: [];
+      };
+      /** migrations/20261214_topic_guides.sql: topic pages' guides (seo-spec C3). */
+      topic_guides: {
+        Row: {
+          id: string;
+          slug: string;
+          name: string;
+          category: string | null;
+          title: string;
+          intro: string;
+          /** { title, intro, books: { slug, why }[] }[] */
+          stages: Json;
+          status: "draft" | "approved";
+          approved_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          name: string;
+          category?: string | null;
+          title: string;
+          intro: string;
+          stages?: Json;
+          status?: "draft" | "approved";
+          approved_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["topic_guides"]["Insert"]>;
+        Relationships: [];
+      };
+      /** migrations/20261215_reading_lists.sql: monthly reading lists (seo-spec C1). */
+      reading_lists: {
+        Row: {
+          id: string;
+          slug: string;
+          title: string;
+          intro: string;
+          /** { slug, why, tag }[] */
+          books: Json;
+          day: string;
+          occasion: string;
+          topic: string | null;
+          status: "draft" | "approved";
+          approved_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          title: string;
+          intro: string;
+          books?: Json;
+          day: string;
+          occasion?: string;
+          topic?: string | null;
+          status?: "draft" | "approved";
+          approved_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["reading_lists"]["Insert"]>;
         Relationships: [];
       };
       /** migrations/20261211_seo_authors_quotes.sql: people, kept in step with

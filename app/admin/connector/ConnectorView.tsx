@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { ArrowRight, BookUser, Check, ChevronRight, Copy, FolderPen, PenLine, Quote, Tags } from "lucide-react";
+import { ArrowRight, BookUser, Check, ChevronRight, Compass, Copy, FolderPen, ListOrdered, PenLine, Quote, Tags } from "lucide-react";
 import AdminPageHeader from "../AdminPageHeader";
 import { BUTTON, PRIMARY } from "../passage/QuoteCard";
 import { showToast } from "@/stores/toast-store";
@@ -31,7 +31,7 @@ const USES: { job: string; icon: ReactNode; does: string; examples: string[]; re
     job: "Passages",
     icon: <Quote size={16} />,
     does: "Plans the next 30 days on its own: anniversaries, topical days and evergreen passages from the library, following the editorial brief. Or finds quotes for an idea you give it.",
-    examples: ["Plan the next 30 days of passages.", "Find three short quotes on land and labour for the passage of the day.", "Send the ones we picked to Ominira."],
+    examples: ["Plan the next 30 days of passages and the month's reading list.", "Find three short quotes on land and labour for the passage of the day.", "Send the ones we picked to Ominira."],
     review: { href: "/admin/passage?tab=review", label: "Review in Passages" },
   },
   {
@@ -111,6 +111,18 @@ function ActivityRow({ item }: { item: ConnectorActivity }) {
               detail: b.changes.map((c) => `${c.field}: ${quoted(c.from)} → ${quoted(c.to)}`).join(" · "),
             })),
           ]
+        : item.kind === "lists"
+          ? [
+              <ListOrdered key="i" size={15} />,
+              <>Drafted the reading list “{item.title}”</>,
+              [{ key: item.slug, label: item.title, detail: `For ${item.day}, for approval in Reading lists` }],
+            ]
+        : item.kind === "topics"
+          ? [
+              <Compass key="i" size={15} />,
+              <>Drafted the {item.name} topic guide</>,
+              [{ key: item.slug, label: item.name, detail: "For approval in Topics" }],
+            ]
         : item.kind === "authors"
           ? [
               <BookUser key="i" size={15} />,

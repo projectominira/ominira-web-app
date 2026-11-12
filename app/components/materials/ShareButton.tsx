@@ -32,6 +32,7 @@ export default function ShareButton({
   label = "Share",
   className,
   iconSize = 15,
+  labelClassName,
 }: {
   title: string;
   text?: string;
@@ -40,6 +41,8 @@ export default function ShareButton({
   /** Replaces the default look, for a surface with its own buttons. */
   className?: string;
   iconSize?: number;
+  /** Wraps the label in a span with this class (e.g. hidden on phones). */
+  labelClassName?: string;
   /** Defaults to the original (only) caller's own book-page wording — a
    * different surface reusing this button (ReaderProfileView) passes its
    * own instead of every reader hearing "Share this book" for a profile. */
@@ -68,7 +71,7 @@ export default function ShareButton({
       }
     >
       {copied ? <Check size={iconSize} /> : <Share size={iconSize} />}
-      {copied && label ? "Copied" : label}
+      {labelClassName ? <span className={labelClassName}>{copied && label ? "Copied" : label}</span> : copied && label ? "Copied" : label}
     </button>
   );
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { ANALYTICS_OPT_OUT_KEY } from "@/app/components/SiteAnalytics";
-import { ArrowUpRight, BookOpen, BookUser, Home, Menu, Mic, Plug, Quote, Send, TextQuote, UserPen, Users, X } from "lucide-react";
+import { ArrowUpRight, BookOpen, BookUser, Compass, Home, ListOrdered, Menu, Mic, Plug, Quote, Send, TextQuote, UserPen, Users, X } from "lucide-react";
 import { SPLASH_MARK } from "@/lib/config/brand-assets";
 
 const NAV = [
@@ -16,6 +16,8 @@ const NAV = [
   { href: "/admin/passage", label: "Passages", icon: Quote },
   { href: "/admin/quotes", label: "Quotes", icon: TextQuote },
   { href: "/admin/authors", label: "Authors", icon: UserPen },
+  { href: "/admin/topics", label: "Topics", icon: Compass },
+  { href: "/admin/reading-lists", label: "Reading lists", icon: ListOrdered },
   { href: "/admin/push", label: "Broadcast", icon: Send },
   { href: "/admin/connector", label: "Connector", icon: Plug },
 ];

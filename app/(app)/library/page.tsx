@@ -4,10 +4,14 @@ import LibraryView from "@/app/components/shell/LibraryView";
 import { getCategories } from "@/lib/categories/config";
 import { resolveCategoryFromSlug } from "@/lib/categories/slug";
 
-export const metadata: Metadata = {
-  title: "Library",
-  description: "Browse the full catalog of revolutionary books, essays, and speeches available to read or listen to.",
-};
+const DESCRIPTION = "Browse the full catalog of revolutionary books, essays, and speeches available to read or listen to.";
+
+/** A category view (`?q=`) is the members' filter; search engines get its
+ * topic page instead (seo-spec C3), so it isn't indexed. */
+export async function generateMetadata({ searchParams }: { searchParams: Promise<{ q?: string }> }): Promise<Metadata> {
+  const { q } = await searchParams;
+  return { title: "Library", description: DESCRIPTION, ...(q && { robots: { index: false, follow: true } }) };
+}
 
 export default async function LibraryPage({
   searchParams,

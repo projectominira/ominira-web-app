@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import { BRAND_BG } from "@/lib/config/brand-assets";
-import { OG_ACCENT, OG_SIZE, brandImage } from "@/lib/config/og";
+import { OG_ACCENT, OG_SIZE, brandImage, loadCover } from "@/lib/config/og";
 import { PLATFORM_HOST } from "@/lib/config/platform";
 import { resolveMaterialRow } from "@/lib/materials/resolve";
 import { projectMaterial } from "@/lib/materials/projection";
@@ -12,19 +12,6 @@ export const alt = "Book on Ominira";
 export const size = OG_SIZE;
 export const contentType = "image/png";
 export const revalidate = 86400;
-
-/** The cover as a data URL, or null if it's missing or a format next/og can't draw. */
-async function loadCover(url: string | null) {
-  if (!url) return null;
-  try {
-    const res = await fetch(url);
-    const type = res.headers.get("content-type") ?? "";
-    if (!res.ok || !/^image\/(jpeg|png)/.test(type)) return null;
-    return `data:${type};base64,${Buffer.from(await res.arrayBuffer()).toString("base64")}`;
-  } catch {
-    return null;
-  }
-}
 
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;

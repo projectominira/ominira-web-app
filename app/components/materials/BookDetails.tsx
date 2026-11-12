@@ -10,6 +10,7 @@ import { chapterEnds } from "@/lib/groups/progress";
 import { positionPercent } from "@/lib/reader/locator";
 import { bookHeader } from "@/lib/rooms/book";
 import { pseudonymToSlug } from "@/lib/reader/profileSlug";
+import { slugifyCategory } from "@/lib/categories/slug";
 import type { BookRoomHeader } from "@/lib/rooms/types";
 import BookCover from "@/app/components/shared/BookCover";
 import { useReadingPositionStore } from "@/stores/reading-position-store";
@@ -108,6 +109,7 @@ export default function BookDetails({
               : material.author}
           </div>
           <MetaLine material={material} audiobook={audiobook} />
+          <TopicLinks categories={material.categories} />
           <ContributorRow material={material} />
           {h.description && <Description text={h.description} />}
 
@@ -214,6 +216,23 @@ function MetaLine({ material, audiobook }: { material: MaterialDetail; audiobook
           </span>
         </span>
       )}
+    </div>
+  );
+}
+
+/** The book's categories, each linking to its topic page (seo-spec C3, T8). */
+function TopicLinks({ categories }: { categories: string[] }) {
+  if (!categories.length) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center justify-center gap-x-2 text-[13px] font-medium text-[var(--reader-text-subtle)]">
+      {categories.map((c, i) => (
+        <span key={c} className="inline-flex items-center gap-2">
+          {i > 0 && <span aria-hidden>·</span>}
+          <Link href={`/topics/${slugifyCategory(c)}`} className="text-inherit hover:underline">
+            {c}
+          </Link>
+        </span>
+      ))}
     </div>
   );
 }

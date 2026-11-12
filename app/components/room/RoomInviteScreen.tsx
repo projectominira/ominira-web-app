@@ -50,12 +50,12 @@ export default function RoomInviteScreen({ invite }: { invite: RoomInvite }) {
             </div>
           ) : (
             <div className="mt-2 flex w-full flex-col gap-2">
-              <p className="m-0 mb-1 text-[13px] text-[var(--reader-text-muted)]">Log in or join Ominira to listen in. You’ll come straight back here.</p>
+              <p className="m-0 mb-1 text-[13px] text-[var(--reader-text-muted)]">Log in or become a member to listen in. You’ll come straight back here.</p>
               <Link href="/auth/login" className={JOIN_BUTTON}>
                 Log in
               </Link>
               <Link href="/auth/signup" className={OUTLINE}>
-                Join Ominira
+                Become a member
               </Link>
             </div>
           )}

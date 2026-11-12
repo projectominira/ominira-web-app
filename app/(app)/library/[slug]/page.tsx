@@ -7,6 +7,8 @@ import { BOOK_ROOMS } from "@/lib/config/features";
 import { PLATFORM_NAME, PLATFORM_URL } from "@/lib/config/platform";
 import { resolveBookCoverSrc } from "@/lib/materials/image";
 import { missingBook } from "@/lib/materials/oldSlug";
+import { slugifyCategory } from "@/lib/categories/slug";
+import { breadcrumbs, JsonLd } from "@/lib/seo/jsonLd";
 
 // generateMetadata and the page both need the book; load it once per request.
 const getDetail = cache(getMaterialDetail);
@@ -83,12 +85,15 @@ export default async function MaterialDetailPage({
     ...(blurb && { description: blurb }),
     ...(material.publishedYear && { datePublished: String(material.publishedYear) }),
   };
+  // Breadcrumbs through the book's first category's topic page.
+  const category = material.categories[0];
+  const trail = breadcrumbs([
+    ...(category ? ([["Topics", "/topics"], [category, `/topics/${slugifyCategory(category)}`]] as [string, string][]) : [["Library", "/library"] as [string, string]]),
+    [material.title, bookPath(slug)],
+  ]);
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
-      />
+      <JsonLd data={[jsonLd, trail]} />
       {BOOK_ROOMS ? <BookRoomView material={material} initialInfo={tab !== "room"} /> : <BookPage material={material} />}
     </>
   );

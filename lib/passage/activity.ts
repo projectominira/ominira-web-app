@@ -10,7 +10,9 @@ export type ConnectorActivity =
   | { id: string; at: string; kind: "edits"; books: BookEdit[] }
   | { id: string; at: string; kind: "categories"; changes: CategoryChange[] }
   | { id: string; at: string; kind: "quotes"; books: QuotedBook[] }
-  | { id: string; at: string; kind: "authors"; slug: string; name: string };
+  | { id: string; at: string; kind: "authors"; slug: string; name: string }
+  | { id: string; at: string; kind: "topics"; slug: string; name: string }
+  | { id: string; at: string; kind: "lists"; slug: string; title: string; day: string };
 
 /** A book's quotes added to the directory (seo-spec C4). */
 export type QuotedBook = { slug: string; title: string; added: number };
@@ -47,6 +49,10 @@ export const logQuotes = (books: QuotedBook[]) => quietly("quotes", () => db().f
 
 export const logAuthor = (author: { slug: string; name: string }) => quietly("authors", () => db().from("connector_activity").insert({ kind: "authors", detail: author }));
 
+export const logTopic = (topic: { slug: string; name: string }) => quietly("topics", () => db().from("connector_activity").insert({ kind: "topics", detail: topic }));
+
+export const logList = (list: { slug: string; title: string; day: string }) => quietly("lists", () => db().from("connector_activity").insert({ kind: "lists", detail: list }));
+
 export const markSeen = () => quietly("seen", () => db().from("connector_status").upsert({ id: 1, last_seen_at: new Date().toISOString() }));
 
 /** The latest changes, and when an app last connected (null: never). */
@@ -70,7 +76,10 @@ export async function getConnectorHistory(limit = 30): Promise<{ lastSeenAt: str
       case "quotes":
         return { ...base, kind: "quotes", books: (d.books ?? []) as never };
       case "authors":
-        return { ...base, kind: "authors", slug: String(d.slug ?? ""), name: String(d.name ?? "") };
+      case "topics":
+        return { ...base, kind: r.kind, slug: String(d.slug ?? ""), name: String(d.name ?? "") };
+      case "lists":
+        return { ...base, kind: "lists", slug: String(d.slug ?? ""), title: String(d.title ?? ""), day: String(d.day ?? "") };
       default:
         return { ...base, kind: "passages", setId: String(d.set_id), title: String(d.title ?? ""), saved: Number(d.saved ?? 0) };
     }

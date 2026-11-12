@@ -12,9 +12,11 @@ import type { TocSection } from "@/lib/api/types";
 import type { Database } from "@/lib/supabase/database.types";
 import { createSet, CreateSetInput, listDays } from "./sets";
 import { getBrief, getCalendar } from "./calendar";
-import { logAuthor, logCategories, logEdits, logPassages, logQuotes, logTags, type BookEdit, type CategoryChange } from "./activity";
+import { logAuthor, logCategories, logEdits, logList, logPassages, logQuotes, logTags, logTopic, type BookEdit, type CategoryChange } from "./activity";
 import { addQuotes, AddQuotesInput, booksToQuote, MAX_QUOTES_PER_BOOK } from "@/lib/quotes/directory";
 import { authorsToWrite, writeAuthor, WriteAuthorInput } from "@/lib/authors/authors";
+import { topicsToWrite, writeTopic, WriteTopicInput } from "@/lib/topics/guides";
+import { listsForPlanning, sendReadingList, SendReadingListInput } from "@/lib/readingLists/lists";
 import { passageDay } from "@/lib/rooms/passage";
 import { addDays } from "@/lib/time/zone";
 import { isScanned, loadBookText, normalise, type BookText, type TextBlock } from "./text";
@@ -29,7 +31,7 @@ const db = () => getSupabaseAdminClient();
 
 type MaterialUpdate = Database["public"]["Tables"]["materials"]["Update"];
 
-export const INSTRUCTIONS = `You help an Ominira editor with four jobs in Ominira's library of books: finding short, quotable passages, curating the quote directory, drafting author pages, and looking after the books (their categories and details).
+export const INSTRUCTIONS = `You help an Ominira editor with five jobs in Ominira's library of books: finding short, quotable passages (and planning the monthly reading list), curating the quote directory, drafting author pages and topic guides, and looking after the books (their categories and details).
 
 ## Passages
 
@@ -45,6 +47,7 @@ When the editor asks you to plan or fill days ("plan the next 30 days", "fill ne
 5. Spread books and authors: avoid the ones \`calendar\` lists as featured recently, and don't repeat a book within the same batch.
 6. Give every quote an \`occasion\`: the one line of context members see above the quote. A plain fact, not a prompt: for an anniversary, what happened that day ("Ken Saro-Wiwa and eight other Ogoni men were executed on 10 November 1995."); for a topical one, the event; for an evergreen one, who wrote it and what the book is.
 7. A month is a lot of reading for one chat: plan anniversaries and topical days first, then evergreen, and send each batch with \`send_to_ominira\` as its own set once it's ready: asking you to plan is asking you to send. Editors approve each quote in Ominira; nothing is posted without them.
+8. The monthly reading list: each month in the window gets one list (\`calendar\` shows \`reading_lists\`, past and planned). Tie it to the month's strongest key date where there is one ("Books on Lumumba" for 17 January), on that day and sharing it with that day's passage; otherwise take an evergreen topic people search for (the Haitian Revolution, the Mau Mau, apartheid, where to start with Pan-Africanism, women in Africa's freedom struggles, the Cuban Revolution, Nigeria, decolonising the mind) on the 1st. Avoid topics, books and authors used in recent lists. Pick 6–12 books with \`catalog\` and read enough with \`find\` and \`read\` to say something specific about each, ordered so a reader knows where to start. Title it as people search ("Books on the Haitian Revolution", "Where to start with Fanon"), plain, no colons or numbers up front. Introduction 100–200 words, answer first, facts checked. For each book two or three sentences in an editor's voice: its argument, a scene, a fact, who it suits; if a sentence could describe another book, rewrite it. Same banned filler as the topic guides. Link the topic page it belongs to (\`topics_to_write\` gives slugs) as \`topic\`. Send it with \`send_reading_list\`.
 
 ### Finding passages for an idea
 
@@ -85,6 +88,21 @@ When the editor asks ("write the author pages", "draft Fanon's page"), work on y
 5. Read alongside: up to 4 books by other authors in the library (find them with \`catalog\`), each with one specific sentence on the link: a teacher, a reply, the same struggle elsewhere. Skip it rather than pad it.
 6. Send each author with \`write_author\` as soon as it's done. Sending again replaces the draft.
 7. Finish with a short report: authors drafted, and any you skipped and why.
+
+## Drafting topic guides
+
+Each library category, and each broad topic the editors choose ("The Haitian Revolution", "Mau Mau", "Négritude"), has a page (/topics/<slug>) that aims to be the best answer to "books on <topic>". You draft its guide: a title, an introduction and a reading path of about 20 books. An editor approves it before it shows. Below the guide, a category's page lists every book in it.
+
+When the editor asks ("write the topic guides", "draft a guide to the Haitian Revolution"), work on your own:
+1. Call \`topics_to_write\`: every category with its book count and guide status, and the broad topics drafted so far. Take categories with no guide, most books first, or the topics the editor names.
+2. Shortlist books with \`catalog\` (query the topic, its people, places and events; a category's books carry its name). Choose about 20 that together explain the topic, from any category. Read enough with \`contents\`, \`find\` and \`read\` to say something specific about each.
+3. Order them as a reading path in two to four stages: start here (the clearest way in), go deeper, then the arguments or a stage of the topic's own (a period, a country, a debate). Give each stage a plain title and one or two sentences on what it covers.
+4. For each book, one or two sentences specific to that book: its argument, a scene, a fact, where it sits in the path, who it suits. If the sentence could describe another book, rewrite it. Say which book answers which when they disagree.
+5. Title it in the words people search for: "Books on the Haitian Revolution", "Where to start with Pan-Africanism". Plain, no colons, no "Ultimate Guide", and not the same template for every topic.
+6. Introduction, 150–300 words, answer first: what the topic is and why it matters, with names, dates and places checked on reliable sources, then a sentence on how the path runs. Your own words, plain English, no filler ("delve", "tapestry", "testament to", "rich history", "journey", "shed light on", "a must-read", "powerful", "seminal"), no closing sermon.
+7. Each stage shows one quote from its own books, taken from the quote directory. If a stage's books have no quotes yet, add a few with \`add_quotes\` first.
+8. Send each guide with \`write_topic\` as soon as it's done (category: true for a category). Sending again replaces the draft.
+9. Finish with a short report: guides drafted, and any topics you skipped and why.
 
 ## Tagging books
 
@@ -628,10 +646,11 @@ const CalendarInput = z.object({});
  * what's waiting for review, and the books and authors used lately. */
 async function calendar() {
   const since = addDays(passageDay(Date.now()), -60);
-  const [brief, cal, recent] = await Promise.all([
+  const [brief, cal, recent, lists] = await Promise.all([
     getBrief(),
     getCalendar(),
     db().from("daily_passages").select("post_id").gte("day", since),
+    listsForPlanning(),
   ]);
   if (recent.error) throw recent.error;
   const posts = recent.data.length
@@ -655,7 +674,8 @@ async function calendar() {
     }),
     waiting_for_review: cal.waiting.map((q) => ({ kind: q.kind, occasion: q.occasion, day_wanted: q.wantedDay, book: q.book.title })),
     featured_recently: [...featured.values()],
-    note: "Plan the open days. Waiting quotes will likely fill some of them once approved; don't duplicate their occasions.",
+    reading_lists: lists,
+    note: "Plan the open days. Waiting quotes will likely fill some of them once approved; don't duplicate their occasions. Plan a reading list for each month in the window that has none (see Planning the calendar, step 8).",
   };
 }
 
@@ -697,6 +717,20 @@ async function draftAuthor(input: z.infer<typeof WriteAuthorInput>, origin: stri
   if (typeof result === "string") throw new ToolError(result);
   await logAuthor(result);
   return { ...result, review: `${origin}/admin/authors`, message: `Saved the draft of ${result.name}'s page. An editor approves it in Ominira's admin.` };
+}
+
+async function draftTopic(input: z.infer<typeof WriteTopicInput>, origin: string) {
+  const result = await writeTopic(input);
+  if (typeof result === "string") throw new ToolError(result);
+  await logTopic(result);
+  return { ...result, review: `${origin}/admin/topics`, message: `Saved the draft of the ${result.name} guide. An editor approves it in Ominira's admin.` };
+}
+
+async function draftList(input: z.infer<typeof SendReadingListInput>, origin: string) {
+  const result = await sendReadingList(input);
+  if (typeof result === "string") throw new ToolError(result);
+  await logList(result);
+  return { ...result, review: `${origin}/admin/reading-lists`, message: `Saved the draft of "${result.title}" for ${result.day}. An editor approves it in Ominira's admin; it goes live at 07:00 Lagos that day.` };
 }
 
 // ---- Registry -------------------------------------------------------------
@@ -777,6 +811,26 @@ const TOOLS: Record<string, Tool> = {
       "Save a draft of an author's page: bio (80–150 words, own words, checked facts), sources, birth and death years, role, places, Wikidata item, portrait (Wikimedia Commons, with credit) and books to read alongside. An editor approves it before it shows. Replaces any earlier draft.",
     input: WriteAuthorInput,
     run: draftAuthor,
+    readOnly: false,
+  },
+  topics_to_write: {
+    description: "Every category with its number of public books and its guide's status (none, draft, approved), and the broad topics drafted so far.",
+    input: z.object({}),
+    run: () => topicsToWrite(),
+    readOnly: true,
+  },
+  write_topic: {
+    description:
+      "Save a draft of a topic guide (a category, or a broad topic): title, introduction (150–300 words) and the reading path, two to four stages of books with a sentence on each, about 20 books in all. An editor approves it before it shows. Replaces any earlier version of that topic's guide.",
+    input: WriteTopicInput,
+    run: draftTopic,
+    readOnly: false,
+  },
+  send_reading_list: {
+    description:
+      "Save a draft of the month's reading list: title, publish day, the key date it's tied to (if any), introduction (100–200 words) and 6–12 books in reading order with two or three sentences on each. An editor approves it; it goes live at 07:00 Lagos on its day. Sending the same title again replaces the draft.",
+    input: SendReadingListInput,
+    run: draftList,
     readOnly: false,
   },
   send_to_ominira: {

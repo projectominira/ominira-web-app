@@ -11,6 +11,7 @@ import { slugifyCategory } from "@/lib/categories/slug";
 import { BRAND_TAGLINE, SPLASH_MARK, WORDMARK, WORDMARK_RATIO } from "@/lib/config/brand-assets";
 import { PLATFORM_NAME } from "@/lib/config/platform";
 import { getLandingView, PRINCIPLES_SLUG } from "@/lib/landing/view";
+import { JsonLd, siteJsonLd } from "@/lib/seo/jsonLd";
 
 const HEADLINE = "Thousands of books to raise your Pan-Africanist consciousness.";
 const SUB = "Read, or listen with African voices.";
@@ -63,6 +64,7 @@ export default async function LandingPage() {
   const [lead, ...rest] = view.featured;
   return (
     <>
+      <JsonLd data={siteJsonLd(`${HEADLINE} ${SUB}`)} />
       <script dangerouslySetInnerHTML={{ __html: HIDE_WHEN_SIGNED_IN }} />
       <style>{"html[data-signed-in] #landing{visibility:hidden}"}</style>
       <SignedInRedirect />
@@ -228,7 +230,7 @@ export default async function LandingPage() {
               </div>
             </section>
             {view.shelves.map((s, i) => (
-              <Shelf key={s.category} title={s.title} line={s.line} href={`/library?q=${slugifyCategory(s.category)}`} dark={i % 2 === 1}>
+              <Shelf key={s.category} title={s.title} line={s.line} href={`/topics/${slugifyCategory(s.category)}`} dark={i % 2 === 1}>
                 {s.books.map((b) => (
                   <div key={b.id} className={`flex-none snap-start ${SHELF_COVER[i % 2]}`}>
                     <Cover book={b} className="w-full" shadow={i % 2 === 1 ? "shadow-[0_14px_30px_rgba(0,0,0,0.5)]" : "shadow-md"} />

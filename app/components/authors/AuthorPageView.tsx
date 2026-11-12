@@ -6,6 +6,7 @@ import { Chip, QuoteCard } from "@/app/components/quotes/QuotesDirectory";
 import { lifespan, type AuthorPage } from "@/lib/authors/authors";
 import { slugifyCategory } from "@/lib/categories/slug";
 import { PLATFORM_NAME, PLATFORM_URL } from "@/lib/config/platform";
+import { breadcrumbs, JsonLd } from "@/lib/seo/jsonLd";
 import JoinBar from "./JoinBar";
 
 // An author page (seo-spec.md C2; Claude Design "SEO content pages" →
@@ -65,18 +66,10 @@ export default function AuthorPageView({ a }: { a: AuthorPage }) {
       subjectOf: a.books.map((b) => ({ "@type": "Book", name: b.title, url: `${PLATFORM_URL}/library/${b.slug}` })),
     },
   };
-  const breadcrumbs = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Authors", item: `${PLATFORM_URL}/authors` },
-      { "@type": "ListItem", position: 2, name: a.name, item: url },
-    ],
-  };
 
   return (
     <SearchableAppPage className="pb-16">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify([jsonLd, breadcrumbs]).replace(/</g, "\\u003c") }} />
+      <JsonLd data={[jsonLd, breadcrumbs([["Authors", "/authors"], [a.name, `/authors/${a.slug}`]])]} />
       <article className="mx-auto flex max-w-[980px] flex-col gap-5">
         <nav className="flex items-center gap-2 pt-2 text-[13px] font-medium text-[var(--color-app-text-muted)]">
           <Link href="/authors" className="text-inherit">Authors</Link>
@@ -163,7 +156,7 @@ export default function AuthorPageView({ a }: { a: AuthorPage }) {
           <Section title="Topics">
             <div className="flex flex-wrap gap-2">
               {a.topics.map((t) => (
-                <Chip key={t} href={`/library?q=${slugifyCategory(t)}`} on={false}>
+                <Chip key={t} href={`/topics/${slugifyCategory(t)}`} on={false}>
                   {t}
                 </Chip>
               ))}
