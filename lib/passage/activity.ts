@@ -8,7 +8,11 @@ export type ConnectorActivity =
   | { id: string; at: string; kind: "tags"; books: { title: string; slug: string; categories: string[] }[]; created: string[] }
   | { id: string; at: string; kind: "passages"; setId: string; title: string; saved: number }
   | { id: string; at: string; kind: "edits"; books: BookEdit[] }
-  | { id: string; at: string; kind: "categories"; changes: CategoryChange[] };
+  | { id: string; at: string; kind: "categories"; changes: CategoryChange[] }
+  | { id: string; at: string; kind: "quotes"; books: QuotedBook[] };
+
+/** A book's quotes added to the directory (seo-spec C4). */
+export type QuotedBook = { slug: string; title: string; added: number };
 
 /** A book's changed fields, before and after. */
 export type BookEdit = { slug: string; title: string; changes: { field: string; from: string | null; to: string | null }[] };
@@ -38,6 +42,8 @@ export const logEdits = (books: BookEdit[]) => quietly("edits", () => db().from(
 export const logCategories = (changes: CategoryChange[]) =>
   quietly("categories", () => db().from("connector_activity").insert({ kind: "categories", detail: { changes } }));
 
+export const logQuotes = (books: QuotedBook[]) => quietly("quotes", () => db().from("connector_activity").insert({ kind: "quotes", detail: { books } }));
+
 export const markSeen = () => quietly("seen", () => db().from("connector_status").upsert({ id: 1, last_seen_at: new Date().toISOString() }));
 
 /** The latest changes, and when an app last connected (null: never). */
@@ -58,6 +64,8 @@ export async function getConnectorHistory(limit = 30): Promise<{ lastSeenAt: str
         return { ...base, kind: "edits", books: (d.books ?? []) as never };
       case "categories":
         return { ...base, kind: "categories", changes: (d.changes ?? []) as never };
+      case "quotes":
+        return { ...base, kind: "quotes", books: (d.books ?? []) as never };
       default:
         return { ...base, kind: "passages", setId: String(d.set_id), title: String(d.title ?? ""), saved: Number(d.saved ?? 0) };
     }

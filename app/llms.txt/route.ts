@@ -17,6 +17,7 @@ The library holds over a thousand books: Pan-African political thought, African 
 ## Main pages
 
 - [Library](${PLATFORM_URL}/library): every book, by category
+- [Quotes](${PLATFORM_URL}/quotes): quotes from the library's books, each word for word from the page, by topic and author
 - [Home](${PLATFORM_URL}/): what Ominira is
 - [Sitemap](${PLATFORM_URL}/sitemap.xml): every book page
 

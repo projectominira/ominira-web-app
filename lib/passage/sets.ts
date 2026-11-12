@@ -57,15 +57,15 @@ export type CreateSetInput = z.input<typeof CreateSetInput>;
 
 export type CreateSetResult = { setId: string | null; saved: number; rejected: { quote: string; reason: string }[] };
 
+export type FoundQuote = { materialId: string; slug: string; title: string; ranges: AnnotationRange[]; context: ContextBlock[] };
+
 /**
- * The one way a set comes in, for the sample script and the connector. Each
- * quote is found word for word in its book (lib/passage/text.ts); one that
- * can't be is reported with a reason, and the rest still save. A set with
- * nothing found isn't saved.
+ * Finds each quote word for word in its book (lib/passage/text.ts): the
+ * check every quote passes, for sets and the quote directory alike. A quote
+ * that can't be found comes back as the reason.
  */
-export async function createSet(raw: CreateSetInput): Promise<CreateSetResult> {
-  const input = CreateSetInput.parse(raw);
-  const keys = [...new Set(input.quotes.map((q) => q.book))];
+export async function locateQuotes(quotes: { book: string; quote: string; near?: string | number }[]): Promise<(FoundQuote | string)[]> {
+  const keys = [...new Set(quotes.map((q) => q.book))];
   const ids = keys.filter((k) => UUID_RE.test(k));
   const slugs = keys.filter((k) => !UUID_RE.test(k));
   const [byId, bySlug] = await Promise.all([
@@ -75,23 +75,36 @@ export async function createSet(raw: CreateSetInput): Promise<CreateSetResult> {
   if (byId.error) throw byId.error;
   if (bySlug.error) throw bySlug.error;
   const books = new Map([...byId.data, ...bySlug.data].flatMap((m) => [[m.id, m] as const, [m.slug, m] as const]));
-
-  const found = await Promise.all(
-    input.quotes.map(async (q) => {
+  // Each book's text is read once, however many quotes it has.
+  const texts = new Map<string, ReturnType<typeof loadBookText>>();
+  return Promise.all(
+    quotes.map(async (q) => {
       const book = books.get(q.book);
       if (!book || book.status !== "published" || book.visibility !== "public") return "No public, published book by that slug or id.";
-      const load = loadBookText(book);
+      if (!texts.has(book.id)) texts.set(book.id, loadBookText(book));
+      const load = texts.get(book.id);
       if (!load) return "Only EPUBs and text PDFs can be quoted.";
       try {
         const text = await load;
         if (isScanned(text)) return "This PDF is a scan: it has no text to quote.";
         const located = locateQuote(text, q.quote, q.near);
-        return typeof located === "string" ? located : { materialId: book.id, ...located };
+        return typeof located === "string" ? located : { materialId: book.id, slug: book.slug, title: book.title, ...located };
       } catch (err) {
         return err instanceof Error ? err.message : "The book's text couldn't be read.";
       }
     })
   );
+}
+
+/**
+ * The one way a set comes in, for the sample script and the connector. Each
+ * quote is found word for word in its book (lib/passage/text.ts); one that
+ * can't be is reported with a reason, and the rest still save. A set with
+ * nothing found isn't saved.
+ */
+export async function createSet(raw: CreateSetInput): Promise<CreateSetResult> {
+  const input = CreateSetInput.parse(raw);
+  const found = await locateQuotes(input.quotes);
 
   const rejected: CreateSetResult["rejected"] = [];
   const saved = input.quotes.flatMap((q, i) => {
@@ -131,7 +144,8 @@ const DAYS_PAGE = 20;
 
 type QuoteRow = {
   id: string;
-  set_id: string;
+  /** Null on a directory quote (seo-spec C4). */
+  set_id: string | null;
   material_id: string;
   ranges: unknown;
   picked_ranges: unknown;
@@ -239,7 +253,7 @@ export async function listSets({ cursor }: { cursor: string | null }): Promise<P
   const bySet = new Map<string, QuoteView[]>();
   for (const q of quotes) {
     const view = views.get(q.id);
-    if (view) bySet.set(q.set_id, [...(bySet.get(q.set_id) ?? []), view]);
+    if (view && q.set_id) bySet.set(q.set_id, [...(bySet.get(q.set_id) ?? []), view]);
   }
   return {
     items: sets.map((s) => ({ id: s.id, title: s.title, note: s.note, createdAt: s.created_at, quotes: bySet.get(s.id) ?? [] })),
@@ -302,7 +316,7 @@ export async function dayViews(days: DayRow[]): Promise<DayView[]> {
   if (replies.error) throw replies.error;
   if (quotes.error) throw quotes.error;
   const materialIds = [...new Set(posts.data.flatMap((p) => (p.material_id ? [p.material_id] : [])))];
-  const setIds = [...new Set(quotes.data.map((q) => q.set_id))];
+  const setIds = [...new Set(quotes.data.flatMap((q) => (q.set_id ? [q.set_id] : [])))];
   const [materials, sets] = await Promise.all([
     materialIds.length ? db().from("materials").select("id, title").in("id", materialIds) : { data: [], error: null },
     setIds.length ? db().from("passage_sets").select("id, title").in("id", setIds) : { data: [], error: null },
@@ -313,7 +327,7 @@ export async function dayViews(days: DayRow[]): Promise<DayView[]> {
   const postById = new Map(posts.data.map((p) => [p.id, p]));
   const titles = new Map(materials.data.map((m) => [m.id, m.title]));
   const setTitles = new Map(sets.data.map((s) => [s.id, s.title]));
-  const setOf = new Map(quotes.data.map((q) => [q.post_id, setTitles.get(q.set_id) ?? null]));
+  const setOf = new Map(quotes.data.map((q) => [q.post_id, (q.set_id && setTitles.get(q.set_id)) || null]));
   const answers = new Map<string, number>();
   for (const r of replies.data) if (r.parent_id) answers.set(r.parent_id, (answers.get(r.parent_id) ?? 0) + 1);
 

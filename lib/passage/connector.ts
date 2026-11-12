@@ -12,7 +12,8 @@ import type { TocSection } from "@/lib/api/types";
 import type { Database } from "@/lib/supabase/database.types";
 import { createSet, CreateSetInput, listDays } from "./sets";
 import { getBrief, getCalendar } from "./calendar";
-import { logCategories, logEdits, logPassages, logTags, type BookEdit, type CategoryChange } from "./activity";
+import { logCategories, logEdits, logPassages, logQuotes, logTags, type BookEdit, type CategoryChange } from "./activity";
+import { addQuotes, AddQuotesInput, booksToQuote, MAX_QUOTES_PER_BOOK } from "@/lib/quotes/directory";
 import { passageDay } from "@/lib/rooms/passage";
 import { addDays } from "@/lib/time/zone";
 import { isScanned, loadBookText, normalise, type BookText, type TextBlock } from "./text";
@@ -27,7 +28,7 @@ const db = () => getSupabaseAdminClient();
 
 type MaterialUpdate = Database["public"]["Tables"]["materials"]["Update"];
 
-export const INSTRUCTIONS = `You help an Ominira editor with two jobs in Ominira's library of books: finding short, quotable passages, and looking after the books (their categories and details).
+export const INSTRUCTIONS = `You help an Ominira editor with three jobs in Ominira's library of books: finding short, quotable passages, curating the quote directory, and looking after the books (their categories and details).
 
 ## Passages
 
@@ -58,6 +59,18 @@ How to work:
 - Keep quotes short (one to three sentences) and self-contained: they must make sense without what comes before.
 - For each quote, pass \`near\` (the block id or page number \`read\` showed) and say why it fits.
 - Check \`recent_passages\` and avoid repeating recent quotes or books.
+
+## Curating the quote directory
+
+Ominira's quote directory (/quotes) shows quotes from every book, word for word from Ominira's edition. The same quotes fill author and topic pages, so they are what readers searching "<author> quotes" find. Quotes go live as soon as you send them (they're checked word for word); editors can hide one later.
+
+When the editor asks you to curate quotes ("curate the new books", "add quotes from Fanon"), work on your own:
+1. Call \`books_to_quote\` for books not yet curated, or pick books with \`catalog\` when the editor names some.
+2. For each book, use what readers already quote as a guide (Goodreads quotes, well-known lines), then \`find\` and \`read\` to locate them, or better ones, in the book. Read enough of the book to choose well, not just the opening.
+3. Choose up to about 8 quotes a book (never more than ${MAX_QUOTES_PER_BOOK}): its strongest, most quotable lines, one to three sentences, each making sense on its own. Skip tables of contents, front matter, editors' introductions and other people's words quoted in the book. A book with nothing worth quoting gets none.
+4. Give each quote one to three topics from \`categories\`.
+5. Send each book's quotes with \`add_quotes\` as soon as it's done, passing books you skipped in \`done\`. Re-sending a listed quote is skipped, so a run can safely resume.
+6. Finish with a short report: books curated, quotes added, and anything skipped.
 
 ## Tagging books
 
@@ -375,6 +388,7 @@ function hints(b: { slug: string; title: string; author: string; published_year:
   const authorLetters = author.replace(/[^A-Za-z]/g, "");
   if (authorLetters.length > 3 && authorLetters === authorLetters.toUpperCase()) out.push("author all upper case");
   if (author.includes(",")) out.push("author has a comma (surname first, or several names?)");
+  if (/\d|[()]/.test(author)) out.push("author has dates, brackets or a book's details: authors are names only");
   if (/\.$/.test(author.trim()) || /\.[A-Za-z]/.test(author) || /\b[A-Z]\b(?!\.)/.test(author)) out.push("author initials or punctuation look off");
   if (/\b(ed\.|eds\.|editor|translated|trans\.)/i.test(author)) out.push("author may be an editor or translator");
   if (b.published_year === null) out.push("no year");
@@ -645,6 +659,19 @@ async function send(input: z.infer<typeof Send>, origin: string) {
   };
 }
 
+const ToQuote = z.object({ offset: z.int().min(0).default(0), limit: z.int().min(1).max(100).default(25) });
+
+async function addToDirectory(input: z.infer<typeof AddQuotesInput>, origin: string) {
+  const result = await addQuotes(input);
+  if (result.added.length) await logQuotes(result.added);
+  const total = result.added.reduce((n, b) => n + b.added, 0);
+  return {
+    ...result,
+    directory: `${origin}/quotes`,
+    message: `Added ${total} quote${total === 1 ? "" : "s"}.${result.unknownTopics.length ? " Topics not in the library were dropped: use names from categories." : ""}`,
+  };
+}
+
 // ---- Registry -------------------------------------------------------------
 
 type Tool = { description: string; input: z.ZodType; run: (input: never, origin: string) => Promise<unknown>; readOnly: boolean };
@@ -697,6 +724,19 @@ const TOOLS: Record<string, Tool> = {
     description: "Set the categories of up to 100 books, replacing what each had. New categories must be listed in new_categories. Only call this when the editor asks.",
     input: Tag,
     run: tagBooks,
+    readOnly: false,
+  },
+  books_to_quote: {
+    description: "Public books whose quotes haven't been curated yet, oldest first: slug, title, author, categories. Pages of up to 100.",
+    input: ToQuote,
+    run: (i: z.infer<typeof ToQuote>) => booksToQuote(i),
+    readOnly: true,
+  },
+  add_quotes: {
+    description:
+      "List quotes in Ominira's quote directory: up to 50 a call, each found word for word in its book, with near and one to three topics. They go live at once. Marks each book curated; pass books with nothing worth quoting in done.",
+    input: AddQuotesInput,
+    run: addToDirectory,
     readOnly: false,
   },
   send_to_ominira: {

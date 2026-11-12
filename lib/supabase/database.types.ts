@@ -14,13 +14,15 @@
 import type { NotificationKind } from "@/lib/notifications/types";
 import type { RoomKind } from "@/lib/rooms/types";
 
-export type ConnectorActivityKind = "tags" | "passages" | "edits" | "categories";
+export type ConnectorActivityKind = "tags" | "passages" | "edits" | "categories" | "quotes";
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type GroupEventKind = "joined" | "target_set" | "book_current" | "book_added" | "session_scheduled" | "room_started";
 /** migrations/20261204_passage_calendar.sql (passage-spec §8). */
-export type PassageQuoteStatus = "new" | "approved" | "used" | "dismissed";
+/** listed/hidden: quote directory rows (seo-spec C4), with no set or day. */
+export type PassageQuoteStatus = "new" | "approved" | "used" | "dismissed" | "listed" | "hidden";
+export type AuthorBioStatus = "none" | "draft" | "approved";
 export type PassageKind = "anniversary" | "topical" | "evergreen";
 
 type Timestamps = { created_at: string; updated_at: string };
@@ -125,6 +127,8 @@ export type Database = {
           google_meta_data: Json | null;
           /** Earlier slugs, each 308-redirecting to `slug` (seo-spec.md T2). */
           old_slugs: string[];
+          /** When the connector last curated the book's quotes (seo-spec C4). */
+          quotes_curated_at: string | null;
           /** { coverUrl, thumbnailUrl, description } — see
            * scripts/generate-material-openlibrary-metadata.ts. */
           openlibrary_meta_data: Json | null;
@@ -169,6 +173,7 @@ export type Database = {
           thumbnail_url?: string | null;
           google_meta_data?: Json | null;
           old_slugs?: string[];
+          quotes_curated_at?: string | null;
           openlibrary_meta_data?: Json | null;
           cover_source?: "own" | "openlibrary" | "google";
           language?: string | null;
@@ -857,7 +862,7 @@ export type Database = {
       passage_quotes: {
         Row: {
           id: string;
-          set_id: string;
+          set_id: string | null;
           position: number;
           material_id: string;
           ranges: Json;
@@ -872,11 +877,13 @@ export type Database = {
           occasion: string;
           wanted_day: string | null;
           day: string | null;
+          /** Library category names (seo-spec C4). */
+          topics: string[];
         };
         Insert: {
           id?: string;
-          set_id: string;
-          position: number;
+          set_id?: string | null;
+          position?: number;
           material_id: string;
           ranges: Json;
           picked_ranges: Json;
@@ -890,9 +897,48 @@ export type Database = {
           occasion?: string;
           wanted_day?: string | null;
           day?: string | null;
+          topics?: string[];
         };
         Update: Partial<Database["public"]["Tables"]["passage_quotes"]["Insert"]>;
         Relationships: [];
+      };
+      /** migrations/20261211_seo_authors_quotes.sql: people, kept in step with
+       * materials.author by a trigger (seo-spec C2). */
+      authors: {
+        Row: {
+          id: string;
+          slug: string;
+          name: string;
+          bio: string;
+          /** { title, url }[] */
+          bio_sources: Json;
+          bio_status: AuthorBioStatus;
+          wikidata_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          name: string;
+          bio?: string;
+          bio_sources?: Json;
+          bio_status?: AuthorBioStatus;
+          wikidata_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["authors"]["Insert"]>;
+        Relationships: [];
+      };
+      material_authors: {
+        Row: { material_id: string; author_id: string; position: number };
+        Insert: { material_id: string; author_id: string; position: number };
+        Update: Partial<Database["public"]["Tables"]["material_authors"]["Insert"]>;
+        Relationships: [
+          { foreignKeyName: "material_authors_author_id_fkey"; columns: ["author_id"]; isOneToOne: false; referencedRelation: "authors"; referencedColumns: ["id"] },
+          { foreignKeyName: "material_authors_material_id_fkey"; columns: ["material_id"]; isOneToOne: false; referencedRelation: "materials"; referencedColumns: ["id"] },
+        ];
       };
       /** migrations/20261204_passage_calendar.sql: one row, the editorial brief. */
       editorial_brief: {
@@ -948,6 +994,12 @@ export type Database = {
     Functions: {
       /** migrations/20261206_rename_category.sql: rename, merge (an existing new_name) or remove (null); returns books changed. */
       rename_category: { Args: { old_name: string; new_name: string | null }; Returns: number };
+      /** migrations/20261211_seo_authors_quotes.sql: the /quotes directory, filtered and paged. */
+      directory_facets: { Args: Record<string, never>; Returns: { kind: "author" | "topic"; slug: string | null; name: string; quotes: number }[] };
+      directory_quotes: {
+        Args: { q?: string | null; topic?: string | null; author?: string | null; lim?: number; off?: number };
+        Returns: { id: string; material_id: string; ranges: Json; topics: string[]; status: PassageQuoteStatus; created_at: string }[];
+      };
       /** migrations/20261005_admin_dashboard.sql — shape in lib/metrics/dashboard.ts. */
       admin_dashboard_metrics: { Args: Record<string, never>; Returns: Json };
       /** migrations/20261118_admin_weekly_dashboard.sql — shape in lib/metrics/dashboard.ts. */

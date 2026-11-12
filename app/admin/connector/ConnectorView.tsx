@@ -111,7 +111,13 @@ function ActivityRow({ item }: { item: ConnectorActivity }) {
               detail: b.changes.map((c) => `${c.field}: ${quoted(c.from)} → ${quoted(c.to)}`).join(" · "),
             })),
           ]
-        : [
+        : item.kind === "quotes"
+          ? [
+              <Quote key="i" size={15} />,
+              <>Added {plural(item.books.reduce((n, b) => n + b.added, 0), "quote")} to the directory</>,
+              item.books.map((b) => ({ key: b.slug, label: b.title, detail: plural(b.added, "quote") })),
+            ]
+          : [
             <FolderPen key="i" size={15} />,
             <>Changed {plural(item.changes.length, "category", "categories")}</>,
             item.changes.map((c) => ({
