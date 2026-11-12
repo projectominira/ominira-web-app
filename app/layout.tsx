@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Source_Serif_4, Manrope } from "next/font/google";
-import { Analytics } from "@vercel/analytics/react";
+import SiteAnalytics from "./components/SiteAnalytics";
 import "./globals.css";
 import ServiceWorkerRegistration from "./ServiceWorkerRegistration";
 import TouchActiveState from "./components/pwa/TouchActiveState";
@@ -135,17 +135,7 @@ export default function RootLayout({
           <Toaster />
           <ConfirmDialog />
           <JoinRoomDialog />
-          {/* `mode` is explicit (rather than relying on the "auto" default)
-           * so a local `bun run dev` never reports as production even if
-           * NODE_ENV gets overridden by tooling — only a real production
-           * build sends events; every other mode just console-logs them. */}
-          <Analytics
-            mode={
-              process.env.NODE_ENV === "production"
-                ? "production"
-                : "development"
-            }
-          />
+          <SiteAnalytics />
         </QueryProvider>
       </body>
     </html>

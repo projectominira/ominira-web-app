@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ANALYTICS_OPT_OUT_KEY } from "@/app/components/SiteAnalytics";
 import { ArrowUpRight, BookOpen, BookUser, Home, Menu, Mic, Plug, Quote, Send, TextQuote, UserPen, Users, X } from "lucide-react";
 import { SPLASH_MARK } from "@/lib/config/brand-assets";
 
@@ -66,6 +67,13 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   const [openOn, setOpenOn] = useState<string | null>(null);
   const open = openOn === pathname;
   const setOpen = (value: boolean) => setOpenOn(value ? pathname : null);
+
+  // Only reachable past the PIN: keep this browser out of Vercel Analytics everywhere.
+  useEffect(() => {
+    try {
+      localStorage.setItem(ANALYTICS_OPT_OUT_KEY, "1");
+    } catch {}
+  }, []);
 
   if (pathname.startsWith("/admin/unlock")) return <main className="mx-auto w-full px-5 py-8 shell:px-10">{children}</main>;
 
