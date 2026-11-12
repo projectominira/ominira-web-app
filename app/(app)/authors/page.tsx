@@ -27,19 +27,19 @@ export default async function AuthorsPage() {
   }
   return (
     <SearchableAppPage className="pb-16">
-      <div className="mx-auto flex max-w-[720px] flex-col gap-6">
-        <header className="flex flex-col gap-3 pt-2">
+      <div className="mx-auto flex max-w-[980px] flex-col gap-5">
+        <header className="flex max-w-[720px] flex-col gap-3 pt-2">
           <span className="text-[11px] font-bold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Library</span>
-          <h1 className="m-0 font-serif text-[32px]/[1.12] font-semibold text-[var(--color-app-text)] md:text-[44px]">Authors</h1>
+          <h1 className="m-0 font-serif text-[24px]/[1.25] font-semibold md:text-[28px]/[1.2] text-[var(--color-app-text)]">Authors</h1>
           <p className="m-0 text-[15px]/[1.6] text-[var(--color-app-text-secondary)]">{DESCRIPTION}</p>
         </header>
         {[...groups.entries()].map(([letter, list]) => (
-          <section key={letter} className="flex flex-col gap-2 border-t border-[var(--color-app-border)] pt-4">
-            <h2 className="m-0 font-serif text-[20px] font-semibold text-[var(--color-app-text)]">{letter}</h2>
-            <ul className="m-0 grid list-none grid-cols-1 gap-x-6 gap-y-1.5 p-0 sm:grid-cols-2">
+          <section key={letter} className="flex flex-col gap-3 border-t border-[var(--color-app-border)] pt-5">
+            <h2 className="m-0 text-ui-md font-bold text-[var(--color-app-text)]">{letter}</h2>
+            <ul className="m-0 grid list-none grid-cols-1 gap-x-6 gap-y-2 p-0 sm:grid-cols-2 md:grid-cols-3">
               {list.map((a) => (
                 <li key={a.slug}>
-                  <Link href={`/authors/${a.slug}`} className="text-[15px] font-medium text-[var(--color-app-text)] hover:text-[var(--color-app-brand)]">
+                  <Link href={`/authors/${a.slug}`} className="text-[14px] font-medium text-[var(--color-app-text)] no-underline hover:text-[var(--color-app-brand)]">
                     {a.name}
                   </Link>
                 </li>

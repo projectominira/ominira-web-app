@@ -134,7 +134,7 @@ export default function QuotesDirectory(v: DirectoryView) {
   );
 }
 
-function Chip({ href, on, children }: { href: string; on: boolean; children: React.ReactNode }) {
+export function Chip({ href, on, children }: { href: string; on: boolean; children: React.ReactNode }) {
   return (
     <Link
       href={href}
@@ -167,7 +167,7 @@ function Cover({ src, className }: { src: string | null; className: string }) {
   );
 }
 
-function QuoteCard({ quote: q }: { quote: DirectoryQuote }) {
+export function QuoteCard({ quote: q }: { quote: DirectoryQuote }) {
   return (
     <article className="mb-5 flex break-inside-avoid flex-col gap-4 rounded-sm border border-[var(--color-app-border)] p-5">
       <p className="m-0 font-serif text-[16px]/[1.65] text-pretty text-[var(--color-app-text)]">

@@ -1,8 +1,9 @@
 import "server-only";
 
 import { z } from "zod";
-import { resolveBookThumbnailSrc } from "@/lib/materials/image";
+import type { MaterialSummary } from "@/lib/api/types";
 import { toMaterialSummary } from "@/lib/materials/summary";
+import { listCurrentReaders } from "@/lib/reader/activity";
 import { toDirectoryQuotes, type DirectoryQuote } from "@/lib/quotes/directory";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import type { AuthorBioStatus } from "@/lib/supabase/database.types";
@@ -120,8 +121,6 @@ export async function authorsToWrite({ offset, limit, redo }: { offset: number; 
 
 // ---- Reading ----------------------------------------------------------------
 
-export type AuthorBook = { slug: string; title: string; author: string; year: number | null; cover: string | null };
-
 export type AuthorPage = {
   slug: string;
   name: string;
@@ -134,10 +133,11 @@ export type AuthorPage = {
   places: string;
   wikidataId: string | null;
   approvedAt: string | null;
-  books: AuthorBook[];
+  /** As the library lists them, with who is reading each. */
+  books: MaterialSummary[];
   quotes: DirectoryQuote[];
   moreQuotes: boolean;
-  alongside: (AuthorBook & { why: string })[];
+  alongside: { book: MaterialSummary; why: string }[];
   topics: string[];
   indexable: boolean;
 };
@@ -145,15 +145,9 @@ export type AuthorPage = {
 const BOOK_FIELDS =
   "id, slug, material_type, title, author, description, cover_url, language, published_year, page_count_estimate, categories, thumbnail_url, google_meta_data, openlibrary_meta_data, cover_source, uploaded_by, visibility, status";
 
-type BookRow = { id: string; slug: string; title: string; author: string; published_year: number | null; categories: unknown; status: string; visibility: string };
+type BookRow = { id: string; slug: string; title: string; author: string; categories: unknown; status: string; visibility: string };
 
-const toBook = (b: BookRow): AuthorBook => ({
-  slug: b.slug,
-  title: b.title,
-  author: b.author,
-  year: b.published_year,
-  cover: resolveBookThumbnailSrc(toMaterialSummary(b as never)),
-});
+const toBook = (b: BookRow): MaterialSummary => toMaterialSummary(b as never);
 
 /** Everything an author page shows, or null when there's no such author
  * with a public book. */
@@ -178,12 +172,21 @@ export async function getAuthorPage(slug: string): Promise<AuthorPage | null> {
   const rows = (links.data as unknown as { materials: BookRow }[])
     .map((l) => l.materials)
     .filter((b) => b.status === "published" && b.visibility === "public")
-    // Oldest first: the order they were written. Undated last.
-    .sort((x, y) => (x.published_year ?? 9999) - (y.published_year ?? 9999) || x.title.localeCompare(y.title));
+    // A to Z, as the library lists them (published_year is often an edition's).
+    .sort((x, y) => x.title.localeCompare(y.title));
   if (rows.length === 0) return null;
 
-  const quotes = await toDirectoryQuotes(quoteRows.data.slice(0, PAGE_QUOTES));
-  const bySlug = new Map((alongsideRows.data as unknown as BookRow[]).map((b) => [b.slug, b]));
+  const alongsideBooks = alongsideRows.data as unknown as BookRow[];
+  const [quotes, readers] = await Promise.all([
+    toDirectoryQuotes(quoteRows.data.slice(0, PAGE_QUOTES)),
+    listCurrentReaders([...rows, ...alongsideBooks].map((b) => b.id)),
+  ]);
+  // The library's "N currently reading" on each row.
+  const withReaders = (b: BookRow): MaterialSummary => {
+    const r = readers.get(b.id);
+    return { ...toBook(b), currentReaders: r?.readers ?? [], currentReaderCount: r?.totalCount ?? 0 };
+  };
+  const bySlug = new Map(alongsideBooks.map((b) => [b.slug, b]));
   const topicCount = new Map<string, number>();
   for (const b of rows) for (const c of (b.categories as string[] | null) ?? []) topicCount.set(c, (topicCount.get(c) ?? 0) + 1);
 
@@ -198,12 +201,12 @@ export async function getAuthorPage(slug: string): Promise<AuthorPage | null> {
     places: approved ? a.places : "",
     wikidataId: approved ? a.wikidata_id : null,
     approvedAt: a.approved_at,
-    books: rows.map(toBook),
+    books: rows.map(withReaders),
     quotes,
     moreQuotes: quoteRows.data.length > PAGE_QUOTES,
     alongside: alongsideRefs.flatMap((r) => {
       const b = bySlug.get(r.slug);
-      return b ? [{ ...toBook(b), why: r.why }] : [];
+      return b ? [{ book: withReaders(b), why: r.why }] : [];
     }),
     topics: [...topicCount.entries()].sort((x, y) => y[1] - x[1]).slice(0, 4).map(([t]) => t),
     indexable: isIndexable({ bio_status: a.bio_status, books: rows.length, quotes: quoteRows.data.length }),
