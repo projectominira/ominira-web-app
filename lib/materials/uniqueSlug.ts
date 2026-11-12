@@ -19,12 +19,22 @@ async function claim(slug: string): Promise<boolean> {
   }
 }
 
+/** Pirate-library names, hashes and ISBN tails that file names carry into
+ * titles ("…-z-library-sk-1lib-sk", "…-isbn13-978…-<md5>-anna-s-archive").
+ * Never part of a slug (seo-spec.md T2). */
+const SLUG_JUNK = /-(?:z-library|z-lib|1lib|zlib)(?:-(?:sk|org))?(?=-|$)|-anna-s-archive(?=-|$)|-(?:pdfdrive|libgen)(?:-[a-z]+)?(?=-|$)|-isbn(?:13)?-\d{10,13}(?=-|$)|-[0-9a-f]{32}(?=-|$)/g;
+
+/** A slug from a title, with pirate-library names and hashes stripped. */
+export function slugFromTitle(title: string): string {
+  return `-${slugify(title)}`.replace(SLUG_JUNK, "").replace(/^-+/, "") || "untitled";
+}
+
 /** Claims a slug from the title that no material row uses and no one has
  * claimed before. The claim is atomic, so two uploads of the same title at
  * once never share a folder. */
 export async function uniqueSlug(baseTitle: string): Promise<string> {
   const admin = getSupabaseAdminClient();
-  const base = slugify(baseTitle) || "untitled";
+  const base = slugFromTitle(baseTitle);
   let candidate = base;
   for (let attempt = 1; attempt < 50; attempt++) {
     const { data } = await admin.from("materials").select("id").eq("slug", candidate).maybeSingle();

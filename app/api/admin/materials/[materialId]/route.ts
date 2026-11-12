@@ -53,7 +53,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const { materialId } = await params;
   const admin = getSupabaseAdminClient();
 
-  const { data: material } = await admin.from("materials").select("slug").eq("id", materialId).maybeSingle();
+  const { data: material } = await admin.from("materials").select("slug, old_slugs").eq("id", materialId).maybeSingle();
   if (!material) return NextResponse.json({ error: "This book no longer exists." }, { status: 404 });
 
   // The row goes first — that's what actually makes the book disappear
@@ -63,7 +63,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const { error: deleteError } = await admin.from("materials").delete().eq("id", materialId);
   if (deleteError) return NextResponse.json({ error: "We could not delete this book. Please try again." }, { status: 500 });
 
-  const { errors: storageWarnings } = await deleteMaterialAssets(material.slug);
+  const { errors: storageWarnings } = await deleteMaterialAssets(material.slug, material.old_slugs);
 
   return NextResponse.json({ deleted: true, storageWarnings: storageWarnings.length > 0 ? storageWarnings : undefined });
 }

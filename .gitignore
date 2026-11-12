@@ -89,3 +89,7 @@ ui-mockups/
 remotion/
 # Standalone repo (own git), see ominira-tts-server/
 /ominira-tts-server/
+
+# local credentials (Search Console service account key, etc.)
+/secrets/
+/seo-reports/

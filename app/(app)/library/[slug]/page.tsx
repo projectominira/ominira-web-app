@@ -1,5 +1,4 @@
 import { cache } from "react";
-import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getMaterialDetail, MaterialNotFoundError, type MaterialDetail } from "@/lib/materials/detail";
 import BookPage from "@/app/components/materials/BookPage";
@@ -7,9 +6,12 @@ import BookRoomView from "@/app/components/materials/BookRoomView";
 import { BOOK_ROOMS } from "@/lib/config/features";
 import { PLATFORM_NAME, PLATFORM_URL } from "@/lib/config/platform";
 import { resolveBookCoverSrc } from "@/lib/materials/image";
+import { missingBook } from "@/lib/materials/oldSlug";
 
 // generateMetadata and the page both need the book; load it once per request.
 const getDetail = cache(getMaterialDetail);
+
+const bookPath = (slug: string) => `/library/${slug}`;
 
 /** The book's blurb, as plain text. */
 function blurbOf(material: MaterialDetail) {
@@ -26,16 +28,20 @@ export async function generateMetadata({
   let material;
   try {
     material = await getDetail(slug);
-  } catch {
-    return { title: "Not found" };
+  } catch (err) {
+    // A renamed book redirects; an unknown slug is a real 404 (seo-spec.md T2, T6).
+    if (err instanceof MaterialNotFoundError) return missingBook(slug, bookPath);
+    throw err;
   }
   const { title, author } = material;
   const url = `${PLATFORM_URL}/library/${slug}`;
   const blurb = blurbOf(material);
   const desc = blurb ? (blurb.length > 200 ? `${blurb.slice(0, 197).trimEnd()}…` : blurb) : `${title} by ${author} — read or listen on ${PLATFORM_NAME}.`;
   // The share image comes from ./opengraph-image.tsx (served from our domain).
+  // The author goes in the tab/search title: people search "fanon wretched of the earth".
+  const hasAuthor = author && !/^unknown$/i.test(author.trim());
   return {
-    title,
+    title: hasAuthor ? `${title} by ${author}` : title,
     description: desc,
     alternates: { canonical: url },
     openGraph: { title, description: desc, url, type: "book" },
@@ -58,9 +64,7 @@ export default async function MaterialDetailPage({
   try {
     material = await getDetail(slug);
   } catch (err) {
-    if (err instanceof MaterialNotFoundError) {
-      notFound();
-    }
+    if (err instanceof MaterialNotFoundError) return missingBook(slug, bookPath);
     throw err;
   }
   const blurb = blurbOf(material);

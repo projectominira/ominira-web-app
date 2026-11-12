@@ -123,6 +123,8 @@ export type Database = {
           /** { googleBooksId, isbn, coverUrl, thumbnailUrl, description } — see
            * scripts/generate-material-google-metadata.ts and lib/materials/providerMeta.ts. */
           google_meta_data: Json | null;
+          /** Earlier slugs, each 308-redirecting to `slug` (seo-spec.md T2). */
+          old_slugs: string[];
           /** { coverUrl, thumbnailUrl, description } — see
            * scripts/generate-material-openlibrary-metadata.ts. */
           openlibrary_meta_data: Json | null;
@@ -166,6 +168,7 @@ export type Database = {
           cover_url?: string | null;
           thumbnail_url?: string | null;
           google_meta_data?: Json | null;
+          old_slugs?: string[];
           openlibrary_meta_data?: Json | null;
           cover_source?: "own" | "openlibrary" | "google";
           language?: string | null;

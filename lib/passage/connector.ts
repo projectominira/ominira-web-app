@@ -6,6 +6,8 @@ import { CATEGORIES_CACHE_TAG } from "@/lib/categories/config";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { fetchMaterialManifest } from "@/lib/materials/manifest";
 import { UUID_RE } from "@/lib/materials/resolve";
+import { slugFromTitle, uniqueSlug } from "@/lib/materials/uniqueSlug";
+import { allRows } from "@/lib/supabase/allRows";
 import type { TocSection } from "@/lib/api/types";
 import type { Database } from "@/lib/supabase/database.types";
 import { createSet, CreateSetInput, listDays } from "./sets";
@@ -80,6 +82,7 @@ When the editor asks in any words ("fix books with wrong details", "tidy the aut
    - Authors by their usual full name, first name first, joined with commas ("Cheikh Anta Diop", "W. E. B. Du Bois", "Toyin Falola, Jessica Achberger"), spelled the same on every book.
    - Year: fill a missing one with the year the work was first published. Leave existing years alone unless plainly wrong.
    - Description: fill a missing one only with a short, factual summary you are sure of.
+   - Pirate-library names, hashes and file details never belong in a book: strip "Z-Library", "z-lib.org", "1lib", "Anna's Archive", "PDFDrive", ISBNs, 32-character hashes and publisher/year tails from titles, and pass \`fix_slug: true\` for every book whose hints say its slug carries them. The slug is remade from the (fixed) title and the old link redirects.
    Check with a web search when unsure. If still unsure, leave the book and say so.
 3. Send the fixes with \`edit_books\` as you go, up to 100 a call, passing only the fields that change.
 4. Finish with a short report: how many books you fixed, a few examples, and any you left for the editor. Every change, before and after, is kept in the Connector history.`;
@@ -149,15 +152,7 @@ const Catalog = z.object({
 });
 
 async function catalog({ query }: z.infer<typeof Catalog>) {
-  const { data, error } = await db()
-    .from("materials")
-    .select("slug, title, author, published_year, material_type, categories, description, json_storage_path")
-    .eq("status", "published")
-    .eq("visibility", "public")
-    .in("material_type", ["book", "pdf"])
-    .order("title");
-  if (error) throw error;
-  const books = data.map((m) => ({ ...m, categories: Array.isArray(m.categories) ? (m.categories as string[]) : [] }));
+  const books = (await publicBooks()).filter((b) => b.material_type === "book" || b.material_type === "pdf");
   if (!query) {
     // The whole list, kept short: one line a book.
     return {
@@ -306,14 +301,18 @@ async function find({ books, terms, limit }: z.infer<typeof Find>) {
 const Categories = z.object({});
 
 /** Published public books (any type) with their categories. */
+/** Every public book, by title. Paged: a plain select stops at 1000 rows. */
 async function publicBooks() {
-  const { data, error } = await db()
-    .from("materials")
-    .select("id, slug, title, author, published_year, categories, description")
-    .eq("status", "published")
-    .eq("visibility", "public")
-    .order("title");
-  if (error) throw error;
+  const data = await allRows((from, to) =>
+    db()
+      .from("materials")
+      .select("id, slug, old_slugs, title, author, published_year, material_type, categories, description, json_storage_path")
+      .eq("status", "published")
+      .eq("visibility", "public")
+      .order("title")
+      .order("id")
+      .range(from, to)
+  );
   return data.map((m) => ({ ...m, categories: Array.isArray(m.categories) ? (m.categories as string[]) : [] }));
 }
 
@@ -359,9 +358,15 @@ const ToFix = z.object({
 });
 
 /** Signs a book's details need a look; the AI decides. */
-function hints(b: { title: string; author: string; published_year: number | null; description: string | null }): string[] {
+/** A slug carrying a pirate-library name, a hash, an ISBN or the file name's author/publisher tail. */
+function slugIsMessy(slug: string, title: string): boolean {
+  return /z-?lib|1lib|anna-s-arc|pdfdrive|libgen|isbn|[0-9a-f]{32}/.test(slug) || slug.length > slugFromTitle(title).length + 12;
+}
+
+function hints(b: { slug: string; title: string; author: string; published_year: number | null; description: string | null }): string[] {
   const out: string[] = [];
   const { title, author } = b;
+  if (slugIsMessy(b.slug, title)) out.push("slug carries a pirate-library name, hash or file details: pass fix_slug");
   const letters = title.replace(/[^A-Za-z]/g, "");
   if (letters.length > 3 && (letters === letters.toUpperCase() || letters === letters.toLowerCase())) out.push("title all upper or lower case");
   if (/[_]|\.(pdf|epub|txt)$|--|\s[-–:]\s|\s:/i.test(title)) out.push("title has file-name or odd punctuation");
@@ -477,13 +482,18 @@ const Edit = z.object({
         author: z.string().trim().min(1).max(300).optional(),
         year: z.int().min(0).max(3000).nullable().optional().describe("Year the work was first published; null clears it."),
         description: z.string().trim().max(10_000).nullable().optional().describe("Null clears it."),
+        fix_slug: z
+          .literal(true)
+          .optional()
+          .describe("Remake the book's slug (its link) from its title, dropping pirate-library names, hashes and file details. The old link keeps working: it redirects to the new one."),
       })
     )
     .min(1)
     .max(100),
 });
 
-/** Fixes books' details; the slug (the book's link) never changes. */
+/** Fixes books' details. With fix_slug the slug is remade from the title and
+ * the old one kept in old_slugs, which redirect to it (seo-spec.md T2). */
 async function editBooks({ books }: z.infer<typeof Edit>, origin: string) {
   const byKey = new Map<string, Awaited<ReturnType<typeof publicBooks>>[number]>();
   for (const b of await publicBooks()) byKey.set(b.slug, b).set(b.id, b);
@@ -508,7 +518,14 @@ async function editBooks({ books }: z.infer<typeof Edit>, origin: string) {
       update[column] = to;
       changes.push({ field, from: from === null ? null : String(from), to: to === null ? null : String(to) });
     }
-    if (changes.length) edits.push({ id: b.id, slug: b.slug, title: w.title ?? b.title, changes, update: update as MaterialUpdate });
+    const title = w.title ?? b.title;
+    if (w.fix_slug && slugFromTitle(title) !== b.slug) {
+      const slug = await uniqueSlug(title);
+      update.slug = slug;
+      update.old_slugs = [...b.old_slugs, b.slug];
+      changes.push({ field: "slug", from: b.slug, to: slug });
+    }
+    if (changes.length) edits.push({ id: b.id, slug: (update.slug as string) ?? b.slug, title, changes, update: update as MaterialUpdate });
   }
   for (let i = 0; i < edits.length; i += 10) {
     await Promise.all(
@@ -658,7 +675,7 @@ const TOOLS: Record<string, Tool> = {
   },
   edit_books: {
     description:
-      "Fix books' details: title, author, year first published, description. Pass only the fields to change; the book's slug stays the same. Up to 100 books a call. When the editor asks you to fix or tidy books, apply the fixes you are sure of without asking first; every change is kept in the Connector history.",
+      "Fix books' details: title, author, year first published, description, and fix_slug to remake a messy slug from the title (the old link redirects). Pass only the fields to change. Up to 100 books a call. When the editor asks you to fix or tidy books, apply the fixes you are sure of without asking first; every change is kept in the Connector history.",
     input: Edit,
     run: editBooks,
     readOnly: false,
