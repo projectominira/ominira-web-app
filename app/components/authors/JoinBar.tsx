@@ -10,7 +10,7 @@ export default function JoinBar({ children }: { children: React.ReactNode }) {
   const session = useSessionStore((s) => s.session);
   if (!hasHydrated || isSessionValid(session)) return null;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 border-t border-[var(--color-app-border)] pt-6">
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-sm border border-[var(--color-app-border)] p-5">
       <span className="max-w-[480px] text-[15px]/[1.6] text-[var(--color-app-text-secondary)]">{children}</span>
       <Link href="/auth/signup" className="flex h-[42px] items-center rounded-sm bg-brand-500 px-5 text-[14px] font-semibold text-white no-underline hover:bg-brand-600">
         Join Ominira

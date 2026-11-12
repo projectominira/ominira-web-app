@@ -30,10 +30,11 @@ export function Portrait({ src, name, className }: { src: string | null; name: s
   );
 }
 
-/** A section under the header, as the quote directory's "Quotes by author". */
+/** A section under the header, titled as the quote directory's "Quotes by
+ * author". Set apart by space, not a rule: book rows carry their own. */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-3.5 border-t border-[var(--color-app-border)] pt-6">
+    <section className="flex flex-col gap-3.5 pt-6">
       <h2 className="m-0 text-ui-md font-bold text-[var(--color-app-text)]">{title}</h2>
       {children}
     </section>

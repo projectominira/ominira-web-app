@@ -61,7 +61,7 @@ export default async function AuthorsPage() {
           ))}
         </nav>
         {[...groups.entries()].map(([letter, list]) => (
-          <section key={letter} id={letter} className="flex scroll-mt-20 flex-col border-t border-[var(--color-app-border)] pt-5">
+          <section key={letter} id={letter} className="flex scroll-mt-20 flex-col pt-4">
             <h2 className="m-0 text-ui-md font-bold text-[var(--color-app-text)]">{letter}</h2>
             <div className="grid grid-cols-1 shell:grid-cols-2 shell:gap-x-10">
               {list.map((a) => (
