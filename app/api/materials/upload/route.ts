@@ -1,8 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
-import { getAuthenticatedReader, isAdminReader } from "@/lib/auth/session";
-import { forbidden, unauthorized, validationError } from "@/lib/api/errors";
-import { readerCanUpload } from "@/lib/auth/profile";
+import { validationError } from "@/lib/api/errors";
+import { getUploader } from "@/lib/materials/uploader";
 import { cdnUrl, copyObject, deletePrefix, fetchStorageText, listObjects, putObject } from "@/lib/storage/r2";
 import { parseBookDocument } from "@/lib/book/schema";
 import { enrichMaterial } from "@/lib/materials/enrichMaterial";
@@ -26,19 +25,17 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
  * pass through here except the book JSON) and records the material. Any
  * rejection removes the uploaded objects.
  *
- * Paths come from uploadObjectPaths(readerId, uploadId) — the caller can only
- * ever finalize objects in their own uploads/ folder.
+ * Paths come from uploadObjectPaths(folder, uploadId) — the caller can only
+ * ever finalize objects in their own uploads/ folder (a reader's id, or
+ * "admin" for an upload on the admin PIN alone; see lib/materials/uploader.ts).
  *
  * Reader uploads publish immediately (no editorial review queue — see
  * migrations/20260927_reader_uploads.sql's RLS policy comment); `visibility`
  * (default `personal`) is what actually gates who can see it, not `status`.
  */
 export async function POST(request: Request) {
-  const reader = await getAuthenticatedReader(request);
-  if (!reader) return unauthorized();
-  if (!(await readerCanUpload(reader))) return forbidden("Uploading books is open to approved readers only.");
-
   const body = (await request.json().catch(() => ({}))) as {
+    asAdmin?: unknown;
     uploadId?: unknown;
     materialType?: unknown;
     title?: unknown;
@@ -49,6 +46,8 @@ export async function POST(request: Request) {
     fileName?: unknown;
     mimeType?: unknown;
   };
+  const uploader = await getUploader(request, body.asAdmin);
+  if (uploader instanceof Response) return uploader;
   const { uploadId, materialType, title, author } = body;
 
   if (typeof uploadId !== "string" || !UUID_PATTERN.test(uploadId)) return validationError("uploadId is required.", "uploadId");
@@ -58,7 +57,7 @@ export async function POST(request: Request) {
   const visibility = body.visibility === "public" ? "public" : "personal";
 
   const admin = getSupabaseAdminClient();
-  const paths = uploadObjectPaths(reader.readerId, uploadId, materialType, thumbnailExtension(body.thumbnailType));
+  const paths = uploadObjectPaths(uploader.folder, uploadId, materialType, thumbnailExtension(body.thumbnailType));
   let bookFolder: string | null = null;
   const reject = async (message: string, field?: string) => {
     await Promise.all([deletePrefix(`${paths.folder}/`), bookFolder ? deletePrefix(bookFolder) : null]).catch(() => {});
@@ -71,7 +70,7 @@ export async function POST(request: Request) {
 
   const sourceSize = sizeOf(paths.source);
   if (sourceSize === null) return reject("The file didn't finish uploading. Please try again.", "sourceFile");
-  const limits = isAdminReader(reader) ? ADMIN_UPLOAD_LIMITS : MEMBER_UPLOAD_LIMITS;
+  const limits = uploader.admin ? ADMIN_UPLOAD_LIMITS : MEMBER_UPLOAD_LIMITS;
   if (sourceSize > limits.maxFileSizeBytes) return reject(`Files must be under ${formatBytes(limits.maxFileSizeBytes)}.`, "sourceFile");
   const thumbPath = sizeOf(paths.thumbnail) !== null ? paths.thumbnail : null;
 
@@ -138,7 +137,7 @@ export async function POST(request: Request) {
       submission_type: "upload",
       title: title.trim(),
       author: author.trim(),
-      reader_id: reader.readerId,
+      reader_id: uploader.readerId,
       storage_path: finalKey(paths.source),
       original_filename: typeof body.fileName === "string" ? body.fileName.slice(0, 500) : null,
       mime_type: typeof body.mimeType === "string" && body.mimeType ? body.mimeType.slice(0, 200) : null,
@@ -161,7 +160,7 @@ export async function POST(request: Request) {
       page_count_estimate: pageCountEstimate,
       file_size_bytes: sourceSize,
       status: "published",
-      uploaded_by: reader.readerId,
+      uploaded_by: uploader.readerId,
       visibility,
     })
     .select("id, slug, title, author")

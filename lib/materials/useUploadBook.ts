@@ -122,6 +122,9 @@ export function useUploadBook() {
       file: File,
       opts: {
         visibility?: "personal" | "public";
+        // An admin upload on the admin PIN alone (/admin/library/new): no
+        // reader session needed, and the book has no uploader.
+        asAdmin?: boolean;
         onStage?: (stage: UploadStage) => void;
         // Fired only when a cover is actually available to show: PDF's
         // rasterized first page (produced client-side by parsePdf before
@@ -231,6 +234,7 @@ export function useUploadBook() {
           publicUrls: { thumbnail: string | null; images: Record<string, string> };
         }>("/materials/upload/sign", {
           json: {
+            asAdmin: opts.asAdmin,
             materialType,
             fileSize: file.size,
             thumbnailType: thumbnailBlob?.type ?? null,
@@ -266,6 +270,7 @@ export function useUploadBook() {
         ]);
         const result = await apiFetch<UploadedBook>("/materials/upload", {
           json: {
+            asAdmin: opts.asAdmin,
             uploadId,
             materialType,
             title,

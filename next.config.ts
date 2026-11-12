@@ -5,11 +5,6 @@ const nextConfig: NextConfig = {
   // Versions the service worker per deploy (app/ServiceWorkerRegistration.tsx).
   env: {
     NEXT_PUBLIC_BUILD_ID: (process.env.VERCEL_GIT_COMMIT_SHA ?? String(Date.now())).slice(0, 12),
-    // The admin Drive import reads public folders from the browser
-    // (lib/materials/googleDrive.ts) with the same key as Google Books. Only
-    // free APIs are enabled on its project, so the exposed key can at worst
-    // use up the daily quota.
-    NEXT_PUBLIC_GOOGLE_DRIVE_KEY: process.env.GOOGLE_BOOKS_API_KEY ?? "",
   },
   // PDFium's Node build loads its pdfium.wasm from beside itself
   // (lib/passage/text.ts), which a bundled copy can't.

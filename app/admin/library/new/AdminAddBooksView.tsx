@@ -6,15 +6,26 @@ import { useEffect, useRef, useState, type DragEvent } from "react";
 import { AlertCircle, CloudUpload, Link2, X } from "lucide-react";
 import AdminPageHeader from "@/app/admin/AdminPageHeader";
 import { apiFetch } from "@/lib/api/client";
-import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { cleanTitle } from "@/lib/materials/cleanTitle";
-import { DriveError, downloadDriveFile, driveFolderId, driveFolderName, listDriveFolder, type DriveFile } from "@/lib/materials/googleDrive";
+import {
+  DriveError,
+  connectDrive,
+  downloadDriveFile,
+  driveFolderId,
+  driveFolderName,
+  driveSignedIn,
+  listDriveFolder,
+  preloadDriveSignIn,
+  refreshDrive,
+  watchDriveSignIn,
+  type DriveFile,
+} from "@/lib/materials/googleDrive";
 import { ACCEPTED_FILE_TYPES, ADMIN_UPLOAD_LIMITS } from "@/lib/materials/uploadLimits";
 import { useUploadBook } from "@/lib/materials/useUploadBook";
-import { useSessionStore } from "@/stores/session-store";
 
-/** How many files download/read/upload at once. */
-const CONCURRENCY = 10;
+/** One book at a time: download, read, upload, publish, then the next.
+ * Parallel books only got Drive and R2 to throttle and fail them. */
+const CONCURRENCY = 1;
 const MAX_BYTES = ADMIN_UPLOAD_LIMITS.maxFileSizeBytes;
 const MAX_MB = Math.round(MAX_BYTES / 1048576);
 
@@ -64,11 +75,12 @@ type Item = {
   slug?: string;
 };
 
-type LinkError = "blank" | "invalid" | "private" | "empty" | "other";
+type LinkError = "blank" | "invalid" | "private" | "signin" | "empty" | "other";
 const LINK_ERRORS: Record<LinkError, [string, string]> = {
   blank: ["Paste a folder link first.", "Copy it from the folder’s Share menu in Google Drive."],
   invalid: ["That isn’t a Google Drive folder link.", "Folder links start with drive.google.com/drive/folders/ — copy one from the folder’s Share menu."],
-  private: ["This folder isn’t shared publicly.", "In Drive, open Share → General access and choose “Anyone with the link”, then import again."],
+  private: ["Your Google account can’t open this folder.", "In Drive, open Share → General access and choose “Anyone with the link”, then import again."],
+  signin: ["Sign in with Google to import.", "Drive folders are read with your Google account, read-only. Press Import and finish the sign-in."],
   empty: ["This folder has no files.", "Check it’s the right folder. Subfolders are included."],
   other: ["Couldn’t reach Google Drive.", "Check your connection and try again."],
 };
@@ -80,14 +92,20 @@ const extOf = (name: string) => (name.includes(".") ? name.split(".").pop()!.toL
 
 /**
  * /admin/library/new: drop files or paste a public Google Drive folder link;
- * both feed one list that works through the files two at a time — download
+ * both feed one list that works through the files one at a time — download
  * (Drive only), read, upload, publish as public — through the same
  * useUploadBook pipeline as every other upload. All of it runs in this tab.
  */
-export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: { libraryTitles: string[]; initialLink?: string }) {
+export default function AdminAddBooksView({
+  libraryTitles,
+  librarySizes,
+  initialLink = "",
+}: {
+  libraryTitles: string[];
+  librarySizes: number[];
+  initialLink?: string;
+}) {
   const router = useRouter();
-  const isAuthenticated = useIsAuthenticated();
-  const hasHydrated = useSessionStore((s) => s.hasHydrated);
   const { upload } = useUploadBook();
 
   const [items, setItems] = useState<Item[]>([]);
@@ -98,6 +116,7 @@ export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: {
   const [cancelled, setCancelled] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [dragging, setDragging] = useState(false);
+  const [needsGoogle, setNeedsGoogle] = useState(false);
 
   const nextId = useRef(0);
   const started = useRef(new Set<number>());
@@ -106,6 +125,9 @@ export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: {
   const itemsRef = useRef(items);
   itemsRef.current = items;
   const known = useRef(new Set(libraryTitles.map(normalise)));
+  // Byte sizes of files already here: two different books are never the same
+  // size to the byte, so this is the reliable check (titles vary by source).
+  const knownSizes = useRef(new Set(librarySizes));
   const inputRef = useRef<HTMLInputElement>(null);
   const linkRef = useRef<HTMLInputElement>(null);
 
@@ -121,12 +143,44 @@ export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: {
   const running = items.some((it) => it.status === "queued" || ACTIVE.includes(it.status));
   const finished = total > 0 && !running && !listing;
 
-  // Leaving mid-import would stop it.
+  // Google's sign-in script loads up front so Import can open its popup at
+  // once, and a sign-in kept from before is picked up so no popup is needed.
+  useEffect(() => {
+    preloadDriveSignIn().catch(() => {});
+    void refreshDrive();
+    return watchDriveSignIn(setNeedsGoogle);
+  }, []);
+
+  // While importing: warn before leaving, hold a Web Lock so the browser
+  // doesn't freeze or discard the tab in the background, and keep the
+  // screen (so the computer) awake while the tab is showing.
   useEffect(() => {
     if (!running) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
+    let stopped = false;
+    let release = () => {};
+    navigator.locks?.request("book-import", () => (stopped ? undefined : new Promise<void>((done) => (release = done)))).catch(() => {});
+    let wake: WakeLockSentinel | null = null;
+    const awake = () => {
+      if (document.visibilityState !== "visible" || stopped) return;
+      navigator.wakeLock
+        ?.request("screen")
+        .then((w) => {
+          if (stopped) void w.release();
+          else wake = w;
+        })
+        .catch(() => {});
+    };
+    awake();
+    document.addEventListener("visibilitychange", awake);
+    return () => {
+      stopped = true;
+      release();
+      wake?.release().catch(() => {});
+      window.removeEventListener("beforeunload", warn);
+      document.removeEventListener("visibilitychange", awake);
+    };
   }, [running]);
 
   // Start queued files while there's a free slot.
@@ -161,11 +215,12 @@ export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: {
       if (!file) {
         patch(it.id, { status: "downloading", progress: 0 });
         file = await downloadDriveFile(it.drive!, onProgress, abort.signal, (until) =>
-          patch(it.id, { note: until ? `Google Drive limit reached · trying again at ${until.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : undefined })
+          patch(it.id, { note: until ? `Google Drive limit reached · trying again at ${until.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}` : undefined })
         );
       }
       const result = await upload(file, {
         visibility: "public",
+        asAdmin: true,
         onStage: (stage) => {
           shown = 0;
           if (stage === "parsing") patch(it.id, { status: "reading", progress: 0 });
@@ -176,13 +231,14 @@ export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: {
         onMetadata: (guess) => setItems((list) => list.map((x) => (x.id === it.id && !x.edited ? { ...x, ...guess } : x))),
       });
       known.current.add(normalise(result.title));
+      knownSizes.current.add(file.size);
       if (cancelledIds.current.has(it.id)) {
-        apiFetch(`/materials/${result.materialId}`, { method: "DELETE" }).catch(() => {});
+        apiFetch(`/admin/materials/${result.materialId}`, { method: "DELETE" }).catch(() => {});
         return;
       }
       const latest = itemsRef.current.find((x) => x.id === it.id);
       if (latest?.edited) save(result.materialId, latest);
-      patch(it.id, { status: "added", progress: 1, materialId: result.materialId, slug: result.slug });
+      patch(it.id, { status: "added", progress: 1, materialId: result.materialId, slug: result.slug, note: undefined });
     } catch (err) {
       if (cancelledIds.current.has(it.id)) return;
       patch(it.id, { status: "failed", note: err instanceof Error ? err.message : "Could not add this file." });
@@ -192,7 +248,7 @@ export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: {
   }
 
   function save(materialId: string, it: Pick<Item, "title" | "author">) {
-    apiFetch(`/materials/${materialId}`, { method: "PATCH", json: { title: it.title.trim(), author: it.author.trim() } }).catch(() => {});
+    apiFetch(`/admin/materials/${materialId}`, { method: "PATCH", json: { title: it.title.trim(), author: it.author.trim() } }).catch(() => {});
   }
 
   /** New rows, with files that can't or needn't be uploaded skipped up front.
@@ -200,14 +256,19 @@ export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: {
   function toItems(entries: { name: string; size: number; where: string; drive?: DriveFile; file?: File }[]): Item[] {
     const rank = (ext: string) => ["epub", "pdf", "docx"].indexOf(ext);
     const keep = new Map<string, number>();
+    const sizes = new Set<number>();
     const rows: Item[] = [];
     for (const e of entries) {
       const ext = extOf(e.name);
       const { title, author } = cleanTitle(e.name);
+      // Google Docs list with no size (exported on download), so 0 never matches.
+      const sized = e.size > 0;
       let note: string | undefined;
       if (rank(ext) < 0) note = `Not a book file (.${ext || "unknown"})`;
       else if (e.size > MAX_BYTES) note = `Over ${MAX_MB} MB (${Math.round(e.size / 1048576)} MB)`;
-      else if (known.current.has(normalise(title))) note = "Already in library";
+      else if ((sized && knownSizes.current.has(e.size)) || known.current.has(normalise(title))) note = "Already in library";
+      else if (sized && sizes.has(e.size)) note = "Same file as another one here";
+      if (!note && sized) sizes.add(e.size);
       const item: Item = {
         id: ++nextId.current,
         where: e.where,
@@ -221,7 +282,7 @@ export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: {
         author: author ?? "",
         edited: false,
         note,
-        duplicate: note === "Already in library",
+        duplicate: note === "Already in library" || note === "Same file as another one here",
       };
       if (!note) {
         const key = normalise(title);
@@ -234,7 +295,11 @@ export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: {
       }
       rows.push(item);
     }
-    for (const r of rows) if (r.status === "queued") known.current.add(normalise(r.title));
+    entries.forEach((e, i) => {
+      if (rows[i].status !== "queued") return;
+      known.current.add(normalise(rows[i].title));
+      if (e.size > 0) knownSizes.current.add(e.size);
+    });
     return rows;
   }
   async function importFolder() {
@@ -247,6 +312,7 @@ export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: {
     setCancelled(false);
     setFilter("all");
     try {
+      if (!driveSignedIn()) await connectDrive();
       const [name, files] = await Promise.all([driveFolderName(folderId), listDriveFolder(folderId)]);
       if (!files.length) return setLinkError("empty");
       setLink("");
@@ -256,7 +322,7 @@ export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: {
       setItems((list) => [...list, ...fresh]);
       setPaused(false);
     } catch (err) {
-      setLinkError(err instanceof DriveError && err.kind === "private" ? "private" : "other");
+      setLinkError(err instanceof DriveError && err.kind !== "other" ? err.kind : "other");
     } finally {
       setListing(false);
     }
@@ -276,6 +342,31 @@ export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: {
     cancelledIds.current.delete(it.id);
     patch(it.id, { status: "queued", note: undefined, duplicate: false, progress: 0 });
     setCancelled(false);
+  }
+
+  /** × on a row: drops it from the list, stopping it if it's running and
+   * deleting the book (row and files) if it was already added. Its title and
+   * size stop counting as "in the library", so it can be added again. */
+  async function remove(it: Item) {
+    if (it.status === "added") {
+      if (!it.materialId || !window.confirm(`Delete “${it.title}” from the library?`)) return;
+      patch(it.id, { note: "Deleting…" });
+      try {
+        await apiFetch(`/admin/materials/${it.materialId}`, { method: "DELETE" });
+      } catch {
+        return patch(it.id, { note: "Could not delete this book. Try again." });
+      }
+    } else if (it.status === "queued" || ACTIVE.includes(it.status)) {
+      // A file mid-upload finishes, then process() deletes the new book.
+      cancelledIds.current.add(it.id);
+      aborts.current.get(it.id)?.abort();
+    }
+    if (it.status === "queued" || it.status === "added" || ACTIVE.includes(it.status)) {
+      known.current.delete(normalise(it.title));
+      knownSizes.current.delete(it.drive?.size ?? it.file?.size ?? 0);
+    }
+    if (it.cover) URL.revokeObjectURL(it.cover);
+    setItems((list) => list.filter((x) => x.id !== it.id));
   }
 
   function cancel() {
@@ -319,27 +410,14 @@ export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: {
     },
   };
 
-  if (!hasHydrated) return null;
-  if (!isAuthenticated) {
-    return (
-      <div className="mx-auto w-full max-w-[1040px]">
-        <AdminPageHeader title="Add books" back={{ href: "/admin/library", label: "Library" }} />
-        <p className="m-0 rounded-sm border border-[var(--reader-border)] px-5 py-8 text-center text-sm text-[var(--reader-text-muted)]">
-          <Link href="/auth/login" className="font-semibold text-[var(--reader-accent)]">
-            Sign in
-          </Link>{" "}
-          with your admin account to upload books.
-        </p>
-      </div>
-    );
-  }
-
   const hasList = total > 0 || listing;
   const shown = items.filter((it) => filter === "all" || it.status === filter);
   const pct = (n: number) => `${total ? (n / total) * 100 : 0}%`;
   const summary = `${added} of ${total} added${skipped ? ` · ${skipped} skipped` : ""}${failed ? ` · ${failed} failed` : ""}`;
   const driveWait = active.find((it) => it.status === "downloading" && it.note)?.note;
-  const footNote = paused
+  const footNote = needsGoogle
+    ? "Google sign-in expired — sign in again to carry on."
+    : paused
     ? "Paused — nothing new will start until you resume."
     : driveWait
       ? `${driveWait} · it carries on by itself. Keep this tab open.`
@@ -429,7 +507,7 @@ export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: {
               </div>
             )}
             <p className="m-0 max-w-[520px] text-[12px] text-[var(--reader-text-subtle)]">
-              Every file in the folder and its subfolders is imported. The folder must be shared as “Anyone with the link”.
+              Every file in the folder and its subfolders is imported. You sign in with Google (read-only) once; it stays signed in.
             </p>
           </div>
         ) : (
@@ -536,7 +614,7 @@ export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: {
 
             <ul className="m-0 list-none p-0">
               {shown.map((it) => (
-                <Row key={it.id} item={it} onEdit={edit} onSave={(x) => x.materialId && save(x.materialId, x)} onRetry={retry} onRemove={(x) => setItems((l) => l.filter((y) => y.id !== x.id))} />
+                <Row key={it.id} item={it} onEdit={edit} onSave={(x) => x.materialId && save(x.materialId, x)} onRetry={retry} onRemove={remove} />
               ))}
             </ul>
             {!shown.length && <p className="m-0 py-8 text-center text-[14px] text-[var(--reader-text-subtle)]">Nothing here.</p>}
@@ -558,6 +636,11 @@ export default function AdminAddBooksView({ libraryTitles, initialLink = "" }: {
               <span className="truncate text-[12px] text-[var(--reader-text-muted)]">{footNote}</span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {running && needsGoogle && (
+                <button type="button" onClick={() => connectDrive().catch(() => {})} className="h-9 cursor-pointer rounded-sm border-none bg-brand-500 px-4 text-[13px] font-bold text-white hover:bg-brand-600">
+                  Continue with Google
+                </button>
+              )}
               {running && (
                 <>
                   <button type="button" onClick={() => setPaused(!paused)} className="h-9 cursor-pointer rounded-sm border border-[var(--reader-border)] bg-transparent px-4 text-[13px] font-bold text-[var(--reader-text)] hover:bg-[var(--reader-surface-hover)]">
@@ -677,15 +760,15 @@ function Row({
             <div className="h-full bg-brand-500 transition-[width] duration-200" style={{ width: `${it.progress * 100}%` }} />
           </div>
         )}
-        {it.note && (it.status === "skipped" || it.status === "failed" || it.status === "downloading") && <span className="pl-4 text-[12px] text-[var(--reader-text-muted)]">{it.note}</span>}
+        {it.note && (it.status === "skipped" || it.status === "failed" || it.status === "downloading" || it.status === "added") && <span className="pl-4 text-[12px] text-[var(--reader-text-muted)]">{it.note}</span>}
       </div>
       <button
         type="button"
         onClick={() => onRemove(it)}
-        aria-label="Remove from list"
-        className={`order-2 flex h-8 w-8 flex-none cursor-pointer items-center justify-center rounded-sm border-none bg-transparent text-[var(--reader-text-subtle)] hover:bg-[var(--reader-surface-hover)] ${
-          busy || it.status === "added" ? "invisible" : ""
-        }`}
+        disabled={it.note === "Deleting…"}
+        aria-label={it.status === "added" ? "Delete this book" : busy || it.status === "queued" ? "Stop and remove" : "Remove from list"}
+        title={it.status === "added" ? "Delete this book" : busy || it.status === "queued" ? "Stop and remove" : "Remove from list"}
+        className="order-2 flex h-8 w-8 flex-none cursor-pointer items-center justify-center rounded-sm border-none bg-transparent text-[var(--reader-text-subtle)] hover:bg-[var(--reader-surface-hover)] hover:text-[var(--reader-text)] disabled:cursor-default disabled:opacity-40"
       >
         <X size={16} />
       </button>

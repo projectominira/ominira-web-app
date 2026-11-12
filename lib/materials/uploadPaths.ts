@@ -27,15 +27,16 @@ export function thumbnailExtension(contentType: unknown): string | null {
 }
 
 /**
- * Every object one upload may write, derived only from the uploader's own id
+ * Every object one upload may write, derived only from the uploader's folder
+ * (their reader id, or "admin" — lib/materials/uploader.ts)
  * and a server-issued uploadId — never from client-supplied paths — so the
  * finalize step (POST /api/materials/upload) can only ever claim objects in
  * the caller's own `uploads/{readerId}/` folder. Both the signing route and
  * the finalize route build paths here, so they can't drift apart. Finalize
  * moves them into the material's `books/<slug>/` folder.
  */
-export function uploadObjectPaths(readerId: string, uploadId: string, materialType: UploadMaterialType, thumbExt: string | null) {
-  const folder = `uploads/${readerId}/${uploadId}`;
+export function uploadObjectPaths(owner: string, uploadId: string, materialType: UploadMaterialType, thumbExt: string | null) {
+  const folder = `uploads/${owner}/${uploadId}`;
   return {
     folder,
     source: `${folder}/source.${EXTENSION_BY_MATERIAL_TYPE[materialType]}`,

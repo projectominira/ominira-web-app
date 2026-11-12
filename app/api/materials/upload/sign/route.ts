@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { getAuthenticatedReader, isAdminReader } from "@/lib/auth/session";
-import { forbidden, unauthorized, validationError } from "@/lib/api/errors";
-import { readerCanUpload } from "@/lib/auth/profile";
+import { validationError } from "@/lib/api/errors";
+import { getUploader } from "@/lib/materials/uploader";
 import { cdnUrl, presignPut } from "@/lib/storage/r2";
 import { ADMIN_UPLOAD_LIMITS, MEMBER_UPLOAD_LIMITS, formatBytes } from "@/lib/materials/uploadLimits";
 import { MAX_UPLOAD_IMAGES, isUploadImageName, isUploadMaterialType, thumbnailExtension, uploadObjectPaths } from "@/lib/materials/uploadPaths";
 
-type Body = { materialType?: unknown; fileSize?: unknown; thumbnailType?: unknown; imageNames?: unknown };
+type Body = { asAdmin?: unknown; materialType?: unknown; fileSize?: unknown; thumbnailType?: unknown; imageNames?: unknown };
 
 /**
  * Step 1 of an upload: hands the browser signed URLs to PUT the file (and,
@@ -19,15 +18,13 @@ type Body = { materialType?: unknown; fileSize?: unknown; thumbnailType?: unknow
  * Step 2 is POST /api/materials/upload, which checks what actually landed.
  */
 export async function POST(request: Request) {
-  const reader = await getAuthenticatedReader(request);
-  if (!reader) return unauthorized();
-  if (!(await readerCanUpload(reader))) return forbidden("Uploading books is open to approved readers only.");
-
   const body = (await request.json().catch(() => ({}))) as Body;
+  const uploader = await getUploader(request, body.asAdmin);
+  if (uploader instanceof Response) return uploader;
   if (!isUploadMaterialType(body.materialType)) return validationError("materialType must be 'book', 'pdf', or 'docx'.", "materialType");
   if (typeof body.fileSize !== "number" || body.fileSize <= 0) return validationError("fileSize is required.", "fileSize");
 
-  const limits = isAdminReader(reader) ? ADMIN_UPLOAD_LIMITS : MEMBER_UPLOAD_LIMITS;
+  const limits = uploader.admin ? ADMIN_UPLOAD_LIMITS : MEMBER_UPLOAD_LIMITS;
   if (body.fileSize > limits.maxFileSizeBytes) {
     return validationError(`Files must be under ${formatBytes(limits.maxFileSizeBytes)}.`, "fileSize");
   }
@@ -39,7 +36,7 @@ export async function POST(request: Request) {
   }
 
   const uploadId = randomUUID();
-  const paths = uploadObjectPaths(reader.readerId, uploadId, body.materialType, thumbnailExtension(body.thumbnailType));
+  const paths = uploadObjectPaths(uploader.folder, uploadId, body.materialType, thumbnailExtension(body.thumbnailType));
 
   try {
     // Signing is local (no network), so even 500 images sign at once. The
