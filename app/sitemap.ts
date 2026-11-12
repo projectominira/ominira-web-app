@@ -4,6 +4,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { allRows } from "@/lib/supabase/allRows";
 import { slugifyCategory } from "@/lib/categories/slug";
 import { quoteFacets } from "@/lib/quotes/directory";
+import { indexableAuthors } from "@/lib/authors/authors";
 
 /** An author's quote page is listed once it has a few quotes (not thin). */
 const MIN_AUTHOR_QUOTES = 3;
@@ -29,6 +30,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.error("[sitemap] quote facets", err);
     return { authors: [], topics: [] };
   });
+  // Author pages worth indexing (seo-spec C2), and their hub.
+  const authors = await indexableAuthors().catch((err) => {
+    console.error("[sitemap] authors", err);
+    return [];
+  });
+  const authorPaths = authors.length ? ["/authors", ...authors.map((a) => `/authors/${a.slug}`)] : [];
+
   const quotes = [
     ...(facets.authors.length ? [`/quotes`] : []),
     ...facets.topics.map((t) => `/quotes/topic/${slugifyCategory(t)}`),
@@ -38,6 +46,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     { url: `${PLATFORM_URL}/`, changeFrequency: "daily", priority: 1 },
     { url: `${PLATFORM_URL}/library`, changeFrequency: "daily", priority: 0.9 },
+    ...authorPaths.map((path) => ({ url: `${PLATFORM_URL}${path}`, changeFrequency: "weekly" as const, priority: 0.8 })),
     ...quotes.map((path) => ({ url: `${PLATFORM_URL}${path}`, changeFrequency: "weekly" as const, priority: 0.7 })),
     ...books.map((book) => ({
       url: `${PLATFORM_URL}/library/${book.slug}`,

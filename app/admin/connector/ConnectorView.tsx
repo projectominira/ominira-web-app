@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { ArrowRight, Check, ChevronRight, Copy, FolderPen, PenLine, Quote, Tags } from "lucide-react";
+import { ArrowRight, BookUser, Check, ChevronRight, Copy, FolderPen, PenLine, Quote, Tags } from "lucide-react";
 import AdminPageHeader from "../AdminPageHeader";
 import { BUTTON, PRIMARY } from "../passage/QuoteCard";
 import { showToast } from "@/stores/toast-store";
@@ -111,7 +111,13 @@ function ActivityRow({ item }: { item: ConnectorActivity }) {
               detail: b.changes.map((c) => `${c.field}: ${quoted(c.from)} → ${quoted(c.to)}`).join(" · "),
             })),
           ]
-        : item.kind === "quotes"
+        : item.kind === "authors"
+          ? [
+              <BookUser key="i" size={15} />,
+              <>Drafted {item.name}’s author page</>,
+              [{ key: item.slug, label: item.name, detail: "For approval in Authors" }],
+            ]
+          : item.kind === "quotes"
           ? [
               <Quote key="i" size={15} />,
               <>Added {plural(item.books.reduce((n, b) => n + b.added, 0), "quote")} to the directory</>,

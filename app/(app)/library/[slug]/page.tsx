@@ -74,7 +74,10 @@ export default async function MaterialDetailPage({
     "@context": "https://schema.org",
     "@type": "Book",
     name: material.title,
-    author: { "@type": "Person", name: material.author },
+    // Each author's page carries their Person (seo-spec T9).
+    author: material.authors.length
+      ? material.authors.map((a) => ({ "@type": "Person", name: a.name, url: `${PLATFORM_URL}/authors/${a.slug}` }))
+      : { "@type": "Person", name: material.author },
     url: `${PLATFORM_URL}/library/${slug}`,
     ...(image && { image }),
     ...(blurb && { description: blurb }),

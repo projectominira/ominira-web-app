@@ -9,7 +9,8 @@ export type ConnectorActivity =
   | { id: string; at: string; kind: "passages"; setId: string; title: string; saved: number }
   | { id: string; at: string; kind: "edits"; books: BookEdit[] }
   | { id: string; at: string; kind: "categories"; changes: CategoryChange[] }
-  | { id: string; at: string; kind: "quotes"; books: QuotedBook[] };
+  | { id: string; at: string; kind: "quotes"; books: QuotedBook[] }
+  | { id: string; at: string; kind: "authors"; slug: string; name: string };
 
 /** A book's quotes added to the directory (seo-spec C4). */
 export type QuotedBook = { slug: string; title: string; added: number };
@@ -44,6 +45,8 @@ export const logCategories = (changes: CategoryChange[]) =>
 
 export const logQuotes = (books: QuotedBook[]) => quietly("quotes", () => db().from("connector_activity").insert({ kind: "quotes", detail: { books } }));
 
+export const logAuthor = (author: { slug: string; name: string }) => quietly("authors", () => db().from("connector_activity").insert({ kind: "authors", detail: author }));
+
 export const markSeen = () => quietly("seen", () => db().from("connector_status").upsert({ id: 1, last_seen_at: new Date().toISOString() }));
 
 /** The latest changes, and when an app last connected (null: never). */
@@ -66,6 +69,8 @@ export async function getConnectorHistory(limit = 30): Promise<{ lastSeenAt: str
         return { ...base, kind: "categories", changes: (d.changes ?? []) as never };
       case "quotes":
         return { ...base, kind: "quotes", books: (d.books ?? []) as never };
+      case "authors":
+        return { ...base, kind: "authors", slug: String(d.slug ?? ""), name: String(d.name ?? "") };
       default:
         return { ...base, kind: "passages", setId: String(d.set_id), title: String(d.title ?? ""), saved: Number(d.saved ?? 0) };
     }

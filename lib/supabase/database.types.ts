@@ -14,7 +14,7 @@
 import type { NotificationKind } from "@/lib/notifications/types";
 import type { RoomKind } from "@/lib/rooms/types";
 
-export type ConnectorActivityKind = "tags" | "passages" | "edits" | "categories" | "quotes";
+export type ConnectorActivityKind = "tags" | "passages" | "edits" | "categories" | "quotes" | "authors";
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
@@ -914,6 +914,13 @@ export type Database = {
           bio_sources: Json;
           bio_status: AuthorBioStatus;
           wikidata_id: string | null;
+          born: number | null;
+          died: number | null;
+          role: string;
+          places: string;
+          /** { slug, why }[] (migrations/20261212_author_pages.sql) */
+          alongside: Json;
+          approved_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -925,6 +932,12 @@ export type Database = {
           bio_sources?: Json;
           bio_status?: AuthorBioStatus;
           wikidata_id?: string | null;
+          born?: number | null;
+          died?: number | null;
+          role?: string;
+          places?: string;
+          alongside?: Json;
+          approved_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -995,6 +1008,7 @@ export type Database = {
       /** migrations/20261206_rename_category.sql: rename, merge (an existing new_name) or remove (null); returns books changed. */
       rename_category: { Args: { old_name: string; new_name: string | null }; Returns: number };
       /** migrations/20261211_seo_authors_quotes.sql: the /quotes directory, filtered and paged. */
+      author_stats: { Args: Record<string, never>; Returns: { id: string; slug: string; name: string; bio_status: AuthorBioStatus; books: number; quotes: number }[] };
       directory_facets: { Args: Record<string, never>; Returns: { kind: "author" | "topic"; slug: string | null; name: string; quotes: number }[] };
       directory_quotes: {
         Args: { q?: string | null; topic?: string | null; author?: string | null; lim?: number; off?: number };

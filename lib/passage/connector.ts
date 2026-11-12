@@ -12,8 +12,9 @@ import type { TocSection } from "@/lib/api/types";
 import type { Database } from "@/lib/supabase/database.types";
 import { createSet, CreateSetInput, listDays } from "./sets";
 import { getBrief, getCalendar } from "./calendar";
-import { logCategories, logEdits, logPassages, logQuotes, logTags, type BookEdit, type CategoryChange } from "./activity";
+import { logAuthor, logCategories, logEdits, logPassages, logQuotes, logTags, type BookEdit, type CategoryChange } from "./activity";
 import { addQuotes, AddQuotesInput, booksToQuote, MAX_QUOTES_PER_BOOK } from "@/lib/quotes/directory";
+import { authorsToWrite, writeAuthor, WriteAuthorInput } from "@/lib/authors/authors";
 import { passageDay } from "@/lib/rooms/passage";
 import { addDays } from "@/lib/time/zone";
 import { isScanned, loadBookText, normalise, type BookText, type TextBlock } from "./text";
@@ -28,7 +29,7 @@ const db = () => getSupabaseAdminClient();
 
 type MaterialUpdate = Database["public"]["Tables"]["materials"]["Update"];
 
-export const INSTRUCTIONS = `You help an Ominira editor with three jobs in Ominira's library of books: finding short, quotable passages, curating the quote directory, and looking after the books (their categories and details).
+export const INSTRUCTIONS = `You help an Ominira editor with four jobs in Ominira's library of books: finding short, quotable passages, curating the quote directory, drafting author pages, and looking after the books (their categories and details).
 
 ## Passages
 
@@ -71,6 +72,18 @@ When the editor asks you to curate quotes ("curate the new books", "add quotes f
 4. Give each quote one to three topics from \`categories\`.
 5. Send each book's quotes with \`add_quotes\` as soon as it's done, passing books you skipped in \`done\`. Re-sending a listed quote is skipped, so a run can safely resume.
 6. Finish with a short report: books curated, quotes added, and anything skipped.
+
+## Drafting author pages
+
+Each author in the library has a page (/authors/<slug>) with their books and quotes. You draft the rest: a short bio, the facts line under their name, sources, and books to read alongside. An editor approves each draft before it shows.
+
+When the editor asks ("write the author pages", "draft Fanon's page"), work on your own:
+1. Call \`authors_to_write\` for authors with no draft yet, most books first, or take the authors the editor names.
+2. Check the facts on Wikipedia and Wikidata (and a reliable biography when they disagree): dates, places, works, roles. Leave out anything you can't verify. Pass the Wikidata item only when you're sure it is this person.
+3. Write the bio in your own words, 80–150 words, never copied or closely paraphrased. Open with who they were and why they matter, then the life: concrete names, dates and places, the books in the library where they fit. Plain English, no filler ("delve", "tapestry", "testament to", "rich legacy", "journey", "powerful", "seminal"), no closing sermon. It should read as a well-read Pan-Africanist editor wrote it for a friend.
+4. Read alongside: up to 4 books by other authors in the library (find them with \`catalog\`), each with one specific sentence on the link: a teacher, a reply, the same struggle elsewhere. Skip it rather than pad it.
+5. Send each author with \`write_author\` as soon as it's done. Sending again replaces the draft.
+6. Finish with a short report: authors drafted, and any you skipped and why.
 
 ## Tagging books
 
@@ -672,6 +685,19 @@ async function addToDirectory(input: z.infer<typeof AddQuotesInput>, origin: str
   };
 }
 
+const ToWrite = z.object({
+  offset: z.int().min(0).default(0),
+  limit: z.int().min(1).max(100).default(25),
+  redo: z.boolean().default(false).describe("List authors already drafted or approved instead, to revise them."),
+});
+
+async function draftAuthor(input: z.infer<typeof WriteAuthorInput>, origin: string) {
+  const result = await writeAuthor(input);
+  if (typeof result === "string") throw new ToolError(result);
+  await logAuthor(result);
+  return { ...result, review: `${origin}/admin/authors`, message: `Saved the draft of ${result.name}'s page. An editor approves it in Ominira's admin.` };
+}
+
 // ---- Registry -------------------------------------------------------------
 
 type Tool = { description: string; input: z.ZodType; run: (input: never, origin: string) => Promise<unknown>; readOnly: boolean };
@@ -737,6 +763,19 @@ const TOOLS: Record<string, Tool> = {
       "List quotes in Ominira's quote directory: up to 50 a call, each found word for word in its book, with near and one to three topics. They go live at once. Marks each book curated; pass books with nothing worth quoting in done.",
     input: AddQuotesInput,
     run: addToDirectory,
+    readOnly: false,
+  },
+  authors_to_write: {
+    description: "Authors with public books whose page has no draft yet, most books first: slug, name, their books and quote count. Pages of up to 100.",
+    input: ToWrite,
+    run: (i: z.infer<typeof ToWrite>) => authorsToWrite(i),
+    readOnly: true,
+  },
+  write_author: {
+    description:
+      "Save a draft of an author's page: bio (80–150 words, own words, checked facts), sources, birth and death years, role, places, Wikidata item and books to read alongside. An editor approves it before it shows. Replaces any earlier draft.",
+    input: WriteAuthorInput,
+    run: draftAuthor,
     readOnly: false,
   },
   send_to_ominira: {

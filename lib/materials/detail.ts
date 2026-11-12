@@ -52,6 +52,8 @@ export type MaterialDetail = {
    * (non-reader-contributed) material. */
   contributor: MaterialContributor;
   reactionCount: number;
+  /** Each author, in order, for links to their pages (seo-spec C2). */
+  authors: { slug: string; name: string }[];
 };
 
 const DETAIL_FIELDS = [
@@ -91,7 +93,7 @@ export async function getMaterialDetail(slug: string): Promise<MaterialDetail> {
   const admin = getSupabaseAdminClient();
   // Only sectioned books (an EPUB or native book) have a JSON and a manifest
   // beside it; pdf/docx/webpage materials get an empty outline.
-  const [projected, manifest, currentReadersByMaterial, contributorRow, notes] = await Promise.all([
+  const [projected, manifest, currentReadersByMaterial, contributorRow, notes, authors] = await Promise.all([
     projectMaterial(row, { fields: DETAIL_FIELDS.filter((field) => field !== "spine" && field !== "sections" && field !== "toc_titles") }),
     row.json_storage_path ? fetchMaterialManifest(row.json_storage_path) : Promise.resolve({ schemaVersion: 1 as const, slug: row.slug, toc: [], spine: [] }),
     listCurrentReaders([row.id], CURRENT_READERS_DETAIL_CAP),
@@ -99,6 +101,7 @@ export async function getMaterialDetail(slug: string): Promise<MaterialDetail> {
       ? admin.from("readers").select("id, pseudonym, avatar_color, avatar_url").eq("id", row.uploaded_by).maybeSingle()
       : Promise.resolve({ data: null }),
     admin.from("posts").select("id", { count: "exact", head: true }).eq("material_id", row.id).is("parent_id", null).eq("visibility", "public"),
+    admin.from("material_authors").select("position, authors!inner(slug, name)").eq("material_id", row.id).order("position"),
   ]);
   const currentReaders = currentReadersByMaterial.get(row.id);
   const contributor: MaterialContributor = contributorRow.data
@@ -133,5 +136,6 @@ export async function getMaterialDetail(slug: string): Promise<MaterialDetail> {
     noteCount: notes.count ?? 0,
     contributor,
     reactionCount: row.reaction_count ?? 0,
+    authors: ((authors.data ?? []) as unknown as { authors: { slug: string; name: string } }[]).map((a) => a.authors),
   };
 }

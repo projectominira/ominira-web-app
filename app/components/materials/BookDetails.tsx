@@ -95,7 +95,18 @@ export default function BookDetails({
         <BookCover materialType={material.materialType} src={resolveBookCoverSrc(material)} alt={material.title} className="aspect-[2/3] w-48 flex-none shadow-lg shell:w-56" />
         <div className="w-full min-w-0">
           <h1 className="m-0 font-serif type-1 text-balance text-[var(--reader-text)]">{material.title}</h1>
-          <div className="mt-2 text-sm font-medium text-[var(--reader-text-muted)]">{material.author}</div>
+          <div className="mt-2 text-sm font-medium text-[var(--reader-text-muted)]">
+            {material.authors.length
+              ? material.authors.map((a, i) => (
+                  <span key={a.slug}>
+                    {i > 0 && ", "}
+                    <Link href={`/authors/${a.slug}`} className="text-inherit hover:underline">
+                      {a.name}
+                    </Link>
+                  </span>
+                ))
+              : material.author}
+          </div>
           <MetaLine material={material} audiobook={audiobook} />
           <ContributorRow material={material} />
           {h.description && <Description text={h.description} />}

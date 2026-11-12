@@ -3,7 +3,7 @@ import { getCategories } from "@/lib/categories/config";
 import { slugifyCategory } from "@/lib/categories/slug";
 
 // What Ominira is, for AI assistants (seo-spec.md §7, T5). Hubs only; add
-// authors, reading lists and topics here as those pages ship.
+// reading lists and topics here as those pages ship.
 export const revalidate = 3600;
 
 export async function GET() {
@@ -17,6 +17,7 @@ The library holds over a thousand books: Pan-African political thought, African 
 ## Main pages
 
 - [Library](${PLATFORM_URL}/library): every book, by category
+- [Authors](${PLATFORM_URL}/authors): the library's authors, each with a short biography, their books and quotes
 - [Quotes](${PLATFORM_URL}/quotes): quotes from the library's books, each word for word from the page, by topic and author
 - [Home](${PLATFORM_URL}/): what Ominira is
 - [Sitemap](${PLATFORM_URL}/sitemap.xml): every book page

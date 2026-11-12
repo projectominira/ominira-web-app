@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { ArrowUpRight, BookOpen, BookUser, Home, Menu, Mic, Plug, Quote, Send, TextQuote, Users, X } from "lucide-react";
+import { ArrowUpRight, BookOpen, BookUser, Home, Menu, Mic, Plug, Quote, Send, TextQuote, UserPen, Users, X } from "lucide-react";
 import { SPLASH_MARK } from "@/lib/config/brand-assets";
 
 const NAV = [
@@ -14,6 +14,7 @@ const NAV = [
   { href: "/admin/rooms", label: "Reading rooms", icon: Mic },
   { href: "/admin/passage", label: "Passages", icon: Quote },
   { href: "/admin/quotes", label: "Quotes", icon: TextQuote },
+  { href: "/admin/authors", label: "Authors", icon: UserPen },
   { href: "/admin/push", label: "Broadcast", icon: Send },
   { href: "/admin/connector", label: "Connector", icon: Plug },
 ];

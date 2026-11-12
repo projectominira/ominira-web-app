@@ -3,6 +3,13 @@ import { ADMIN_COOKIE, verifyAdminSession } from "@/lib/admin/pin";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 
 const BOOK_PATH = /^\/(library|read|reader)\/([a-z0-9-]+)$/;
+const AUTHOR_PATH = /^\/(authors|quotes)\/([a-z0-9-]+)$/;
+
+const notFound = () =>
+  new NextResponse("<!doctype html><title>Not found</title><h1>This page doesn't exist</h1>", {
+    status: 404,
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
 
 /**
  * Book URLs, for search crawlers only: a real 404 for a slug no book has and
@@ -25,10 +32,13 @@ async function crawlerBookCheck(request: NextRequest, route: string, slug: strin
     const to = new URL(`/${route}/${data[0].slug}${request.nextUrl.search}`, request.url);
     return NextResponse.redirect(to, 308);
   }
-  return new NextResponse("<!doctype html><title>Not found</title><h1>This page doesn't exist</h1>", {
-    status: 404,
-    headers: { "Content-Type": "text/html; charset=utf-8" },
-  });
+  return notFound();
+}
+
+/** The same for author pages and authors' quotes (seo-spec C2, C4). */
+async function crawlerAuthorCheck(slug: string) {
+  const { data, error } = await getSupabaseAdminClient().from("authors").select("id").eq("slug", slug).maybeSingle();
+  return error || data ? NextResponse.next() : notFound();
 }
 
 export async function proxy(request: NextRequest) {
@@ -36,6 +46,8 @@ export async function proxy(request: NextRequest) {
 
   const book = BOOK_PATH.exec(pathname);
   if (book) return userAgent(request).isBot ? crawlerBookCheck(request, book[1], book[2]) : NextResponse.next();
+  const author = AUTHOR_PATH.exec(pathname);
+  if (author) return userAgent(request).isBot ? crawlerAuthorCheck(author[2]) : NextResponse.next();
 
   /** PIN gate for every admin page and admin API route (lib/admin/pin.ts). */
   if (pathname === "/admin/unlock") return NextResponse.next();
@@ -50,5 +62,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*", "/library/:slug", "/read/:slug", "/reader/:slug"],
+  matcher: ["/admin/:path*", "/api/admin/:path*", "/library/:slug", "/read/:slug", "/reader/:slug", "/authors/:slug", "/quotes/:slug"],
 };
