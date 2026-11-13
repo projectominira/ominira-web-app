@@ -8,9 +8,9 @@ import { toDirectoryQuotes, type DirectoryQuote } from "@/lib/quotes/directory";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import type { AuthorBioStatus } from "@/lib/supabase/database.types";
 
-// Author pages (seo-spec.md C2): /authors/<slug>. The connector drafts the
-// bio, facts and "read alongside" (write_author); an editor approves them in
-// /admin/authors. Books and quotes show from the start.
+// Author pages (seo-spec.md C2): /authors/<slug>. The connector writes the
+// bio, facts and "read alongside" (write_author), which go live at once;
+// editors can edit or take them down in /admin/authors. Books and quotes show from the start.
 // migrations/20261211_seo_authors_quotes.sql, 20261212_author_pages.sql.
 
 const db = () => getSupabaseAdminClient();
@@ -81,7 +81,7 @@ async function isImage(url: string): Promise<boolean> {
   }
 }
 
-/** Saves the connector's draft of an author page for an editor to approve. */
+/** Publishes the connector's author page; editors can edit or take it down later. */
 export async function writeAuthor(raw: WriteAuthorInput): Promise<{ slug: string; name: string } | string> {
   const input = WriteAuthorInput.parse(raw);
   const noCredit = imageError(input.image_url, input.image_credit);
@@ -106,6 +106,7 @@ export async function writeAuthor(raw: WriteAuthorInput): Promise<{ slug: string
     if (bad.length) return `Not public books by another author: ${bad.join(", ")}. Use slugs from catalog.`;
   }
 
+  const now = new Date().toISOString();
   const { error: saveError } = await db()
     .from("authors")
     .update({
@@ -119,9 +120,9 @@ export async function writeAuthor(raw: WriteAuthorInput): Promise<{ slug: string
       image_url: input.image_url,
       image_credit: input.image_url ? input.image_credit : "",
       alongside: input.alongside.map((a) => ({ slug: a.book, why: a.why })),
-      bio_status: "draft",
-      approved_at: null,
-      updated_at: new Date().toISOString(),
+      bio_status: "approved",
+      approved_at: now,
+      updated_at: now,
     })
     .eq("id", author.id);
   if (saveError) throw saveError;

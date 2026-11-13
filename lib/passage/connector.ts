@@ -31,7 +31,7 @@ const db = () => getSupabaseAdminClient();
 
 type MaterialUpdate = Database["public"]["Tables"]["materials"]["Update"];
 
-export const INSTRUCTIONS = `You help an Ominira editor with five jobs in Ominira's library of books: finding short, quotable passages (and planning the monthly reading list), curating the quote directory, drafting author pages, writing topic guides, and looking after the books (their categories and details).
+export const INSTRUCTIONS = `You help an Ominira editor with five jobs in Ominira's library of books: finding short, quotable passages (and planning the monthly reading list), curating the quote directory, writing author pages and topic guides, and looking after the books (their categories and details).
 
 ## Passages
 
@@ -76,18 +76,18 @@ When the editor asks you to curate quotes ("curate the new books", "add quotes f
 5. Send each book's quotes with \`add_quotes\` as soon as it's done, passing books you skipped in \`done\`. Re-sending a listed quote is skipped, so a run can safely resume.
 6. Finish with a short report: books curated, quotes added, and anything skipped.
 
-## Drafting author pages
+## Writing author pages
 
-Each author in the library has a page (/authors/<slug>) with their books and quotes. You draft the rest: a short bio, the facts line under their name, sources, and books to read alongside. An editor approves each draft before it shows.
+Each author in the library has a page (/authors/<slug>) with their books and quotes. You write the rest: a short bio, the facts line under their name, sources, and books to read alongside. It goes live as soon as you send it; editors can edit or remove it later.
 
-When the editor asks ("write the author pages", "draft Fanon's page"), work on your own:
-1. Call \`authors_to_write\` for authors with no draft yet, most books first, or take the authors the editor names.
+When the editor asks ("write the author pages", "write Fanon's page"), work on your own:
+1. Call \`authors_to_write\` for authors with no page yet, most books first, or take the authors the editor names.
 2. Check the facts on Wikipedia and Wikidata (and a reliable biography when they disagree): dates, places, works, roles. Leave out anything you can't verify. Pass the Wikidata item only when you're sure it is this person.
 3. Write the bio in your own words, 80–150 words, never copied or closely paraphrased. Open with who they were and why they matter, then the life: concrete names, dates and places, the books in the library where they fit. Plain English, no filler ("delve", "tapestry", "testament to", "rich legacy", "journey", "powerful", "seminal"), no closing sermon. It should read as a well-read Pan-Africanist editor wrote it for a friend.
 4. Portrait: take the image on their Wikidata item (P18), which lives on Wikimedia Commons. Pass the thumbnail URL Commons gives for the file (its API: action=query&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=400, the thumburl), with its credit from the file's Commons page: "Photo: <author>, <licence>, via Wikimedia Commons", or "Public domain, via Wikimedia Commons". No image from anywhere else, and none when you're not sure it shows this person.
 5. Read alongside: up to 4 books by other authors in the library (find them with \`catalog\`), each with one specific sentence on the link: a teacher, a reply, the same struggle elsewhere. Skip it rather than pad it.
-6. Send each author with \`write_author\` as soon as it's done. Sending again replaces the draft.
-7. Finish with a short report: authors drafted, and any you skipped and why.
+6. Send each author with \`write_author\` as soon as it's done. Sending again replaces the page.
+7. Finish with a short report: authors published, and any you skipped and why.
 
 ## Writing topic guides
 
@@ -709,14 +709,14 @@ async function addToDirectory(input: z.infer<typeof AddQuotesInput>, origin: str
 const ToWrite = z.object({
   offset: z.int().min(0).default(0),
   limit: z.int().min(1).max(100).default(25),
-  redo: z.boolean().default(false).describe("List authors already drafted or approved instead, to revise them."),
+  redo: z.boolean().default(false).describe("List authors already written instead, to revise them."),
 });
 
-async function draftAuthor(input: z.infer<typeof WriteAuthorInput>, origin: string) {
+async function publishAuthor(input: z.infer<typeof WriteAuthorInput>, origin: string) {
   const result = await writeAuthor(input);
   if (typeof result === "string") throw new ToolError(result);
   await logAuthor(result);
-  return { ...result, review: `${origin}/admin/authors`, message: `Saved the draft of ${result.name}'s page. An editor approves it in Ominira's admin.` };
+  return { ...result, page: `${origin}/authors/${result.slug}`, message: `Published ${result.name}'s page.` };
 }
 
 async function publishTopic(input: z.infer<typeof WriteTopicInput>, origin: string) {
@@ -801,16 +801,16 @@ const TOOLS: Record<string, Tool> = {
     readOnly: false,
   },
   authors_to_write: {
-    description: "Authors with public books whose page has no draft yet, most books first: slug, name, their books and quote count. Pages of up to 100.",
+    description: "Authors with public books whose page has no bio yet, most books first: slug, name, their books and quote count. Pages of up to 100.",
     input: ToWrite,
     run: (i: z.infer<typeof ToWrite>) => authorsToWrite(i),
     readOnly: true,
   },
   write_author: {
     description:
-      "Save a draft of an author's page: bio (80–150 words, own words, checked facts), sources, birth and death years, role, places, Wikidata item, portrait (Wikimedia Commons, with credit) and books to read alongside. An editor approves it before it shows. Replaces any earlier draft.",
+      "Publish an author's page: bio (80–150 words, own words, checked facts), sources, birth and death years, role, places, Wikidata item, portrait (Wikimedia Commons, with credit) and books to read alongside. It goes live at once. Replaces any earlier version.",
     input: WriteAuthorInput,
-    run: draftAuthor,
+    run: publishAuthor,
     readOnly: false,
   },
   topics_to_write: {
