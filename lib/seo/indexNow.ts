@@ -1,6 +1,5 @@
 import { PLATFORM_URL } from "@/lib/config/platform";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
-import { listsLiveSince } from "@/lib/readingLists/lists";
 
 // IndexNow (seo-spec.md T10): tells Bing (whose index feeds ChatGPT search
 // and DuckDuckGo), Yandex and Seznam about new and changed pages within
@@ -25,7 +24,8 @@ export async function pingIndexNow(): Promise<number> {
     db.from("authors").select("slug").eq("bio_status", "approved").gte("updated_at", since).limit(500),
     db.from("topic_guides").select("slug").eq("status", "approved").gte("updated_at", since).limit(500),
     // A list counts from 07:00 on its day, when it goes live, not when approved.
-    listsLiveSince(since),
+    // Loaded here so scripts can import INDEXNOW_KEY without the server-only lists module.
+    import("@/lib/readingLists/lists").then((m) => m.listsLiveSince(since)),
   ]);
   const urlList = [
     ...(books.data ?? []).map((r) => `${PLATFORM_URL}/library/${r.slug}`),
