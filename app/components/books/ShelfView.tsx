@@ -15,7 +15,7 @@ type Tab = "reading" | "saved" | "finished";
 
 const TABS: { value: Tab; label: string }[] = [
   { value: "reading", label: "Reading" },
-  { value: "saved", label: "Bookmarks" },
+  { value: "saved", label: "Saved" },
   { value: "finished", label: "Finished" },
 ];
 

@@ -42,8 +42,8 @@ export function streakCopy(view: StreakView, today: StreakToday): StreakCopy {
       : state.kind === "kept"
         ? `${goalLabel(left)} left of today's goal.`
         : fresh
-          ? `Read ${more} today to start one.`
-          : `Read ${more} to make it day ${state.days + 1}.`;
+          ? `Read for ${more} today to start one.`
+          : `Read for ${more} to make it day ${state.days + 1}.`;
   return { title: fresh ? "Start a streak" : `${state.days}-day streak`, sub: goal };
 }
 

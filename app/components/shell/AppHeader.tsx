@@ -27,7 +27,8 @@ type Props = {
   greetingName?: string;
 };
 
-/** The one browsing-chrome row every page shares (search + bell + profile).
+/** The phone's browsing-chrome row (search + bell + profile); on desktop
+ * AppTopBar has all three, so only Home's greeting stays.
  * A detail-style page (material details, a reader profile) that also needs
  * a back arrow / share action does NOT fold those into this component —
  * they're a different, page-specific row (see DetailHeader) stacked below
@@ -35,14 +36,25 @@ type Props = {
  * itself and it fought the search field for space and broke on pages that
  * don't want search at all; keeping the two rows separate is deliberate,
  * not a regression to "fix" back into one component again. */
-export default function AppHeader({ searchValue, onSearchChange, onSearchFocus, greeting, greetingName }: Props) {
+export default function AppHeader({
+  searchValue,
+  onSearchChange,
+  onSearchFocus,
+  greeting,
+  greetingName,
+}: Props) {
   const isAuthenticated = useIsAuthenticated();
   // Until the session has rehydrated we can't tell signed-in from signed-out,
   // so neither the bell nor the theme toggle shows (no toggle → bell swap).
   const sessionKnown = useSessionStore((s) => s.hasHydrated);
+  // A visitor's phone has AppTopBar (search, Join us, menu), so this row is
+  // for signed-in readers, or Home's greeting.
+  if (!isAuthenticated && !greeting) return null;
 
   return (
-    <header className="mb-5 bg-[var(--reader-bg)] py-3">
+    <header
+      className={`mb-5 bg-[var(--reader-bg)] py-3 ${greeting ? "shell:pt-6" : "shell:hidden"}`}
+    >
       <div className="flex items-center gap-4">
         {greeting && (
           <>
@@ -51,16 +63,20 @@ export default function AppHeader({ searchValue, onSearchChange, onSearchFocus, 
                 <span className="block font-sans text-[13px]/[1.3] font-semibold text-[var(--reader-text-muted)] shell:inline shell:font-serif shell:text-[24px]/[1.25] shell:font-extrabold shell:text-[var(--reader-text)]">
                   {greeting},
                 </span>{" "}
-                <span className="block truncate text-[19px]/[1.25] shell:inline shell:text-[24px]/[1.25]">{greetingName}</span>
+                <span className="block truncate text-[19px]/[1.25] shell:inline shell:text-[24px]/[1.25]">
+                  {greetingName}
+                </span>
               </h1>
             ) : (
-              <h1 className="m-0 min-w-0 flex-1 truncate font-serif text-[22px]/[1.2] font-extrabold text-[var(--reader-text)] shell:text-[24px]/[1.25]">{greeting}</h1>
+              <h1 className="m-0 min-w-0 flex-1 truncate font-serif text-[22px]/[1.2] font-extrabold text-[var(--reader-text)] shell:text-[24px]/[1.25]">
+                {greeting}
+              </h1>
             )}
             <button
               type="button"
               aria-label="Search the library"
               onClick={onSearchFocus}
-              className="inline-flex size-10 flex-none cursor-pointer items-center justify-center rounded-sm border-none bg-transparent text-[var(--reader-text-muted)] hover:text-[var(--reader-text)] shell:hidden"
+              className={`size-10 flex-none cursor-pointer items-center justify-center rounded-sm border-none bg-transparent text-[var(--reader-text-muted)] hover:text-[var(--reader-text)] ${isAuthenticated ? "inline-flex shell:hidden" : "hidden"}`}
             >
               <Search size={20} />
             </button>
@@ -74,21 +90,22 @@ export default function AppHeader({ searchValue, onSearchChange, onSearchFocus, 
             order, and the same right-hand corner, every app puts them in).
             The field no longer needs its own centering column, so it just
             grows into whatever space the cluster leaves. */}
-        <div
-          className={`h-10 min-w-0 items-center gap-2 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] px-3.5 ${
-            greeting ? "hidden w-80 flex-none shell:flex" : "flex w-full max-w-sm"
-          }`}
-        >
-          <Search size={16} className="flex-none text-[var(--reader-text-muted)]" />
-          <input
-            value={searchValue ?? ""}
-            onChange={(e) => onSearchChange?.(e.target.value)}
-            onFocus={onSearchFocus}
-            readOnly={Boolean(onSearchFocus) && !onSearchChange}
-            placeholder="Search the library"
-            className="min-w-0 flex-1 border-none bg-transparent font-semibold text-[13px] text-[var(--reader-text)] outline-none placeholder:text-[var(--reader-text-subtle)]"
-          />
-        </div>
+        {!greeting && (
+          <div className="flex h-10 w-full max-w-sm min-w-0 items-center gap-2 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] px-3.5">
+            <Search
+              size={16}
+              className="flex-none text-[var(--reader-text-muted)]"
+            />
+            <input
+              value={searchValue ?? ""}
+              onChange={(e) => onSearchChange?.(e.target.value)}
+              onFocus={onSearchFocus}
+              readOnly={Boolean(onSearchFocus) && !onSearchChange}
+              placeholder="Search the library"
+              className="min-w-0 flex-1 border-none bg-transparent font-semibold text-[13px] text-[var(--reader-text)] outline-none placeholder:text-[var(--reader-text-subtle)]"
+            />
+          </div>
+        )}
 
         {/* ml-auto: the cluster is pinned to the right edge whether or not
             the field above has grown to its max width. gap-4 (not the
@@ -96,10 +113,16 @@ export default function AppHeader({ searchValue, onSearchChange, onSearchFocus, 
             group rather than as two separate header items — close enough
             to pair, far enough that the unread badge never overlaps the
             avatar beside it. */}
-        <div className={`flex flex-none items-center gap-5 ${greeting ? "" : "ml-auto"}`}>
+        <div
+          className={`flex-none items-center gap-5 ${isAuthenticated ? "flex shell:hidden" : "hidden"} ${greeting ? "" : "ml-auto"}`}
+        >
           {/* Signed-out readers have no bell and no theme switch in their
               account menu, so the theme toggle takes the bell's slot. */}
-          {isAuthenticated ? <NotificationsMenu /> : sessionKnown && <HeaderThemeToggle />}
+          {isAuthenticated ? (
+            <NotificationsMenu />
+          ) : (
+            sessionKnown && <HeaderThemeToggle />
+          )}
           <ProfileMenu />
         </div>
       </div>

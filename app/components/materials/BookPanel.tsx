@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import type { MaterialDetail } from "@/lib/materials/detail";
@@ -17,7 +17,7 @@ import { BookActions, BookBody } from "./BookPage";
  * material it's the route's loading state: the spinner in the panel, and
  * the panel's entrance, which the loaded one doesn't repeat.
  */
-export default function BookPanel({ material = null }: { material?: MaterialDetail | null }) {
+export default function BookPanel({ material = null, extras }: { material?: MaterialDetail | null; extras?: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const open = material ? pathname === `/library/${material.slug}` : pathname.startsWith("/library/");
@@ -53,7 +53,7 @@ export default function BookPanel({ material = null }: { material?: MaterialDeta
           {material && <BookActions material={material} />}
         </div>
         {material ? (
-          <BookBody material={material} />
+          <BookBody material={material} extras={extras} />
         ) : (
           <div className="flex flex-1 items-center justify-center">
             <div role="status" aria-label="Loading" className="size-7 animate-spin rounded-full border-[2.5px] border-sand-200 border-t-brand-500" />

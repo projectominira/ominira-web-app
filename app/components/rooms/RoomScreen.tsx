@@ -26,7 +26,7 @@ export default function RoomScreen({
   contain = true,
 }: {
   children: ReactNode;
-  /** false: the screen spans the whole window on desktop (a study group). */
+  /** false: the screen covers the desktop header too (a study group). */
   sidebar?: boolean;
   /** The screen itself scrolls, so its scrollbar sits at the window's edge (a page of forms and lists). */
   scroll?: boolean;
@@ -39,10 +39,10 @@ export default function RoomScreen({
   return (
     <div
       style={{ bottom: docked ? navHeight + docked : 0, paddingTop: "env(safe-area-inset-top)" }}
-      className={`fixed inset-x-0 top-0 z-[41] flex bg-[var(--reader-bg)] ${scroll ? `om-scroll overflow-y-auto ${contain ? "overscroll-y-contain" : ""}` : ""} ${sidebar ? "shell:left-[var(--app-sidebar-w)]" : ""}`}
+      className={`fixed inset-x-0 top-0 z-[41] flex bg-[var(--reader-bg)] ${scroll ? `om-scroll overflow-y-auto ${contain ? "overscroll-y-contain" : ""}` : ""} ${sidebar ? "shell:top-[calc(var(--app-topbar-h)+1px)]" : ""}`}
     >
-      <div className="min-w-0 flex-1 shell:px-10">
-        <div className={`relative mx-auto flex w-full max-w-4xl ${scroll ? "min-h-full" : "h-full"} flex-col text-[var(--color-app-text)]`}>
+      <div className="min-w-0 flex-1">
+        <div className={`relative mx-auto flex w-full max-w-[54rem] shell:px-10 ${scroll ? "min-h-full" : "h-full"} flex-col text-[var(--color-app-text)]`}>
           <SideSlot.Provider value={slot}>{children}</SideSlot.Provider>
         </div>
       </div>
@@ -80,8 +80,8 @@ export function ScreenHead({
 }
 
 /** A page that scrolls: one centred column. */
-export function ScreenPage({ children, outer = false }: { children: ReactNode; /** The screen itself scrolls (`RoomScreen scroll`), so the page doesn't. */ outer?: boolean }) {
-  const column = <div className="mx-auto flex w-full max-w-[640px] flex-col px-4 pt-6 pb-12">{children}</div>;
+export function ScreenPage({ children, outer = false }: { children: ReactNode; /** In the app shell's page flow (BookPage): the page scrolls and the shell pads it. */ outer?: boolean }) {
+  const column = <div className={`mx-auto flex w-full max-w-[640px] flex-col ${outer ? "" : "px-4 pt-6 pb-12"}`}>{children}</div>;
   return outer ? column : <div className="om-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain">{column}</div>;
 }
 

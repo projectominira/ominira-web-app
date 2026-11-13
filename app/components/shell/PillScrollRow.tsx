@@ -106,7 +106,7 @@ export default function PillScrollRow({ items }: { items: PillItem[] }) {
               : "border-[var(--reader-border)] bg-[var(--reader-surface)] text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)]"
           }`;
           return (
-            <Link key={item.key} href={item.href} scroll={false} className={className} onClick={item.onClick} data-active-pill={item.active || undefined}>
+            <Link key={item.key} href={item.href} scroll={item.href.startsWith("#") && item.href.length > 1} className={className} onClick={item.onClick} data-active-pill={item.active || undefined}>
               {item.label}
             </Link>
           );

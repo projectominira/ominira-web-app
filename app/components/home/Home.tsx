@@ -45,21 +45,51 @@ export default function Home({
     return (
       <div className="flex flex-1 items-center justify-center p-4 py-16">
         {failed ? (
-          <p className="text-ui-body text-[var(--color-app-text-secondary)]">Home didn’t load. Try again in a moment.</p>
+          <p className="text-ui-body text-[var(--color-app-text-secondary)]">
+            Home didn’t load. Try again in a moment.
+          </p>
         ) : (
-          <div role="status" aria-label="Loading" className="size-7 animate-spin rounded-full border-[2.5px] border-sand-200 border-t-brand-500" />
+          <div
+            role="status"
+            aria-label="Loading"
+            className="size-7 animate-spin rounded-full border-[2.5px] border-sand-200 border-t-brand-500"
+          />
         )}
       </div>
     );
 
   const joined = view.groups.filter((g) => g.joined);
   const toJoin = view.groups.filter((g) => !g.joined);
-  const live = view.strip.length > 0 && <StatusStrip items={view.strip} onPick={onPickRoom} disabled={entering} className="pb-1" />;
-  const book = <BookCard current={view.current} start={view.start} desktop={desktop} />;
-  const daily = <DailyCard streak={view.streak} today={view.today} desktop={desktop} onSaveGoal={onSaveGoal} />;
+  const live = view.strip.length > 0 && (
+    <StatusStrip
+      items={view.strip}
+      onPick={onPickRoom}
+      disabled={entering}
+      className="pb-1"
+    />
+  );
+  const book = (
+    <BookCard current={view.current} start={view.start} desktop={desktop} />
+  );
+  const daily = (
+    <DailyCard
+      streak={view.streak}
+      today={view.today}
+      desktop={desktop}
+      onSaveGoal={onSaveGoal}
+    />
+  );
   const forYou = <ForYou books={view.forYou} desktop={desktop} />;
   const groups = (
-    <StudyGroups groups={joined} rooms={view.rooms} joinable={toJoin.length > 0} desktop={desktop} entering={entering} onStartRoom={onStartRoom} onStartGroup={onStartGroup} />
+    <StudyGroups
+      groups={joined}
+      rooms={view.rooms}
+      joinable={toJoin.length > 0}
+      desktop={desktop}
+      entering={entering}
+      onStartRoom={onStartRoom}
+      onStartGroup={onStartGroup}
+    />
   );
   const join = <GroupsToJoin groups={toJoin} />;
 
@@ -80,10 +110,8 @@ export default function Home({
       </div>
     );
 
-  // Desktop: the two cards side by side; then the passage in the wide
-  // column with Study groups in its panel (the groups to join in it too) in
-  // a narrow one beside it, or the panel alone across; then For you the
-  // full width.
+  // Desktop: the two cards side by side; then the passage, Study groups
+  // (the groups to join in its panel) and For you, each on its own row.
   return (
     <div className="flex flex-col gap-8 pb-4">
       {live}
@@ -91,26 +119,24 @@ export default function Home({
         {book}
         {daily}
       </div>
-      <div className={`grid items-start gap-6 ${passage ? "grid-cols-[minmax(0,1fr)_340px]" : "grid-cols-1"}`}>
-        {passage}
-        <StudyGroups
-          groups={joined}
-          rooms={view.rooms}
-          joinable={toJoin.length > 0}
-          desktop
-          entering={entering}
-          onStartRoom={onStartRoom}
-          onStartGroup={onStartGroup}
-          boxed
-        >
-          {toJoin.length > 0 && (
-            <>
-              <div className="-mx-4 h-px bg-[var(--color-app-border)]" />
-              {join}
-            </>
-          )}
-        </StudyGroups>
-      </div>
+      {passage}
+      <StudyGroups
+        groups={joined}
+        rooms={view.rooms}
+        joinable={toJoin.length > 0}
+        desktop
+        entering={entering}
+        onStartRoom={onStartRoom}
+        onStartGroup={onStartGroup}
+        boxed
+      >
+        {toJoin.length > 0 && (
+          <>
+            <div className="-mx-4 h-px bg-[var(--color-app-border)]" />
+            {join}
+          </>
+        )}
+      </StudyGroups>
       {forYou}
     </div>
   );

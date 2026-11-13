@@ -17,12 +17,15 @@ export default function PassageQuote({
   cite,
   href,
   onClick,
+  footer,
 }: {
   excerpt: string;
   /** Under the quote: the chapter, "Ch. 1", or a passage's BookCite. */
   cite?: ReactNode;
   href?: string | null;
   onClick?: () => void;
+  /** Under the quote, outside its link: a reaction. With a footer the quote is bare, for a card that already has the background. */
+  footer?: ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
   const { shown, isTruncated } = truncateQuote(excerpt, 0);
@@ -35,7 +38,7 @@ export default function PassageQuote({
           <span aria-hidden className="font-serif text-[20px]/none text-brand-200 select-none">
             &ldquo;
           </span>
-          {(href || onClick) && (
+          {(href || onClick) && !footer && (
             <ArrowUpRight
               aria-hidden
               size={16}
@@ -43,7 +46,7 @@ export default function PassageQuote({
             />
           )}
         </span>
-        <span className="block font-serif text-[16px]/[1.65] text-pretty text-[var(--color-app-text)]">
+        <span className={`block font-serif text-pretty text-[16px]/[1.65] text-[var(--color-app-text)]`}>
           {expanded ? excerpt : shown}
           {isTruncated && !expanded && (
             <>
@@ -63,26 +66,36 @@ export default function PassageQuote({
                   e.stopPropagation();
                   setExpanded(true);
                 }}
-                className="cursor-pointer font-sans text-[12px] font-medium text-[var(--color-app-text-secondary)] hover:text-[var(--color-app-text)]"
+                className="cursor-pointer font-sans text-[12px] font-medium opacity-75 hover:opacity-100"
               >
                 See more
               </span>
             </>
           )}
         </span>
-        {cite && <span className="mt-1.5 block text-[12px] font-medium text-[var(--color-app-text-muted)]">{cite}</span>}
+        {cite && <span className={`${footer ? "mt-3" : "mt-1.5"} block text-[12px] font-medium ${"text-[var(--color-app-text-muted)]"}`}>{cite}</span>}
       </span>
     </>
   );
-  const cls = "group flex w-full items-start rounded-sm bg-[var(--color-app-inset)] px-3.5 py-3 text-left";
-  if (href) return <Link href={href} className={cls}>{body}</Link>;
-  if (onClick)
-    return (
-      <button type="button" onClick={onClick} className={`${cls} cursor-pointer`}>
-        {body}
-      </button>
-    );
-  return <div className={cls}>{body}</div>;
+  const cls = `group flex w-full items-start text-left ${footer ? "" : "rounded-sm bg-[var(--color-app-inset)] px-3.5 py-3"}`;
+  const card = href ? (
+    <Link href={href} className={cls}>
+      {body}
+    </Link>
+  ) : onClick ? (
+    <button type="button" onClick={onClick} className={`${cls} cursor-pointer`}>
+      {body}
+    </button>
+  ) : (
+    <div className={cls}>{body}</div>
+  );
+  if (!footer) return card;
+  return (
+    <div>
+      {card}
+      <div className="mt-4">{footer}</div>
+    </div>
+  );
 }
 
 /** A passage of the day's cite: the book's title, then its author and

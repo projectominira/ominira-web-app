@@ -35,7 +35,11 @@ export default function AppBottomNav() {
     if (!el) return;
     const ro = new ResizeObserver((entries) => setBottomNavHeight(entries[0].contentRect.height));
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      // Unmounted (signing out hides it): nothing left to clear.
+      setBottomNavHeight(0);
+    };
   }, [setBottomNavHeight]);
 
   // See AppSidebar's own onNavClick comment — same soft-navigation-leaves-

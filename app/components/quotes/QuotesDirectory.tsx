@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PillScrollRow from "@/app/components/shell/PillScrollRow";
 import { Search } from "lucide-react";
 import SearchableAppPage from "@/app/components/shell/SearchableAppPage";
 import { slugifyCategory } from "@/lib/categories/slug";
@@ -6,6 +7,7 @@ import { PLATFORM_URL } from "@/lib/config/platform";
 import { breadcrumbs, JsonLd } from "@/lib/seo/jsonLd";
 import type { DirectoryQuote } from "@/lib/quotes/directory";
 import type { HomePassage } from "@/lib/rooms/types";
+import Pager from "./Pager";
 import QuoteShare from "./QuoteShare";
 
 // The quote directory (seo-spec.md C4; Claude Design "SEO content pages" →
@@ -51,8 +53,8 @@ export default function QuotesDirectory(v: DirectoryView) {
   return (
     <SearchableAppPage className="pb-16">
       <JsonLd data={[jsonLd, breadcrumbs([["Quotes", "/quotes"], ...(v.crumb ? [[v.crumb, v.path] as [string, string]] : [])])]} />
-      <div className="mx-auto flex max-w-[980px] flex-col gap-5">
-        <nav className="flex items-center gap-2 pt-2 text-[13px] font-medium text-[var(--color-app-text-muted)]">
+      <div className="flex flex-col gap-5">
+        <nav className="flex items-center gap-2 pt-2 text-ui-sm text-[var(--color-app-text-muted)]">
           <Link href="/library" className="text-inherit">Library</Link>
           <span>/</span>
           {v.crumb ? (
@@ -66,96 +68,65 @@ export default function QuotesDirectory(v: DirectoryView) {
           )}
         </nav>
 
-        <header className="flex max-w-[720px] flex-col gap-3">
-          <span className="text-[11px] font-bold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Quotes</span>
-          <h1 className="m-0 font-serif text-[24px]/[1.25] font-semibold text-balance md:text-[28px]/[1.2] text-[var(--color-app-text)]">{v.heading}</h1>
-          <p className="m-0 text-[15px]/[1.6] text-pretty text-[var(--color-app-text-secondary)]">{v.intro}</p>
+        <header className="flex flex-col gap-2">
+          <span className="text-ui-xs font-bold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Quotes</span>
+          <div className="flex flex-col gap-1">
+            <h1 className="m-0 text-display-sm text-pretty text-[var(--color-app-text)]">{v.heading}</h1>
+            <p className="m-0 text-reading-sm text-pretty text-[var(--color-app-text-secondary)]">{v.intro}</p>
+          </div>
         </header>
 
         <form action={v.path} method="get" role="search">
           <label className="flex h-11 items-center gap-2.5 rounded-sm border border-[var(--color-app-border)] bg-[var(--color-app-surface)] px-4 text-[var(--color-app-text-muted)]">
-            <Search size={18} strokeWidth={1.75} aria-hidden />
+            <Search size={16} strokeWidth={1.75} aria-hidden />
             <input
               type="search"
               name="q"
               defaultValue={v.query}
               placeholder="Search quotes, authors or books"
               aria-label="Search quotes, authors or books"
-              className="min-w-0 flex-1 border-0 bg-transparent text-[15px] text-[var(--color-app-text)] outline-none"
+              className="min-w-0 flex-1 border-0 bg-transparent text-[13px] font-semibold text-[var(--color-app-text)] outline-none"
             />
           </label>
         </form>
 
         {v.topics.length > 0 && (
-          <nav aria-label="Topics" className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0">
-            <Chip href="/quotes" on={!v.topic && v.path === "/quotes"}>Featured</Chip>
-            {v.topics.map((t) => (
-              <Chip key={t} href={`/quotes/topic/${slugifyCategory(t)}`} on={t === v.topic}>
-                {t}
-              </Chip>
-            ))}
+          <nav aria-label="Topics">
+            <PillScrollRow
+              items={[
+                { key: "featured", label: "Featured", active: !v.topic && v.path === "/quotes", href: "/quotes" },
+                ...v.topics.map((t) => ({ key: t, label: t, active: t === v.topic, href: `/quotes/topic/${slugifyCategory(t)}` })),
+              ]}
+            />
           </nav>
         )}
 
         {v.today && <Today passage={v.today} />}
 
         {v.quotes.length > 0 ? (
-          <div className="columns-1 gap-5 md:columns-2">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             {v.quotes.map((q) => (
               <QuoteCard key={q.id} quote={q} />
             ))}
           </div>
         ) : (
-          <p className="py-10 text-center text-[15px] text-[var(--color-app-text-secondary)]">
+          <p className="py-10 text-center text-ui-body-regular text-[var(--color-app-text-secondary)]">
             {v.query ? <>No quotes match “{v.query}”. Try an author’s name or a single word.</> : "No quotes here yet."}
           </p>
         )}
 
         {(v.more || v.page > 1) && (
-          <nav className="flex justify-center gap-3">
-            {v.page > 1 && <PageLink href={pageHref(v.path, v.query, v.page - 1)} rel="prev">Previous</PageLink>}
-            {v.more && <PageLink href={pageHref(v.path, v.query, v.page + 1)} rel="next">More quotes</PageLink>}
-          </nav>
+          <Pager page={v.page} prev={v.page > 1 ? pageHref(v.path, v.query, v.page - 1) : null} next={v.more ? pageHref(v.path, v.query, v.page + 1) : null} />
         )}
 
         {v.authors.length > 0 && (
           <section className="mt-4 flex flex-col gap-3.5 border-t border-[var(--color-app-border)] pt-6">
             <h2 className="m-0 text-ui-md font-bold text-[var(--color-app-text)]">Quotes by author</h2>
-            <div className="flex flex-wrap gap-2">
-              {v.authors.map((a) => (
-                <Chip key={a.slug} href={`/quotes/${a.slug}`} on={v.path === `/quotes/${a.slug}`}>
-                  {a.name}
-                </Chip>
-              ))}
-            </div>
+            <PillScrollRow items={v.authors.map((a) => ({ key: a.slug, label: a.name, active: v.path === `/quotes/${a.slug}`, href: `/quotes/${a.slug}` }))} />
           </section>
         )}
       </div>
     </SearchableAppPage>
-  );
-}
-
-export function Chip({ href, on, children }: { href: string; on: boolean; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      aria-current={on ? "page" : undefined}
-      className={`flex h-9 flex-none items-center rounded-sm border px-3.5 text-[13px] font-medium whitespace-nowrap no-underline ${
-        on
-          ? "border-brand-500 bg-brand-500 text-white"
-          : "border-[var(--color-app-border)] text-[var(--color-app-text)] hover:bg-[var(--color-app-surface-muted)]"
-      }`}
-    >
-      {children}
-    </Link>
-  );
-}
-
-function PageLink({ href, rel, children }: { href: string; rel: string; children: React.ReactNode }) {
-  return (
-    <Link href={href} rel={rel} className="flex h-[42px] items-center rounded-sm border border-[var(--color-app-border)] px-5 text-[14px] font-semibold text-[var(--color-app-text)] no-underline hover:bg-[var(--color-app-surface-muted)]">
-      {children}
-    </Link>
   );
 }
 
@@ -170,8 +141,8 @@ export function Cover({ src, className }: { src: string | null; className: strin
 
 export function QuoteCard({ quote: q }: { quote: DirectoryQuote }) {
   return (
-    <article className="mb-5 flex break-inside-avoid flex-col gap-4 rounded-sm border border-[var(--color-app-border)] p-5">
-      <p className="m-0 font-serif text-[16px]/[1.65] text-pretty text-[var(--color-app-text)]">
+    <article className="flex flex-col justify-between gap-4 rounded-sm border border-[var(--color-app-border)] p-5">
+      <p className="m-0 font-serif text-[15px]/[1.65] text-pretty text-[var(--color-app-text)]">
         “{q.text}”
       </p>
       <div className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3">
@@ -194,9 +165,9 @@ function Today({ passage }: { passage: HomePassage & { cover: string | null; slu
   return (
     <section className="grid items-center gap-5 rounded-sm bg-sand-950 px-[22px] py-[26px] text-sand-50 md:grid-cols-[minmax(0,1fr)_96px] md:gap-8 md:px-8 md:py-7">
       <div className="flex flex-col gap-4">
-        <span className="text-[11px] font-bold tracking-eyebrow text-brand-300 uppercase">Quote of the day · {passage.day.replace(/^\w+, /, "")}</span>
+        <span className="text-ui-xs font-bold tracking-eyebrow text-brand-300 uppercase">Quote of the day · {passage.day.replace(/^\w+, /, "")}</span>
         <p className="m-0 font-serif text-[18px]/[1.5] text-pretty md:text-[20px]/[1.5]">“{passage.excerpt}”</p>
-        <span className="text-[13px]/[1.4] font-medium text-sand-50/75">
+        <span className="text-ui-sm text-sand-50/75">
           {book ? (
             <Link href={book} className="group text-inherit no-underline">
               <b className="font-bold text-sand-50">{passage.book.author}</b> · <span className="group-hover:underline">{passage.book.title}</span>

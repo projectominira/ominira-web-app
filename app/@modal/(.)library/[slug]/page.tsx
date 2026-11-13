@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { getMaterialDetail, MaterialNotFoundError } from "@/lib/materials/detail";
 import BookPanel from "@/app/components/materials/BookPanel";
+import BookExtras from "@/app/components/materials/BookExtras";
+import { getBookExtras } from "@/lib/materials/extras";
 
 /** A click on a book anywhere in the app (a client-side navigation to
  * /library/[slug]) opens its info in BookPanel over the current page; a
@@ -11,5 +13,6 @@ export default async function BookPanelPage({ params }: { params: Promise<{ slug
     if (err instanceof MaterialNotFoundError) notFound();
     throw err;
   });
-  return <BookPanel material={material} />;
+  const extras = await getBookExtras(material);
+  return <BookPanel material={material} extras={<BookExtras extras={extras} title={material.title} author={material.author} />} />;
 }

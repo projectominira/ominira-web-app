@@ -91,7 +91,7 @@ export default function Voices({ book }: { book: LandingBook | null }) {
   // One column beside the cover: the passage, then the player, then the
   // voices, so all of it sits within reach of the words being read.
   return (
-    <div className="flex items-start gap-10 rounded-sm bg-sand-950 p-5 text-sand-25 md:p-10 lg:gap-14">
+    <div className="flex items-start gap-10 rounded-sm border border-[var(--landing-edge)] bg-[var(--landing-ink)] p-5 text-sand-25 md:p-10 lg:gap-14">
       {book && (
         <div className="hidden w-[clamp(150px,13vw,190px)] flex-none flex-col gap-4 md:flex">
           <div className="-rotate-[1.5deg]">
@@ -161,13 +161,13 @@ export default function Voices({ book }: { book: LandingBook | null }) {
                 >
                   <span
                     className={`relative block size-18 rounded-full transition-shadow duration-200 ${
-                      chosen ? "shadow-[0_0_0_2px_var(--color-sand-950),0_0_0_4px_var(--color-brand-300)]" : ""
+                      chosen ? "shadow-[0_0_0_2px_var(--landing-ink),0_0_0_4px_var(--color-brand-300)]" : ""
                     }`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={v.avatar} alt="" loading="lazy" className="size-full rounded-full object-cover" />
                     {on && (
-                      <span className="absolute inset-0 flex items-center justify-center gap-0.5 rounded-full bg-sand-950/62">
+                      <span className="absolute inset-0 flex items-center justify-center gap-0.5 rounded-full bg-black/62">
                         {[0, 1, 2, 3].map((k) => (
                           <span key={k} className="landing-eq h-5 w-[3px] origin-center rounded-[2px] bg-sand-25" style={{ animationDelay: `${k * -0.23}s` }} />
                         ))}

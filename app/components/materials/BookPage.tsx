@@ -1,11 +1,12 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Mic, Share } from "lucide-react";
 import type { OverflowMenuItem } from "@/app/components/reader/notes/OverflowMenu";
 import { readerHref } from "@/app/components/ReaderLink";
 import HeadMenu from "@/app/components/rooms/HeadMenu";
-import RoomScreen, { ScreenHead } from "@/app/components/rooms/RoomScreen";
+import SearchableAppPage from "@/app/components/shell/SearchableAppPage";
 import BookmarkButton from "@/app/components/shared/BookmarkButton";
 import { useBookmarkedMaterialIds, useToggleMaterialBookmark } from "@/lib/bookmarks/useBookmarks";
 import type { MaterialDetail } from "@/lib/materials/detail";
@@ -53,7 +54,7 @@ export function BookActions({ material }: { material: MaterialDetail }) {
 
 /** Book info: the book, your progress and the way back in, who's reading it
  * and its contents. */
-export function BookBody({ material, outer = false }: { material: MaterialDetail; outer?: boolean }) {
+export function BookBody({ material, outer = false, extras }: { material: MaterialDetail; outer?: boolean; extras?: ReactNode }) {
   const router = useRouter();
   const header = useBookHeader(material);
   const { ready, onContinue, onSwitch } = useResume(material);
@@ -66,20 +67,27 @@ export function BookBody({ material, outer = false }: { material: MaterialDetail
       onSwitch={onSwitch}
       onChapter={(id) => router.push(readerHref(`/read/${material.slug}?section=${id}`))}
       outer={outer}
-    />
+    >
+      {extras}
+    </BookDetails>
   );
 }
 
 /**
  * A book's page while book rooms are hidden (lib/config/features), for a
- * shared or typed link: in the app a book opens in BookPanel instead.
+ * shared or typed link: in the app a book opens in BookPanel instead. An
+ * ordinary page in the app shell, so the header (and a member's bottom
+ * nav) stay; the bookmark and ⋮ (rooms, share) sit in the column's corner.
  */
-export default function BookPage({ material }: { material: MaterialDetail }) {
-  const router = useRouter();
+export default function BookPage({ material, extras }: { material: MaterialDetail; extras?: ReactNode }) {
   return (
-    <RoomScreen scroll contain={false}>
-      <ScreenHead onBack={() => (window.history.length > 1 ? router.back() : router.push("/library"))} action={<BookActions material={material} />} actionLast />
-      <BookBody material={material} outer />
-    </RoomScreen>
+    <SearchableAppPage className="pb-6">
+      <div className="relative">
+        <div className="absolute top-0 right-0 z-10">
+          <BookActions material={material} />
+        </div>
+        <BookBody material={material} outer extras={extras} />
+      </div>
+    </SearchableAppPage>
   );
 }

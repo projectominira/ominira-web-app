@@ -196,7 +196,7 @@ export default function ReaderProfileView({ slug }: { slug: string }) {
   const displayName = reader.pseudonym;
 
   return (
-    <div className="pb-12 shell:mx-auto shell:max-w-4xl">
+    <div className="pb-12">
       <DetailHeader
         onBack={() => (window.history.length > 1 ? router.back() : router.push("/"))}
         shareAction={{ title: displayName, text: `${displayName} on Ominira`, ariaLabel: "Share this profile" }}

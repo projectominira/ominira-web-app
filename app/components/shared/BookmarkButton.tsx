@@ -30,7 +30,8 @@ export default function BookmarkButton({
 }: {
   saved: boolean;
   /** A bordered "Save"/"Saved" pill beside ShareButton (book info's share
-   * banner) rather than the bare icon. */
+   * banner) rather than the bare icon; the word shows from the shell
+   * breakpoint up, a bordered icon on phones. */
   labelled?: boolean;
   onToggle: () => void;
   /** Positioning and visibility from the caller only (e.g. BookListRow
@@ -64,7 +65,7 @@ export default function BookmarkButton({
         aria-pressed={saved}
         className={
           labelled
-            ? `flex flex-none cursor-pointer items-center gap-1.5 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] px-3 py-2 text-xs font-semibold transition-colors hover:bg-[var(--reader-surface-hover)] ${
+            ? `flex flex-none cursor-pointer items-center gap-1.5 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] px-2.5 py-2 text-xs shell:px-3 font-semibold transition-colors hover:bg-[var(--reader-surface-hover)] ${
                 saved ? "text-brand-500" : "text-[var(--reader-text)]"
               }`
             : `flex h-7 w-7 flex-none cursor-pointer items-center justify-center rounded-full border-none bg-transparent transition-colors ${
@@ -73,7 +74,7 @@ export default function BookmarkButton({
         }
       >
         <Bookmark size={labelled ? 15 : 17} strokeWidth={1.75} fill={saved ? "currentColor" : "none"} />
-        {labelled && (saved ? "Saved" : "Save")}
+        {labelled && <span className="hidden shell:inline">{saved ? "Saved" : "Save"}</span>}
       </button>
       {showPrompt && (
         <>

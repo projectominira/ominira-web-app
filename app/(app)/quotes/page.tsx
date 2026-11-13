@@ -11,6 +11,6 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
 }
 
 export default async function QuotesPage({ searchParams }: { searchParams: Promise<DirectoryParams> }) {
-  const view = await directoryView({ path: "/quotes", heading: "Quotes from the Ominira library", intro: INTRO, crumb: null }, await searchParams);
+  const view = await directoryView({ path: "/quotes", heading: "Quotes from the Ominira library", intro: "", crumb: null }, await searchParams);
   return <QuotesDirectory {...view} />;
 }

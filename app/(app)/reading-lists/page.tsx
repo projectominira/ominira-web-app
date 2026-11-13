@@ -10,6 +10,8 @@ import { listReadingLists } from "@/lib/readingLists/lists";
 export const revalidate = 300;
 
 const DESCRIPTION = "A reading list each month from the Ominira editors: books on Pan-African, anti-colonial and liberation history and thought, with where to start.";
+/** Shown under the H1; the longer DESCRIPTION is for search results. */
+const SUBHEADING = "A new list every month, and where to start.";
 
 export async function generateMetadata(): Promise<Metadata> {
   const any = (await listReadingLists(1)).length > 0;
@@ -26,11 +28,13 @@ export default async function ReadingListsPage() {
   const lists = await listReadingLists();
   return (
     <SearchableAppPage className="pb-16">
-      <div className="mx-auto flex max-w-[980px] flex-col gap-5">
-        <header className="flex max-w-[720px] flex-col gap-3 pt-2">
-          <span className="text-[11px] font-bold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Library</span>
-          <h1 className="m-0 font-serif text-[24px]/[1.25] font-semibold text-[var(--color-app-text)] md:text-[28px]/[1.2]">Reading lists</h1>
-          <p className="m-0 text-[14px]/[1.6] text-[var(--color-app-text-secondary)]">{DESCRIPTION}</p>
+      <div className="flex flex-col gap-5">
+        <header className="flex flex-col gap-2 pt-2">
+          <span className="text-ui-xs font-bold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Library</span>
+          <div className="flex flex-col gap-1">
+            <h1 className="m-0 text-display-sm text-[var(--color-app-text)]">Reading lists</h1>
+            <p className="m-0 text-reading-sm text-pretty text-[var(--color-app-text-secondary)]">{SUBHEADING}</p>
+          </div>
         </header>
         {lists.length ? (
           <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">

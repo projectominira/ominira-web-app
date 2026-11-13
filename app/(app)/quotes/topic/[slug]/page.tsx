@@ -10,7 +10,7 @@ import { directoryMetadata, directoryView, type DirectoryParams } from "@/lib/qu
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<DirectoryParams> };
 
 const topicOf = async (slug: string) => (await getCategories()).find((c) => slugifyCategory(c) === slug) ?? null;
-const intro = (topic: string) => `Quotes on ${topic.toLowerCase()} from the Ominira library, each taken word for word from the book.`;
+const intro = (topic: string) => ``;
 
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { slug } = await params;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Check, Headphones } from "lucide-react";
 import type { MaterialDetail } from "@/lib/materials/detail";
@@ -29,8 +29,8 @@ import { useSessionStore } from "@/stores/session-store";
 // Book info — the book's page (BookPage), or over its room while book
 // rooms are shown: main's details page (the cover, title, author and
 // facts, who added it, the description, your progress and the one resume
-// button with the switch to the other mode), then who's reading now and the
-// contents, each chapter read, or the one you're in.
+// button with the switch to the other mode, and who's reading it now),
+// then Share and Save, and the contents, each chapter read, or the one you're in.
 
 const EYEBROW = "text-ui-xs tracking-eyebrow text-[var(--color-app-text-muted)] uppercase";
 /** "webpage" never reaches this page; an unknown type is left out. */
@@ -75,6 +75,7 @@ export default function BookDetails({
   onSwitch,
   onChapter,
   outer = false,
+  children,
 }: {
   material: MaterialDetail;
   header: BookRoomHeader;
@@ -86,8 +87,11 @@ export default function BookDetails({
   onChapter: (id: string) => void;
   /** The screen scrolls (BookPage), not the details. */
   outer?: boolean;
+  /** Below the contents: the book's quotes and related books (BookExtras). */
+  children?: ReactNode;
 }) {
   const audiobook = material.narratorCount > 0;
+  const readers = h.everyone.length > 0;
   const position = useReadingPositionStore((s) => s.positions[material.id]);
   const setFinished = useReadingPositionStore((s) => s.setFinished);
   return (
@@ -126,29 +130,9 @@ export default function BookDetails({
               {position.finishedAt ? "Mark as unfinished" : "Mark as finished"}
             </button>
           )}
+          {readers && <ReadingNow header={h} />}
         </div>
       </div>
-
-      {h.everyone.length > 0 && (
-        <section className="mt-8 flex flex-col">
-          <h2 className={`m-0 pb-2 ${EYEBROW}`}>{h.everyoneCount} currently reading</h2>
-          <div className="-mx-1.5 flex flex-wrap">
-            {h.everyone.map(({ comrade }) => (
-              <Link
-                key={comrade.readerId}
-                href={`/@${pseudonymToSlug(comrade.pseudonym)}`}
-                className="flex min-h-9 min-w-0 items-center gap-2 rounded-sm px-1.5 pr-3 no-underline hover:bg-sand-75"
-              >
-                <RoomAvatar comrade={comrade} size={24} />
-                <span className="min-w-0 text-ui-caption font-bold break-words text-[var(--color-app-text)]">{comrade.pseudonym}</span>
-              </Link>
-            ))}
-          </div>
-          {h.everyoneCount > h.everyone.length && (
-            <span className="pt-1.5 text-ui-caption font-bold text-[var(--color-app-text-muted)]">+{h.everyoneCount - h.everyone.length} more comrades</span>
-          )}
-        </section>
-      )}
 
       <div className="mt-8 flex items-center gap-4 rounded-sm bg-[var(--color-app-surface-muted)] px-4 py-3.5">
         <div className="min-w-0 flex-1">
@@ -178,7 +162,32 @@ export default function BookDetails({
           ))}
         </section>
       )}
+      {children}
     </ScreenPage>
+  );
+}
+
+/** Social proof under the way in: "5 currently reading", then their faces,
+ * each linking to the reader's profile (the name as label and tooltip). One
+ * centred line at any width; the faces stop at five, with no "+N". */
+function ReadingNow({ header: h }: { header: BookRoomHeader }) {
+  return (
+    <div className="mt-5 flex items-center justify-center gap-2.5">
+      <span className="text-xs font-semibold text-[var(--reader-text-muted)]">{h.everyoneCount} currently reading</span>
+      <div className="flex -space-x-1.5">
+        {h.everyone.slice(0, 5).map(({ comrade }) => (
+          <Link
+            key={comrade.readerId}
+            href={`/@${pseudonymToSlug(comrade.pseudonym)}`}
+            aria-label={comrade.pseudonym}
+            title={comrade.pseudonym}
+            className="flex rounded-full no-underline ring-2 ring-[var(--reader-bg)] transition-opacity hover:opacity-85"
+          >
+            <RoomAvatar comrade={comrade} size={26} />
+          </Link>
+        ))}
+      </div>
+    </div>
   );
 }
 

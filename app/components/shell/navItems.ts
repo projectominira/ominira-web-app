@@ -10,8 +10,8 @@ export type NavItem = {
   icon: ComponentType<SVGProps<SVGSVGElement> & { size?: number; strokeWidth?: number | string }>;
 };
 
-// Shared by AppSidebar (desktop) and AppBottomNav (mobile) so destinations,
-// icons and order never drift between the two navigation surfaces. Shelf
+// AppBottomNav's tabs (mobile). The desktop header (AppTopBar) links Home
+// and Shelf (Library for visitors) and lists the rest under Browse. Shelf
 // sits right after Home — it used to be a mobile-only "Reading" destination
 // listing in-progress books, with desktop instead exposing the same list
 // directly in the sidebar (SidebarContinueReading); now that it's a proper
@@ -40,9 +40,18 @@ export const NAV_ITEMS: NavItem[] = [
   // { href: "/notes", label: "Notes", icon: MessageCircle },
 ];
 
-// Shared by AppSidebar and AppBottomNav so a nav item's "active" rule can't
-// drift between the two surfaces the way two independent copies of this
-// function eventually would.
+// The desktop header's Browse menu: the catalogue pages under one link, so
+// the header stays short as the catalogue grows.
+export const BROWSE_ITEMS: { href: string; label: string }[] = [
+  { href: "/library", label: "Library" },
+  { href: "/topics", label: "Topics" },
+  { href: "/reading-lists", label: "Reading lists" },
+  { href: "/authors", label: "Authors" },
+  { href: "/quotes", label: "Quotes" },
+];
+
+// Shared by AppTopBar and AppBottomNav so a nav item's "active" rule can't
+// drift between the two surfaces.
 export function isNavItemActive(pathname: string, href: string) {
   // /library alone: a material's own detail page (/library/[slug]) is a
   // destination reached *from* the library listing, not a sub-section of

@@ -17,7 +17,7 @@ const CTA = "flex h-8 min-w-8 flex-none items-center justify-center gap-1.5 roun
 
 function ReadAlong() {
   return (
-    <span className={`${CTA} border-[var(--color-app-border)] bg-[var(--reader-bg)] text-[var(--reader-text)] group-hover:border-brand-500 group-hover:text-brand-500`}>
+    <span className={`${CTA} border-[var(--color-app-border)] bg-[var(--reader-bg)] text-[var(--reader-text)] group-hover:border-[var(--color-app-brand)] group-hover:text-[var(--color-app-brand)]`}>
       <BookOpen size={15} aria-hidden />
       <span className="hidden sm:inline">Read along</span>
     </span>
@@ -112,7 +112,7 @@ export default function StudyTogether({ live, groups, samples }: { live: StatusI
             )}
           </div>
 
-          <div className="flex flex-col gap-4 rounded-sm bg-sand-950 p-5 text-sand-25 md:p-8">
+          <div className="flex flex-col gap-4 rounded-sm border border-[var(--landing-edge)] bg-[var(--landing-ink)] p-5 text-sand-25 md:p-8">
             <div className={`${EYEBROW} text-brand-300`}>
               <Mic size={18} />
               Reading rooms
@@ -121,7 +121,7 @@ export default function StudyTogether({ live, groups, samples }: { live: StatusI
             {live.length > 0 ? (
               <div className="flex flex-col gap-2.5">
                 {live.map((r) => (
-                  <Link key={r.room?.id ?? r.id} href={`/library/${r.id}`} className={`${ROW} bg-sand-900 text-sand-25`}>
+                  <Link key={r.room?.id ?? r.id} href={`/library/${r.id}`} className={`${ROW} bg-[var(--landing-raise)] text-sand-25`}>
                     <BookCover src={r.cover} alt="" className={THUMB} />
                     <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
                       <span className="truncate text-ui-body md:text-ui-md">{r.room?.title ?? r.name}</span>
@@ -134,7 +134,7 @@ export default function StudyTogether({ live, groups, samples }: { live: StatusI
             ) : (
               <div className="flex flex-col gap-2.5">
                 {sampleRooms.map((r) => (
-                  <Link key={r.title} href="/auth/signup" className={`${ROW} bg-sand-900 text-sand-25`}>
+                  <Link key={r.title} href="/auth/signup" className={`${ROW} bg-[var(--landing-raise)] text-sand-25`}>
                     <Cover book={r.book} link={false} className={SAMPLE_COVER} shadow="shadow-none" />
                     <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
                       <span className="truncate text-ui-body md:text-ui-md">{r.title}</span>

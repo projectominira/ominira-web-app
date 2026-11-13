@@ -12,7 +12,7 @@ import { useReaderStore } from "@/stores/reader-store";
  * right one is there on first paint rather than after reader-store
  * rehydrates. The click reads <html> for the same reason.
  */
-export default function HeaderThemeToggle() {
+export default function HeaderThemeToggle({ withLabel = false }: { /** The visitor menu's row: names the theme it switches to. */ withLabel?: boolean }) {
   const setTheme = useReaderStore((s) => s.setTheme);
 
   const toggle = () => {
@@ -25,10 +25,16 @@ export default function HeaderThemeToggle() {
       type="button"
       onClick={toggle}
       aria-label="Toggle light or dark theme"
-      className="flex flex-none cursor-pointer items-center justify-center border-none bg-transparent p-0 text-[var(--reader-text-muted)] hover:text-[var(--reader-text)]"
+      className={`flex flex-none cursor-pointer items-center justify-center gap-2 border-none bg-transparent p-0 ${withLabel ? "text-[13px] font-semibold text-[var(--reader-text)]" : "text-[var(--reader-text-muted)] hover:text-[var(--reader-text)]"}`}
     >
       <Sun size={18} className="theme-light-only" />
       <Moon size={18} className="theme-dark-only" />
+      {withLabel && (
+        <>
+          <span className="theme-light-only">Dark theme</span>
+          <span className="theme-dark-only">Light theme</span>
+        </>
+      )}
     </button>
   );
 }

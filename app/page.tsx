@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import HomeInstallBanner from "@/app/components/home/HomeInstallBanner";
+import AppTopBar from "@/app/components/shell/AppTopBar";
 import Cover from "@/app/components/landing/Cover";
 import Shelf from "@/app/components/landing/Shelf";
 import SignedInRedirect, { HIDE_WHEN_SIGNED_IN } from "@/app/components/landing/SignedInRedirect";
 import StudyTogether from "@/app/components/landing/StudyTogether";
 import Voices from "@/app/components/landing/Voices";
+import SocialLinks from "@/app/components/shared/SocialLinks";
 import { BUTTON, BUTTON_SM, GUTTER, INVERSE, PRIMARY, SECTION_LINE, SECTION_TITLE } from "@/app/components/landing/styles";
 import { slugifyCategory } from "@/lib/categories/slug";
 import { BRAND_TAGLINE, SPLASH_MARK, WORDMARK, WORDMARK_RATIO } from "@/lib/config/brand-assets";
@@ -70,25 +72,9 @@ export default async function LandingPage() {
       <SignedInRedirect />
       <HomeInstallBanner inline />
       <div id="landing" className="w-full overflow-x-clip bg-[var(--reader-bg)] font-sans text-[var(--reader-text)] subpixel-antialiased">
-        <header id="landing-header" className="border-b border-white/8 bg-sand-950 text-sand-25">
-          <div className={`mx-auto flex max-w-[1440px] items-center justify-between gap-4 py-3 md:py-4 ${GUTTER}`}>
-            <Link href="/" aria-label={`${PLATFORM_NAME} home`} className="flex items-center gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={SPLASH_MARK.light} alt="" width={40} height={39} className="block h-9 w-auto md:h-10" />
-              <Wordmark className="h-[18px] md:h-5" />
-            </Link>
-            <nav className="flex items-center gap-2 md:gap-3">
-              <Link href="/auth/login" className="flex h-9.5 items-center rounded-sm px-3 text-ui-md text-sand-25/80 no-underline transition-colors hover:bg-white/8 hover:text-sand-25">
-                Sign in
-              </Link>
-              <Link href="/auth/signup" className={`${BUTTON_SM} ${PRIMARY}`}>
-                Join us
-              </Link>
-            </nav>
-          </div>
-        </header>
+        <AppTopBar landing />
 
-        <section className="relative bg-sand-950 pt-12 text-sand-25 md:pt-[clamp(48px,6vw,96px)]">
+        <section className="relative border-b border-[var(--landing-edge)] bg-[var(--landing-ink)] pt-12 text-sand-25 md:pt-[clamp(48px,6vw,96px)]">
           <div className={`mx-auto flex max-w-[1024px] flex-col items-center gap-5 text-center ${GUTTER}`}>
             <h1 className="m-0 font-serif text-[32px]/[1.08] md:text-[clamp(36px,5.4vw,78px)]/[1.05] font-semibold tracking-[-0.015em] text-balance">
               The largest collection of books online for <span className="text-brand-400">Pan-Africanists</span>.
@@ -243,7 +229,7 @@ export default async function LandingPage() {
 
         <StudyTogether live={view.live} groups={view.groups} samples={view.samples} />
 
-        <section className={`flex flex-col items-center gap-6 bg-sand-950 py-14 text-center text-sand-25 md:py-[clamp(56px,7vw,112px)] ${GUTTER}`}>
+        <section className={`flex flex-col items-center gap-6 border-t border-[var(--landing-edge)] bg-[var(--landing-ink)] py-14 text-center text-sand-25 md:py-[clamp(56px,7vw,112px)] ${GUTTER}`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={SPLASH_MARK.light} alt="" width={64} height={62} className="h-auto w-16" />
           <h2 className="m-0 max-w-[820px] font-serif text-[28px]/[1.1] md:text-[clamp(32px,4.4vw,64px)]/[1.08] font-semibold text-balance">Arise for Freedom</h2>
@@ -268,9 +254,10 @@ export default async function LandingPage() {
               Principles
             </Link>
           </nav>
-          <span className="text-ui-caption text-[var(--color-app-text-muted)]">
-            {BRAND_TAGLINE}
-          </span>
+          <div className="flex flex-col items-center gap-2 md:flex-row md:gap-4">
+            <SocialLinks />
+            <span className="text-ui-caption text-[var(--color-app-text-muted)]">{BRAND_TAGLINE}</span>
+          </div>
         </footer>
       </div>
     </>

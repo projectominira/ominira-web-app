@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
 import { useInstallPrompt } from "@/lib/pwa/useInstallPrompt";
 import {
   INSTALL_BANNER_COOLDOWN_MS,
@@ -8,6 +9,7 @@ import {
   useInstallBannerStore,
 } from "@/stores/install-banner-store";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import InstallModal from "@/app/components/pwa/InstallModal";
 import AppIcon from "@/app/components/pwa/AppIcon";
 
@@ -44,6 +46,9 @@ export default function HomeInstallBanner({ inline = false }: { inline?: boolean
   const dismiss = useInstallBannerStore((s) => s.dismiss);
   const setTopBarHeight = useLayoutStore((s) => s.setTopBarHeight);
   const barRef = useRef<HTMLDivElement>(null);
+  // A visitor has AppTopBar on a phone too, so the bar sits under it there.
+  const member = useIsAuthenticated();
+  const underTopBar = !inline && !member;
 
   // install-banner-store skips automatic persist hydration (see
   // reader-identity-store's own doc comment for why) so the server and
@@ -103,14 +108,14 @@ export default function HomeInstallBanner({ inline = false }: { inline?: boolean
         // class (specificity), leaving bottom padding at 10px and top at
         // whatever the safe area was (0 on desktop) and pushing every child
         // up off-center instead of leaving the row symmetric.
-        style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.625rem)" }}
+        style={underTopBar ? { top: "calc(env(safe-area-inset-top) + var(--app-topbar-h))", paddingTop: "0.625rem" } : { paddingTop: "calc(env(safe-area-inset-top) + 0.625rem)" }}
         aria-hidden={hidden || undefined}
         inert={hidden || undefined}
-        className={`fixed top-0 right-0 left-0 z-50 flex items-center gap-3 bg-black px-4 pb-2.5 ${hidden ? "-translate-y-full" : "shadow-md"} ${inline ? "transition-[translate,box-shadow] duration-300" : "shell:left-[var(--app-sidebar-w)]"}`}
+        className={`fixed top-0 right-0 left-0 z-50 flex items-center gap-3 bg-black px-4 pb-2.5 ${hidden ? "-translate-y-full" : "shadow-md"} ${inline ? "transition-[translate,box-shadow] duration-300" : "shell:top-[var(--app-topbar-h)]"}`}
       >
-        <AppIcon size={28} />
+        {/* <AppIcon size={28} /> */}
         <span className="min-w-0 flex-1 text-[13px] font-bold leading-snug text-white">
-          Install the Ominira app on your phone, tablet or desktop computer
+          Install the Ominira app on your phone, tablet or desktop device
         </span>
         <button
           type="button"
@@ -122,9 +127,12 @@ export default function HomeInstallBanner({ inline = false }: { inline?: boolean
         <button
           type="button"
           onClick={dismiss}
-          className="flex-none cursor-pointer border-none bg-transparent p-1 text-xs font-medium text-white/60 hover:text-white"
+          aria-label="Dismiss"
+          // Small and tucked against the edge (negative margins eat the gap
+          // and the row's padding) so the text and Install get the room.
+          className="-mr-2 flex flex-none cursor-pointer items-center border-none bg-transparent p-1 text-white/60 hover:text-white"
         >
-          Not now
+          <X size={12} strokeWidth={2.5} />
         </button>
       </div>
 

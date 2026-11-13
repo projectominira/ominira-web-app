@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import BookCover from "@/app/components/shared/BookCover";
 import type { MaterialSummary } from "@/lib/api/types";
 import { resolveBookCoverSrc } from "@/lib/materials/image";
+import { useShell } from "@/app/components/useShell";
 import { SECTION_TITLE } from "./StudyGroups";
 
 const ARROW =
@@ -16,9 +17,23 @@ const ARROW =
  * cover, title, author and how many are reading it now — each opening its
  * book page. Swiped on mobile, bleeding to the screen's edge; on desktop,
  * arrows that dim at each end. None, nothing: Home hides it for readers too
- * new for good picks.
+ * new for good picks. Also a book page's "Related books" (BookExtras), with
+ * its own title.
  */
-export default function ForYou({ books, desktop }: { books: MaterialSummary[]; desktop: boolean }) {
+export default function ForYou({
+  books,
+  desktop: given,
+  title = "For you",
+  titleClassName = SECTION_TITLE,
+}: {
+  books: MaterialSummary[];
+  /** The shell breakpoint, when not given. */
+  desktop?: boolean;
+  title?: string;
+  titleClassName?: string;
+}) {
+  const shell = useShell();
+  const desktop = given ?? shell;
   const shelf = useRef<HTMLDivElement>(null);
   const [ends, setEnds] = useState({ start: true, end: false });
   const measure = useCallback(() => {
@@ -41,7 +56,7 @@ export default function ForYou({ books, desktop }: { books: MaterialSummary[]; d
   return (
     <section className="flex min-w-0 flex-col gap-3.5">
       <div className="flex min-h-9 items-center justify-between gap-3">
-        <h2 className={SECTION_TITLE}>For you</h2>
+        <h2 className={titleClassName}>{title}</h2>
         {showArrows && (
           <div className="flex flex-none gap-2">
             <button type="button" aria-label="Previous" onClick={() => scroll(-1)} disabled={ends.start} className={ARROW}>

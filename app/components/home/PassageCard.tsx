@@ -5,7 +5,6 @@ import { Share } from "lucide-react";
 import { readerHref } from "@/app/components/ReaderLink";
 import PassageQuote, { BookCite } from "@/app/components/rooms/PassageQuote";
 import FistReaction from "@/app/components/rooms/FistReaction";
-import { RoomCard } from "@/app/components/rooms/RoomCard";
 import { apiFetch } from "@/lib/api/client";
 import type { HomePassage } from "@/lib/rooms/types";
 import { useShareQuote } from "@/app/components/reader/ShareQuoteModal";
@@ -22,7 +21,7 @@ export default function PassageCard({ passage }: { passage: HomePassage }) {
   const { book } = passage;
   const shareQuote = useShareQuote(book.title, book.author);
   return (
-    <RoomCard priv={false}>
+    <article className="flex w-full flex-col gap-4 rounded-sm bg-[var(--color-app-inset)] px-5 py-5">
       <header className="-my-2 -mr-2 flex items-center justify-between gap-2">
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
           <span className="font-sans text-[11px]/[1.3] font-extrabold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Passage of the day</span>
@@ -49,12 +48,11 @@ export default function PassageCard({ passage }: { passage: HomePassage }) {
       <PassageQuote
         excerpt={passage.excerpt}
         href={readerHref(passage.href)}
-        cite={<BookCite title={book.title} author={book.author} where={passage.where} />}
+        cite={<BookCite title={book.title} author={book.author} />}
+        footer={passage.reaction && <Fist {...passage.reaction} />}
       />
-
-      {passage.reaction && <Fist {...passage.reaction} />}
       {shareQuote.modal}
-    </RoomCard>
+    </article>
   );
 }
 

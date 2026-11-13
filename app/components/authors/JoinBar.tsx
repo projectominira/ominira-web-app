@@ -4,8 +4,8 @@ import Link from "next/link";
 import { isSessionValid, useSessionStore } from "@/stores/session-store";
 
 /** The invitation at the foot of a public page, for visitors only (never
- * flashed at a member before their session loads). */
-export default function JoinBar({ children, editorial = false }: { children: React.ReactNode; /** The SEO pages' design: a rule above, serif copy, no box. */ editorial?: boolean }) {
+ * flashed at a member before their session loads). A plain "Join us" link. */
+export default function JoinBar({ editorial = false }: { /** The SEO pages' design: a rule above, no box. */ editorial?: boolean }) {
   const hasHydrated = useSessionStore((s) => s.hasHydrated);
   const session = useSessionStore((s) => s.session);
   if (!hasHydrated || isSessionValid(session)) return null;
@@ -17,9 +17,15 @@ export default function JoinBar({ children, editorial = false }: { children: Rea
           : "mt-6 flex flex-wrap items-center justify-between gap-4 rounded-sm border border-[var(--color-app-border)] p-5"
       }
     >
-      <span className={editorial ? "max-w-[440px] font-serif text-[17px]/[1.5] text-[var(--color-app-text)]" : "max-w-[480px] text-[15px]/[1.6] text-[var(--color-app-text-secondary)]"}>{children}</span>
-      <Link href="/auth/signup" className={`flex h-[42px] items-center rounded-sm bg-brand-500 px-5 font-semibold text-white no-underline hover:bg-brand-600 ${editorial ? "text-[14px]" : "text-[14px]"}`}>
-        Become a member
+      <p className="m-0 flex max-w-[480px] flex-col gap-0.5 text-ui-body-regular text-[var(--color-app-text-secondary)]">
+        <b className="text-[14px] font-semibold leading-tight text-[var(--color-app-text)]">The largest collection of books online for Pan-Africanists.</b>
+        Read, or listen with African voices.
+      </p>
+      <Link
+        href="/auth/signup"
+        className="text-[14px] font-semibold text-[var(--color-app-brand)] no-underline hover:text-brand-600 hover:underline"
+      >
+        Join us
       </Link>
     </div>
   );

@@ -91,7 +91,7 @@ export async function sendStreakRisk(now = Date.now()): Promise<NotifyTally> {
     add(`goal-${read}-${goal}`, {
       kind: "goal_reminder",
       title: "Finish today's reading goal before midnight",
-      body: `You've read ${read} of ${goal} minutes today.`,
+      body: `You've read for ${read} of ${goal} minutes today.`,
       url: "/home",
       tag: "goal-reminder",
       ref: "goal",

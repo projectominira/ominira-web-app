@@ -11,6 +11,8 @@ import { PLATFORM_URL } from "@/lib/config/platform";
 export const revalidate = 3600;
 
 const DESCRIPTION = "Pan-African, anti-colonial and socialist writers in the Ominira library, with their books and quotes.";
+/** Shown under the H1; the longer DESCRIPTION is for search results. */
+const SUBHEADING = "Writers on liberation, from Africa and beyond, with their books and quotes.";
 
 export const metadata: Metadata = {
   title: "Authors",
@@ -47,11 +49,13 @@ export default async function AuthorsPage() {
   }
   return (
     <SearchableAppPage className="pb-16">
-      <div className="mx-auto flex max-w-[980px] flex-col gap-5">
-        <header className="flex max-w-[720px] flex-col gap-3 pt-2">
-          <span className="text-[11px] font-bold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Library</span>
-          <h1 className="m-0 font-serif text-[24px]/[1.25] font-semibold md:text-[28px]/[1.2] text-[var(--color-app-text)]">Authors</h1>
-          <p className="m-0 text-[14px] text-[var(--color-app-text-secondary)]">{DESCRIPTION}</p>
+      <div className="flex flex-col gap-5">
+        <header className="flex flex-col gap-2 pt-2">
+          <span className="text-ui-xs font-bold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Library</span>
+          <div className="flex flex-col gap-1">
+            <h1 className="m-0 text-display-sm text-[var(--color-app-text)]">Authors</h1>
+            <p className="m-0 text-reading-sm text-pretty text-[var(--color-app-text-secondary)]">{SUBHEADING}</p>
+          </div>
         </header>
         <nav aria-label="Letters" className="flex flex-wrap gap-x-3 gap-y-1 text-[13px] font-semibold">
           {[...groups.keys()].map((letter) => (

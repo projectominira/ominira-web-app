@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { MaterialSummary } from "@/lib/api/types";
 import SearchableAppPage from "@/app/components/shell/SearchableAppPage";
-import ShareButton from "@/app/components/materials/ShareButton";
+import PillScrollRow from "@/app/components/shell/PillScrollRow";
 import { Cover } from "@/app/components/quotes/QuotesDirectory";
 import JoinBar from "@/app/components/authors/JoinBar";
 import { PLATFORM_NAME, PLATFORM_URL } from "@/lib/config/platform";
@@ -21,19 +21,17 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Lagos" });
 
 const LINK = "text-[var(--color-app-brand)] no-underline hover:text-brand-600 hover:underline";
-const H2 = "m-0 font-serif text-[24px]/[1.25] font-semibold text-[var(--color-app-text)]";
-const NOTE = "m-0 text-[15px]/[1.65] text-pretty text-[var(--color-app-text-secondary)]";
-const META = "text-[13px]/[1.4] font-medium text-[var(--color-app-text-secondary)]";
-const CHIP =
-  "inline-flex h-[34px] items-center rounded-sm border border-[var(--color-app-border)] px-3.5 text-[13px] font-medium text-[var(--color-app-text)] no-underline hover:bg-[var(--color-app-surface-muted)]";
+const H2 = "m-0 text-ui-md font-bold text-[var(--color-app-text)]";
+const NOTE = "m-0 text-[13px]/[1.5] text-pretty text-[var(--color-app-text-secondary)]";
+const META = "text-ui-sm text-[var(--color-app-text-secondary)]";
 const RULE = "m-0 h-px border-0 bg-[var(--color-app-border)]";
 
 function Related({ title, links }: { title: string; links: { href: string; label: string }[] }) {
   if (links.length === 0) return null;
   return (
-    <div>
-      <h3 className="m-0 mb-2.5 text-[11px] font-bold tracking-eyebrow text-[var(--color-app-text-muted)] uppercase">{title}</h3>
-      <ul className="m-0 flex list-none flex-col gap-2 p-0 text-[14px]/[1.4] font-medium">
+    <div className="min-[900px]:max-w-64">
+      <h3 className="m-0 mb-2.5 text-ui-xs font-bold tracking-eyebrow text-[var(--color-app-text-muted)] uppercase">{title}</h3>
+      <ul className="m-0 flex list-none flex-col gap-2 p-0 text-ui-body">
         {links.map((l) => (
           <li key={l.href}>
             <Link href={l.href} className={LINK}>
@@ -51,12 +49,12 @@ function PathItem({ book, why }: { book: MaterialSummary; why: string }) {
   return (
     <Link
       href={`/library/${book.slug}`}
-      className="group grid grid-cols-[60px_minmax(0,1fr)] gap-3.5 border-t border-[var(--color-app-border)] py-[18px] text-[var(--color-app-text)] no-underline min-[900px]:grid-cols-[72px_minmax(0,1fr)] min-[900px]:gap-[18px]"
+      className="group grid grid-cols-[80px_minmax(0,1fr)] gap-4 border-t border-[var(--color-app-border)] py-4 text-[var(--color-app-text)] no-underline"
     >
-      <Cover src={resolveBookThumbnailSrc(book)} className="h-[90px] w-[60px] min-[900px]:h-[108px] min-[900px]:w-[72px]" />
+      <Cover src={resolveBookThumbnailSrc(book)} className="h-28 w-20" />
       <div className="flex min-w-0 flex-col gap-1.5">
-        <span className="font-serif text-[18px]/[1.3] font-semibold group-hover:text-[var(--color-app-brand)]">{book.title}</span>
-        <span className={META}>{book.author}</span>
+        <span className="font-serif text-[14px] font-semibold leading-tight group-hover:text-[var(--color-app-brand)]">{book.title}</span>
+        <span className="text-[11px] font-semibold capitalize tracking-[0.04em] text-[var(--color-app-text-muted)]">{book.author}</span>
         <p className={NOTE}>{why}</p>
       </div>
     </Link>
@@ -67,7 +65,7 @@ function PathItem({ book, why }: { book: MaterialSummary; why: string }) {
 function Woven({ quote: q }: { quote: DirectoryQuote }) {
   return (
     <blockquote className="mx-0 mt-[18px] mb-2.5 flex flex-col gap-3 border-l-2 border-brand-300 py-1 pl-5 min-[900px]:ml-14">
-      <p className="m-0 font-serif text-[19px]/[1.55] text-pretty text-[var(--color-app-text)] min-[900px]:text-[22px]/[1.55]">“{q.text}”</p>
+      <p className="m-0 font-serif text-[15px]/[1.65] text-pretty text-[var(--color-app-text)]">“{q.text}”</p>
       <cite className={`not-italic ${META}`}>
         {q.book.author},{" "}
         <Link href={`/library/${q.book.slug}`} className={`font-semibold ${LINK}`}>
@@ -87,8 +85,8 @@ function AllRow({ book }: { book: MaterialSummary }) {
     >
       <Cover src={resolveBookThumbnailSrc(book)} className="h-[72px] w-12" />
       <div className="flex min-w-0 flex-col gap-[3px]">
-        <span className="font-serif text-[15px]/[1.3] font-semibold">{book.title}</span>
-        <span className={`${META} text-[12px]`}>{book.author}</span>
+        <span className="font-serif text-[14px] font-semibold leading-tight">{book.title}</span>
+        <span className="text-[11px] font-semibold capitalize tracking-[0.04em] text-[var(--color-app-text-muted)]">{book.author}</span>
       </div>
     </Link>
   );
@@ -135,8 +133,8 @@ export default function TopicPageView({ t, lists = [] }: { t: TopicPage; /** Mon
   return (
     <SearchableAppPage className="pb-20">
       <JsonLd data={[jsonLd, breadcrumbs([["Topics", "/topics"], [t.name, `/topics/${t.slug}`]])]} />
-      <article className="mx-auto flex max-w-[720px] flex-col gap-[22px]">
-        <nav className="flex items-center gap-2 pt-2 text-[13px]/none font-medium text-[var(--color-app-text-muted)]">
+      <article className="flex flex-col gap-[22px]">
+        <nav className="flex items-center gap-2 pt-2 text-ui-sm text-[var(--color-app-text-muted)]">
           <Link href="/library" className="text-inherit no-underline hover:underline">Library</Link>
           <span>/</span>
           <Link href="/topics" className="text-inherit no-underline hover:underline">Topics</Link>
@@ -145,50 +143,37 @@ export default function TopicPageView({ t, lists = [] }: { t: TopicPage; /** Mon
         </nav>
 
         <div className="flex flex-col gap-3.5 pt-1.5">
-          <span className="text-[11px] font-bold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Topic · {plural(count, "book")}</span>
-          <h1 className="m-0 font-serif text-[32px]/[1.12] font-semibold tracking-[-0.01em] text-balance text-[var(--color-app-text)] min-[900px]:text-[44px]/[1.12]">{t.title}</h1>
+          <span className="text-ui-xs font-bold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Topic · {plural(count, "book")}</span>
+          <h1 className="m-0 text-display-sm text-pretty text-[var(--color-app-text)]">{t.title}</h1>
         </div>
         {paras.map((p, i) => (
-          <p key={i} className={`m-0 font-serif text-[17px]/[1.65] text-pretty text-[var(--color-app-text)] min-[900px]:text-[19px]/[1.65] ${i > 0 ? "-mt-2" : ""}`}>
+          <p key={i} className={`m-0 text-reading-sm text-pretty text-[var(--color-app-text)] ${i > 0 ? "-mt-2" : ""}`}>
             {p}
           </p>
         ))}
-        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[13px]/[1.4] font-medium text-[var(--color-app-text-secondary)]">
-          {t.approvedAt && (
-            <>
-              <span>{PLATFORM_NAME} editors</span>
-              <span aria-hidden className="size-[3px] rounded-full bg-[var(--color-app-text-muted)]" />
-              <span>Updated {dateLabel(t.approvedAt)}</span>
-            </>
-          )}
-          <ShareButton
-            title={t.title}
-            text={`${t.title}, on ${PLATFORM_NAME}.`}
-            ariaLabel="Share this page"
-            labelClassName="hidden min-[900px]:inline"
-            className="ml-auto flex h-[34px] cursor-pointer items-center gap-1.5 rounded-sm border border-[var(--color-app-border)] bg-transparent px-3 text-[13px] font-medium text-[var(--color-app-text)] hover:bg-[var(--color-app-surface-muted)]"
-          />
-        </div>
+        {t.approvedAt && (
+          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-ui-sm text-[var(--color-app-text-secondary)]">
+            <span>Project {PLATFORM_NAME}</span>
+            <span aria-hidden className="size-[3px] rounded-full bg-[var(--color-app-text-muted)]" />
+            <span>{dateLabel(t.approvedAt)}</span>
+          </div>
+        )}
 
         {t.stages.length > 0 && (
-          <nav aria-label="Sections" className="flex flex-wrap gap-2">
-            {t.stages.map((s, i) => (
-              <a key={s.title} href={`#stage-${i + 1}`} className={CHIP}>
-                {i + 1} · {s.title}
-              </a>
-            ))}
-            {t.all.length > 0 && (
-              <a href="#all" className={CHIP}>
-                All {t.all.length} books
-              </a>
-            )}
+          <nav aria-label="Sections">
+            <PillScrollRow
+              items={[
+                ...t.stages.map((s, i) => ({ key: `stage-${i + 1}`, label: `${i + 1} · ${s.title}`, active: false, href: `#stage-${i + 1}` })),
+                ...(t.all.length > 0 ? [{ key: "all", label: `All ${t.all.length} books`, active: false, href: "#all" }] : []),
+              ]}
+            />
           </nav>
         )}
 
         {t.stages.map((s, i) => (
           <section key={s.title} id={`stage-${i + 1}`} className="flex scroll-mt-20 flex-col gap-1.5 pt-3">
             <div className="grid grid-cols-[34px_minmax(0,1fr)] items-baseline gap-3 pb-1.5 min-[900px]:grid-cols-[44px_minmax(0,1fr)]">
-              <span className="font-serif text-[24px]/none font-semibold text-[var(--color-app-brand)] min-[900px]:text-[30px]/none">{i + 1}</span>
+              <span className="font-serif text-[19px]/none font-semibold text-[var(--color-app-brand)] min-[900px]:text-[22px]/none">{i + 1}</span>
               <div className="flex flex-col gap-1.5">
                 <h2 className={H2}>{s.title}</h2>
                 <p className={NOTE}>{s.intro}</p>
@@ -204,7 +189,7 @@ export default function TopicPageView({ t, lists = [] }: { t: TopicPage; /** Mon
         {(t.authors.length > 0 || t.related.length > 0 || lists.length > 0) && (
           <>
             <hr className={`${RULE} ${t.stages.length ? "mt-[18px]" : ""}`} />
-            <section className="grid grid-cols-1 gap-6 min-[900px]:grid-cols-3">
+            <section className="flex flex-col items-center gap-6 text-center min-[900px]:flex-row min-[900px]:items-start min-[900px]:justify-center min-[900px]:gap-16">
               <Related title="Authors" links={t.authors.map((a) => ({ href: `/authors/${a.slug}`, label: a.name }))} />
               <Related title="Related topics" links={t.related.map((r) => ({ href: `/topics/${r.slug}`, label: r.name }))} />
               <Related title="Reading lists" links={lists.map((l) => ({ href: `/reading-lists/${l.slug}`, label: l.title }))} />
@@ -233,7 +218,7 @@ export default function TopicPageView({ t, lists = [] }: { t: TopicPage; /** Mon
           </>
         )}
 
-        <JoinBar editorial>The largest collection of books online for Pan-Africanists. Read, or listen with African voices.</JoinBar>
+        <JoinBar editorial />
       </article>
     </SearchableAppPage>
   );

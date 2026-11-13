@@ -13,21 +13,14 @@
 
 @theme {
   /* The one desktop-shell breakpoint the whole app hinges layout on — the
-     sidebar rail appears, ChaptersDrawer/notes panels push sideways instead
-     of overlaying, etc. Named (not Tailwind's stock sm/md/lg) because 860px
-     is a deliberate product value — the point where a fixed 220px sidebar
-     plus a comfortably-wide content pane actually fit — not a generic
-     "tablet" or "desktop" cutoff; none of Tailwind's presets (768/1024)
-     land there, and snapping to one would show the sidebar either before
-     there's room for it or later than there needs to be. Defining it here
-     makes `shell:` a real Tailwind breakpoint variant everywhere, instead
-     of every callsite repeating `min-[860px]:` as a magic number.
-     Reference: --app-sidebar-w below is the width this math is built on. */
+     desktop header replaces the bottom tab bar, ChaptersDrawer/notes panels
+     push sideways instead of overlaying, etc. Defining it here makes
+     `shell:` a real Tailwind breakpoint variant everywhere. */
   --breakpoint-shell: 860px;
   /* Where a page's main column (min 560px) and its 264px right rail
-     (shared/RailLayout) both fit beside the sidebar: 220 + 80 padding +
-     560 + 40 gap + 264. Below it, the rail stacks above the main column. */
-  --breakpoint-wide: 1160px;
+     (shared/RailLayout) both fit: 80 padding + 560 + 40 gap + 264.
+     Below it, the rail stacks above the main column. */
+  --breakpoint-wide: 944px;
 
   /* Warm paper-like neutrals */
   --color-sand-0: #ffffff;
@@ -96,10 +89,10 @@
 
 /* Plain layout constants (not design tokens Tailwind should turn into
    utilities, so kept out of @theme above) — shared by the app shell's
-   sidebar width and anything that needs to reserve space for or avoid it
-   (AppShell's content padding, NowPlayingBar's desktop left-offset). */
+   desktop header height and anything that needs to sit below it
+   (AppShell's spacer, RoomScreen, HomeInstallBanner). */
 :root {
-  --app-sidebar-w: 220px;
+  --app-topbar-h: 68px;
 }
 
 /* ---- Typography — two families (font-serif / font-sans) and four sizes.
@@ -123,9 +116,9 @@
 @utility text-display-lg { font-family: var(--serif); font-weight: 600; font-size: 44px; line-height: 1.15; }
 @utility text-display-md { font-family: var(--serif); font-weight: 600; font-size: 32px; line-height: 1.2; }
 @utility text-display-sm { font-family: var(--serif); font-weight: 600; font-size: 24px; line-height: 1.25; }
-@utility text-reading-lg { font-family: var(--serif); font-weight: 400; font-size: 20px; line-height: 1.7; }
-@utility text-reading-md { font-family: var(--serif); font-weight: 400; font-size: 17px; line-height: 1.7; }
-@utility text-reading-sm { font-family: var(--serif); font-weight: 400; font-size: 15px; line-height: 1.65; }
+@utility text-reading-lg { font-family: var(--sans); font-weight: 400; font-size: 20px; line-height: 1.7; }
+@utility text-reading-md { font-family: var(--sans); font-weight: 400; font-size: 17px; line-height: 1.7; }
+@utility text-reading-sm { font-family: var(--sans); font-weight: 400; font-size: 15px; line-height: 1.65; }
 @utility text-ui-xl { font-family: var(--sans); font-weight: 700; font-size: 20px; line-height: 1.3; }
 @utility text-ui-lg { font-family: var(--sans); font-weight: 600; font-size: 17px; line-height: 1.35; }
 @utility text-ui-md { font-family: var(--sans); font-weight: 600; font-size: 15px; line-height: 1.4; }
@@ -977,6 +970,22 @@ html:not([data-reader-theme="dark"]) .theme-dark-only {
 }
 .yarl__root.om-lightbox .yarl__slide_image {
   border-radius: var(--radius-sm, 0.25rem);
+}
+
+/* The landing's dark grounds (header, hero, dark shelf bands, the Voices
+   and Reading rooms cards, the closing call): warm sand-950 in light, true
+   black in dark, where an edge stands in for the contrast the page loses.
+   Keyed on <html> alone, so the header's own scoped dark theme can't flip
+   them. */
+:root {
+  --landing-ink: var(--color-sand-950);
+  --landing-raise: var(--color-sand-900);
+  --landing-edge: transparent;
+}
+html[data-reader-theme="dark"] {
+  --landing-ink: #000000;
+  --landing-raise: var(--reader-surface-hover);
+  --landing-edge: var(--reader-border);
 }
 
 /* The landing's hero cover wall (app/page.tsx): each row holds its covers

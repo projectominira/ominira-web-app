@@ -13,9 +13,9 @@ export default function ShowAll({ total, children }: { total: number; children: 
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="mt-3.5 h-10 cursor-pointer justify-self-start rounded-sm border border-[var(--color-app-border)] bg-transparent px-[18px] text-[14px] font-semibold text-[var(--color-app-text)] hover:bg-[var(--color-app-surface-muted)] min-[900px]:col-span-2"
+          className="mt-3.5 h-10 cursor-pointer justify-self-center rounded-sm border border-[var(--color-app-border)] bg-transparent px-[18px] text-[14px] font-semibold text-[var(--color-app-text)] hover:bg-[var(--color-app-surface-muted)] min-[900px]:col-span-2"
         >
-          Show all {total}
+          Show all
         </button>
       )}
     </>

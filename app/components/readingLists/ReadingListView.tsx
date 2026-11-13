@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import SearchableAppPage from "@/app/components/shell/SearchableAppPage";
-import ShareButton from "@/app/components/materials/ShareButton";
 import { Cover } from "@/app/components/quotes/QuotesDirectory";
 import JoinBar from "@/app/components/authors/JoinBar";
 import { PLATFORM_NAME, PLATFORM_URL } from "@/lib/config/platform";
@@ -19,9 +18,9 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 const dateLabel = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
 const LINK = "text-[var(--color-app-brand)] no-underline hover:text-brand-600 hover:underline";
-const H2 = "m-0 font-serif text-[24px]/[1.25] font-semibold text-[var(--color-app-text)]";
-const META = "text-[13px]/[1.4] font-medium text-[var(--color-app-text-secondary)]";
-const EYEBROW = "text-[11px] font-bold tracking-eyebrow uppercase";
+const H2 = "m-0 text-ui-md font-bold text-[var(--color-app-text)]";
+const META = "text-ui-sm text-[var(--color-app-text-secondary)]";
+const EYEBROW = "text-ui-xs font-bold tracking-eyebrow uppercase";
 
 /** A card in "More reading lists" (also the hub's rows). */
 export function ListCard({ l }: { l: ListedReadingList }) {
@@ -31,7 +30,7 @@ export function ListCard({ l }: { l: ListedReadingList }) {
       className="flex flex-col gap-2 rounded-sm border border-[var(--color-app-border)] p-[18px] text-[var(--color-app-text)] no-underline hover:border-[var(--color-app-text-muted)] hover:bg-[var(--color-app-surface-muted)]"
     >
       <span className={`${EYEBROW} text-[var(--color-app-text-muted)]`}>{monthLabel(l.day)}</span>
-      <span className="font-serif text-[18px]/[1.3] font-semibold">{l.title}</span>
+      <span className="font-serif text-[14px] font-semibold leading-tight">{l.title}</span>
       <span className={META}>{plural(l.books, "book")}</span>
     </Link>
   );
@@ -53,7 +52,7 @@ export default function ReadingListView({ l }: { l: ReadingListPage }) {
     description: paras[0],
     datePublished: liveAt(l.day),
     dateModified: l.updatedAt > liveAt(l.day) ? l.updatedAt : liveAt(l.day),
-    author: { "@type": "Organization", name: `${PLATFORM_NAME} editors`, url: PLATFORM_URL },
+    author: { "@type": "Organization", name: `Project ${PLATFORM_NAME}`, url: PLATFORM_URL },
     publisher: { "@id": `${PLATFORM_URL}/#organization` },
     mainEntity: {
       "@type": "ItemList",
@@ -74,8 +73,8 @@ export default function ReadingListView({ l }: { l: ReadingListPage }) {
   return (
     <SearchableAppPage className="pb-20">
       <JsonLd data={[jsonLd, breadcrumbs([["Reading lists", "/reading-lists"], [l.title, path]])]} />
-      <article className="mx-auto flex max-w-[720px] flex-col gap-[22px]">
-        <nav className="flex items-center gap-2 pt-2 text-[13px]/none font-medium text-[var(--color-app-text-muted)]">
+      <article className="flex flex-col gap-[22px]">
+        <nav className="flex items-center gap-2 pt-2 text-ui-sm text-[var(--color-app-text-muted)]">
           <Link href="/reading-lists" className="text-inherit no-underline hover:underline">Reading lists</Link>
           <span>/</span>
           <span>{month}</span>
@@ -83,26 +82,19 @@ export default function ReadingListView({ l }: { l: ReadingListPage }) {
 
         <div className="flex flex-col gap-3.5 pt-1.5">
           <span className={`${EYEBROW} text-[var(--color-app-brand)]`}>Reading list · {month}</span>
-          <h1 className="m-0 font-serif text-[32px]/[1.12] font-semibold tracking-[-0.01em] text-balance text-[var(--color-app-text)] min-[900px]:text-[44px]/[1.12]">{l.title}</h1>
+          <h1 className="m-0 text-display-sm text-pretty text-[var(--color-app-text)]">{l.title}</h1>
         </div>
         {paras.map((p, i) => (
-          <p key={i} className={`m-0 font-serif text-[17px]/[1.65] text-pretty text-[var(--color-app-text)] min-[900px]:text-[19px]/[1.65] ${i > 0 ? "-mt-2" : ""}`}>
+          <p key={i} className={`m-0 text-reading-sm text-pretty text-[var(--color-app-text)] ${i > 0 ? "-mt-2" : ""}`}>
             {p}
           </p>
         ))}
-        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[13px]/[1.4] font-medium text-[var(--color-app-text-secondary)]">
-          <span>{PLATFORM_NAME} editors</span>
+        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-ui-sm text-[var(--color-app-text-secondary)]">
+          <span>Project {PLATFORM_NAME}</span>
           <span aria-hidden className="size-[3px] rounded-full bg-[var(--color-app-text-muted)]" />
           <span>{dateLabel(l.day)}</span>
           <span aria-hidden className="size-[3px] rounded-full bg-[var(--color-app-text-muted)]" />
           <span>{plural(l.entries.length, "book")}</span>
-          <ShareButton
-            title={l.title}
-            text={`${l.title}, on ${PLATFORM_NAME}.`}
-            ariaLabel="Share this list"
-            labelClassName="hidden min-[900px]:inline"
-            className="ml-auto flex h-[34px] cursor-pointer items-center gap-1.5 rounded-sm border border-[var(--color-app-border)] bg-transparent px-3 text-[13px] font-medium text-[var(--color-app-text)] hover:bg-[var(--color-app-surface-muted)]"
-          />
         </div>
         <div aria-hidden className="flex pl-2.5">
           {l.entries.map((e) => (
@@ -116,27 +108,27 @@ export default function ReadingListView({ l }: { l: ReadingListPage }) {
             return (
               <section
                 key={e.book.id}
-                className="grid grid-cols-[72px_minmax(0,1fr)] gap-3.5 border-t border-[var(--color-app-border)] py-7 min-[900px]:grid-cols-[44px_96px_minmax(0,1fr)] min-[900px]:gap-5"
+                className="grid grid-cols-[80px_minmax(0,1fr)] gap-4 border-t border-[var(--color-app-border)] py-6 min-[900px]:grid-cols-[36px_80px_minmax(0,1fr)]"
               >
-                <span className="hidden pt-1 font-serif text-[22px]/none font-semibold text-[var(--color-app-brand)] min-[900px]:block">{String(i + 1).padStart(2, "0")}</span>
+                <span className="hidden pt-0.5 font-serif text-[15px]/none font-semibold text-[var(--color-app-brand)] min-[900px]:block">{String(i + 1).padStart(2, "0")}</span>
                 <Link href={href} tabIndex={-1} aria-hidden>
-                  <Cover src={resolveBookThumbnailSrc(e.book)} className="h-[108px] w-[72px] min-[900px]:h-36 min-[900px]:w-24" />
+                  <Cover src={resolveBookThumbnailSrc(e.book)} className="h-28 w-20" />
                 </Link>
-                <div className="flex min-w-0 flex-col gap-2">
-                  {e.tag && <span className={`${EYEBROW} self-start rounded-[3px] bg-brand-500/10 px-2 py-[5px] text-[var(--color-app-brand)]`}>{e.tag}</span>}
-                  <h2 className="m-0 font-serif text-[20px]/[1.3] font-semibold">
+                <div className="flex min-w-0 flex-col gap-1.5">
+                  {e.tag && <span className={`text-[10px] font-bold tracking-eyebrow uppercase self-start rounded-[3px] bg-brand-500/10 px-1.5 py-[3px] text-[var(--color-app-brand)]`}>{e.tag}</span>}
+                  <h2 className="m-0 font-serif text-[14px] font-semibold leading-tight">
                     <Link href={href} className="text-[var(--color-app-text)] no-underline hover:underline">{e.book.title}</Link>
                   </h2>
-                  <span className={META}>{[e.book.author, e.book.publishedYear].filter(Boolean).join(" · ")}</span>
-                  <p className="m-0 text-[15px]/[1.65] text-pretty text-[var(--color-app-text-secondary)]">{e.why}</p>
-                  <Link href={href} className={`inline-flex items-center gap-1.5 text-[14px]/none font-semibold ${LINK}`}>
-                    Read on {PLATFORM_NAME}
-                    <ChevronRight size={16} aria-hidden />
+                  <span className="text-[11px] font-semibold capitalize tracking-[0.04em] text-[var(--color-app-text-muted)]">{[e.book.author, e.book.publishedYear].filter(Boolean).join(" · ")}</span>
+                  <p className="m-0 text-[13px]/[1.5] text-pretty text-[var(--color-app-text-secondary)]">{e.why}</p>
+                  <Link href={href} className={`inline-flex items-center gap-1.5 text-[13px] font-semibold ${LINK}`}>
+                    Read this book
+                    <ChevronRight size={14} aria-hidden />
                   </Link>
                 </div>
                 {e.quote && (
                   <blockquote className="col-span-full m-0 mt-1.5 flex flex-col gap-3 border-l-2 border-brand-300 py-1 pl-5 min-[900px]:col-start-3 min-[900px]:-mt-1">
-                    <p className="m-0 font-serif text-[19px]/[1.55] text-pretty text-[var(--color-app-text)] min-[900px]:text-[22px]/[1.55]">“{e.quote.text}”</p>
+                    <p className="m-0 font-serif text-[15px]/[1.65] text-pretty text-[var(--color-app-text)]">“{e.quote.text}”</p>
                     <cite className={`not-italic ${META}`}>
                       {e.book.author},{" "}
                       <Link href={href} className={`font-semibold ${LINK}`}>{e.book.title}</Link>
@@ -155,7 +147,7 @@ export default function ReadingListView({ l }: { l: ReadingListPage }) {
           >
             <div className="flex flex-col gap-1.5">
               <span className={`${EYEBROW} text-[var(--color-app-text-muted)]`}>Go deeper</span>
-              <span className="font-serif text-[20px]/[1.3] font-semibold text-[var(--color-app-text)]">{l.deeper.title}</span>
+              <span className="font-serif text-[14px] font-semibold leading-tight text-[var(--color-app-text)]">{l.deeper.title}</span>
               <span className={META}>{plural(l.deeper.books, "book")} on the topic, in reading order</span>
             </div>
             {l.deeper.covers.length > 0 && (
@@ -179,7 +171,7 @@ export default function ReadingListView({ l }: { l: ReadingListPage }) {
           </section>
         )}
 
-        <JoinBar editorial>Read these books with comrades: notes on every page, and an African voice to listen in.</JoinBar>
+        <JoinBar editorial />
       </article>
     </SearchableAppPage>
   );

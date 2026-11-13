@@ -10,6 +10,8 @@ import { listTopics, type ListedTopic } from "@/lib/topics/guides";
 export const revalidate = 3600;
 
 const DESCRIPTION = "Reading guides to Pan-African, anti-colonial and liberation history and thought, and every collection in the Ominira library.";
+/** Shown under the H1; the longer DESCRIPTION is for search results. */
+const SUBHEADING = "Guided reading on liberation, from Africa and beyond.";
 
 export const metadata: Metadata = {
   title: "Topics",
@@ -34,11 +36,13 @@ export default async function TopicsPage() {
   const collections = topics.filter((t) => !t.guide);
   return (
     <SearchableAppPage className="pb-16">
-      <div className="mx-auto flex max-w-[980px] flex-col gap-5">
-        <header className="flex max-w-[720px] flex-col gap-3 pt-2">
-          <span className="text-[11px] font-bold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Library</span>
-          <h1 className="m-0 font-serif text-[24px]/[1.25] font-semibold md:text-[28px]/[1.2] text-[var(--color-app-text)]">Topics</h1>
-          <p className="m-0 text-[14px]/[1.6] text-[var(--color-app-text-secondary)]">{DESCRIPTION}</p>
+      <div className="flex flex-col gap-5">
+        <header className="flex flex-col gap-2 pt-2">
+          <span className="text-ui-xs font-bold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Library</span>
+          <div className="flex flex-col gap-1">
+            <h1 className="m-0 text-display-sm text-[var(--color-app-text)]">Topics</h1>
+            <p className="m-0 text-reading-sm text-pretty text-[var(--color-app-text-secondary)]">{SUBHEADING}</p>
+          </div>
         </header>
         {[
           { title: "Reading guides", list: guides },

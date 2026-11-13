@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { useAudioStore } from "@/stores/audio-store";
 import { useLayoutStore } from "@/stores/layout-store";
-import { useReaderOverlayStore } from "@/stores/reader-overlay-store";
 import { useReaderStore } from "@/stores/reader-store";
 
 // Matches both reader routes (app/read/[slug], the canonical/shareable URL,
@@ -28,14 +27,6 @@ function isReaderPath(pathname: string): boolean {
  * outside Reader's theme-scoped tree, so it sets the attribute itself, or
  * those variables resolve to nothing.
  *
- * Sidebar: every route except the reader has a persistent left sidebar
- * (app/components/shell/AppSidebar.tsx) at the 860px breakpoint — full width
- * would run the bar underneath it. pathname alone can't tell the standalone
- * /read page (no sidebar) apart from ReaderModal open over a sidebar-having
- * page: an intercepted (.)read/[slug] navigation moves the URL to
- * /read/[slug] either way. reader-overlay-store's `open` (set by ReaderModal)
- * is the source of truth for that.
- *
  * Bottom: floats above AppBottomNav (the mobile tab bar). In the reader,
  * AppBottomNav is unmounted or covered, and bottomNavHeight can go stale
  * there (unmounting doesn't reset it), so it's ignored while the reader is
@@ -46,14 +37,12 @@ function isReaderPath(pathname: string): boolean {
  */
 export function useBottomDock() {
   const pathname = usePathname();
-  const overlayOpen = useReaderOverlayStore((s) => s.open);
   const bottomNavHeight = useLayoutStore((s) => s.bottomNavHeight);
   const readerPanelOpen = useLayoutStore((s) => s.readerPanelOpen);
   const theme = useReaderStore((s) => s.theme);
 
   const readerActive = isReaderPath(pathname);
-  const hasSidebar = !readerActive || overlayOpen;
-  const className = `fixed left-0 right-0 z-50 ${hasSidebar ? "shell:left-[var(--app-sidebar-w)]" : ""} ${
+  const className = `fixed left-0 right-0 z-50 ${
     readerActive && readerPanelOpen ? "shell:right-95" : ""
   }`;
   return { theme, className, bottom: readerActive ? 0 : bottomNavHeight };

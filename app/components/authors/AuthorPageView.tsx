@@ -1,11 +1,11 @@
 import Link from "next/link";
 import SearchableAppPage from "@/app/components/shell/SearchableAppPage";
 import BookListRow from "@/app/components/shell/BookListRow";
-import ShareButton from "@/app/components/materials/ShareButton";
-import { Chip, QuoteCard } from "@/app/components/quotes/QuotesDirectory";
+import PillScrollRow from "@/app/components/shell/PillScrollRow";
+import { QuoteCard } from "@/app/components/quotes/QuotesDirectory";
 import { lifespan, type AuthorPage } from "@/lib/authors/authors";
 import { slugifyCategory } from "@/lib/categories/slug";
-import { PLATFORM_NAME, PLATFORM_URL } from "@/lib/config/platform";
+import { PLATFORM_URL } from "@/lib/config/platform";
 import { breadcrumbs, JsonLd } from "@/lib/seo/jsonLd";
 import JoinBar from "./JoinBar";
 
@@ -31,6 +31,26 @@ export function Portrait({ src, name, className }: { src: string | null; name: s
   );
 }
 
+const SITE_NAMES: Record<string, string> = { "wikipedia.org": "Wikipedia", "wikidata.org": "Wikidata", "britannica.com": "Britannica", "sahistory.org.za": "SA History Online", "blackpast.org": "BlackPast" };
+
+/** A source as its site's name ("Wikipedia", "britannica.com"), not its page title. */
+function siteName(url: string): string {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    const known = Object.keys(SITE_NAMES).find((d) => host === d || host.endsWith(`.${d}`));
+    return known ? SITE_NAMES[known] : host;
+  } catch {
+    return url;
+  }
+}
+
+/** The Commons page for an upload.wikimedia.org image (the original or a
+ * thumbnail), where its author and licence are given in full. */
+function commonsPage(src: string): string | null {
+  const m = src.match(/upload\.wikimedia\.org\/wikipedia\/commons\/(?:thumb\/)?[0-9a-f]\/[0-9a-f]{2}\/([^/]+)/);
+  return m ? `https://commons.wikimedia.org/wiki/File:${m[1]}` : null;
+}
+
 /** A section under the header, titled as the quote directory's "Quotes by
  * author". Set apart by space, not a rule: book rows carry their own. */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -45,6 +65,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function AuthorPageView({ a }: { a: AuthorPage }) {
   const url = `${PLATFORM_URL}/authors/${a.slug}`;
   const facts = [lifespan(a), a.role, a.places].filter(Boolean) as string[];
+  // One link per site, named by the site; the page title shows on hover.
+  const sources = a.sources
+    .map((s) => ({ ...s, label: siteName(s.url) }))
+    .filter((s, i, all) => all.findIndex((o) => o.label === s.label) === i);
+  // Its Commons page, or the image itself if the URL isn't one we can map.
+  const portrait = a.image && a.imageCredit ? (commonsPage(a.image) ?? a.image) : null;
   // schema.org Person, linked to Wikidata/Wikipedia, with their books.
   const wikipedia = a.sources.find((s) => /wikipedia\.org/.test(s.url))?.url;
   const jsonLd = {
@@ -70,21 +96,21 @@ export default function AuthorPageView({ a }: { a: AuthorPage }) {
   return (
     <SearchableAppPage className="pb-16">
       <JsonLd data={[jsonLd, breadcrumbs([["Authors", "/authors"], [a.name, `/authors/${a.slug}`]])]} />
-      <article className="mx-auto flex max-w-[980px] flex-col gap-5">
-        <nav className="flex items-center gap-2 pt-2 text-[13px] font-medium text-[var(--color-app-text-muted)]">
+      <article className="flex flex-col gap-5">
+        <nav className="flex items-center gap-2 pt-2 text-ui-sm text-[var(--color-app-text-muted)]">
           <Link href="/authors" className="text-inherit">Authors</Link>
           <span>/</span>
           <span>{a.name}</span>
         </nav>
 
-        <header className="flex max-w-[720px] flex-col gap-3">
+        <header className="flex flex-col gap-3">
           <div className="flex items-center gap-4 md:gap-5">
             {a.image && <Portrait src={a.image} name={a.name} className="size-20 md:size-24" />}
-            <div className="flex min-w-0 flex-col gap-2">
-              <span className="text-[11px] font-bold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Author</span>
-              <h1 className="m-0 font-serif text-[24px]/[1.25] font-semibold text-balance md:text-[28px]/[1.2] text-[var(--color-app-text)]">{a.name}</h1>
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <span className="text-ui-xs font-bold tracking-eyebrow text-[var(--color-app-brand)] uppercase">Author</span>
+              <h1 className="m-0 text-display-sm text-pretty text-[var(--color-app-text)]">{a.name}</h1>
               {facts.length > 0 && (
-                <p className="m-0 flex flex-wrap gap-x-2 gap-y-1 text-[13px]/[1.4] font-medium text-[var(--color-app-text-muted)]">
+                <p className="m-0 flex flex-wrap gap-x-2 gap-y-1 text-ui-sm text-[var(--color-app-text-muted)]">
                   {facts.map((f, i) => (
                     <span key={f} className="contents">
                       {i > 0 && <span aria-hidden>·</span>}
@@ -95,24 +121,33 @@ export default function AuthorPageView({ a }: { a: AuthorPage }) {
               )}
             </div>
           </div>
-          {a.bio && <p className="m-0 text-[15px]/[1.6] text-pretty whitespace-pre-line text-[var(--color-app-text-secondary)]">{a.bio}</p>}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <ShareButton title={`${a.name} on ${PLATFORM_NAME}`} text={`Books and quotes by ${a.name} on ${PLATFORM_NAME}.`} ariaLabel="Share this page" />
-            {a.sources.length > 0 && (
-              <span className="text-[12px]/[1.4] font-medium text-[var(--color-app-text-muted)]">
-                Sources:{" "}
-                {a.sources.map((s, i) => (
-                  <span key={s.url}>
-                    {i > 0 && ", "}
-                    <a href={s.url} rel="nofollow noopener" target="_blank" className="text-inherit underline">
-                      {s.title}
-                    </a>
-                  </span>
-                ))}
-                {a.imageCredit && <> · Portrait: {a.imageCredit}</>}
-              </span>
-            )}
-          </div>
+          {a.bio && <p className="m-0 text-reading-sm text-pretty whitespace-pre-line text-[var(--color-app-text)]">{a.bio}</p>}
+          {(sources.length > 0 || portrait) && (
+            <span className="text-ui-caption text-[var(--color-app-text-muted)]">
+              {sources.length > 0 && (
+                <>
+                  Sources:{" "}
+                  {sources.map((s, i) => (
+                    <span key={s.url}>
+                      {i > 0 && ", "}
+                      <a href={s.url} title={s.title} rel="nofollow noopener" target="_blank" className="text-inherit underline">
+                        {s.label}
+                      </a>
+                    </span>
+                  ))}
+                </>
+              )}
+              {portrait && (
+                <>
+                  {sources.length > 0 && " · "}
+                  Portrait:{" "}
+                  <a href={portrait} title={a.imageCredit} rel="nofollow noopener" target="_blank" className="text-inherit underline">
+                    Wikimedia Commons
+                  </a>
+                </>
+              )}
+            </span>
+          )}
         </header>
 
         <Section title={`Books by ${a.name}`}>
@@ -125,13 +160,13 @@ export default function AuthorPageView({ a }: { a: AuthorPage }) {
 
         {a.quotes.length > 0 && (
           <Section title="Quotes">
-            <div className="columns-1 gap-5 md:columns-2">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               {a.quotes.map((q) => (
                 <QuoteCard key={q.id} quote={q} />
               ))}
             </div>
             {a.moreQuotes && (
-              <Link href={`/quotes/${a.slug}`} className="text-[14px] font-semibold text-[var(--color-app-brand)]">
+              <Link href={`/quotes/${a.slug}`} className="text-ui-body font-semibold text-[var(--color-app-brand)]">
                 All quotes by {a.name}
               </Link>
             )}
@@ -154,17 +189,11 @@ export default function AuthorPageView({ a }: { a: AuthorPage }) {
 
         {a.topics.length > 0 && (
           <Section title="Topics">
-            <div className="flex flex-wrap gap-2">
-              {a.topics.map((t) => (
-                <Chip key={t} href={`/topics/${slugifyCategory(t)}`} on={false}>
-                  {t}
-                </Chip>
-              ))}
-            </div>
+            <PillScrollRow items={a.topics.map((t) => ({ key: t, label: t, active: false, href: `/topics/${slugifyCategory(t)}` }))} />
           </Section>
         )}
 
-        <JoinBar>Read {a.name} with comrades: notes on every page, and an African voice to listen in.</JoinBar>
+        <JoinBar editorial />
       </article>
     </SearchableAppPage>
   );

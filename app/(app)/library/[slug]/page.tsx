@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { getMaterialDetail, MaterialNotFoundError, type MaterialDetail } from "@/lib/materials/detail";
 import BookPage from "@/app/components/materials/BookPage";
 import BookRoomView from "@/app/components/materials/BookRoomView";
+import BookExtras from "@/app/components/materials/BookExtras";
+import { getBookExtras } from "@/lib/materials/extras";
 import { BOOK_ROOMS } from "@/lib/config/features";
 import { PLATFORM_NAME, PLATFORM_URL } from "@/lib/config/platform";
 import { resolveBookCoverSrc } from "@/lib/materials/image";
@@ -69,6 +71,7 @@ export default async function MaterialDetailPage({
     if (err instanceof MaterialNotFoundError) return missingBook(slug, bookPath);
     throw err;
   }
+  const extras = BOOK_ROOMS ? null : await getBookExtras(material);
   const blurb = blurbOf(material);
   const image = resolveBookCoverSrc(material);
   // schema.org Book, so search engines read title/author/cover directly.
@@ -94,7 +97,7 @@ export default async function MaterialDetailPage({
   return (
     <>
       <JsonLd data={[jsonLd, trail]} />
-      {BOOK_ROOMS ? <BookRoomView material={material} initialInfo={tab !== "room"} /> : <BookPage material={material} />}
+      {BOOK_ROOMS ? <BookRoomView material={material} initialInfo={tab !== "room"} /> : <BookPage material={material} extras={extras && <BookExtras extras={extras} title={material.title} author={material.author} />} />}
     </>
   );
 }

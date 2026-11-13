@@ -13,9 +13,9 @@ import { GUTTER } from "./styles";
 export default function Shelf({ title, line, href, dark = false, children }: { title: string; line: string; href: string; dark?: boolean; children: ReactNode }) {
   const row = useRef<HTMLDivElement>(null);
   const scroll = (dir: 1 | -1) => row.current?.scrollBy({ left: dir * row.current.clientWidth * 0.8, behavior: "smooth" });
-  const arrow = `flex size-10 cursor-pointer items-center justify-center rounded-full border bg-transparent p-0 text-current ${dark ? "border-white/16" : "border-sand-300"}`;
+  const arrow = `flex size-10 cursor-pointer items-center justify-center rounded-full border bg-transparent p-0 text-current ${dark ? "border-white/16" : "border-[var(--color-app-border)]"}`;
   return (
-    <section className={dark ? "bg-sand-950 py-8 text-sand-25 md:py-[clamp(40px,4.4vw,72px)]" : "py-8 md:py-[clamp(40px,4.4vw,72px)]"}>
+    <section className={dark ? "border-y border-[var(--landing-edge)] bg-[var(--landing-ink)] py-8 text-sand-25 md:py-[clamp(40px,4.4vw,72px)]" : "py-8 md:py-[clamp(40px,4.4vw,72px)]"}>
       <div className="mx-auto flex max-w-[1440px] flex-col gap-3.5 md:gap-5">
         <div className={`flex items-end justify-between gap-4 ${GUTTER}`}>
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-3.5 gap-y-1">
