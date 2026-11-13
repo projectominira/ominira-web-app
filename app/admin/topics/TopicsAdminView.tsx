@@ -1,11 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ExternalLink } from "lucide-react";
 import AdminPageHeader from "@/app/admin/AdminPageHeader";
-import { AdminSelect } from "@/app/admin/AdminControls";
 import TextAreaField from "@/app/components/auth/TextAreaField";
 import TextField from "@/app/components/auth/TextField";
 import type { AdminTopic } from "@/lib/topics/guides";
@@ -17,37 +15,22 @@ const secondary =
 
 const words = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
 
-/** Topic guides the connector drafted: edit the words, then approve to
- * publish the guide on /topics/<slug>. */
-export default function TopicsAdminView({ approved, topics }: { approved: boolean; topics: AdminTopic[] }) {
-  const router = useRouter();
+/** Topic guides the connector published on /topics/<slug>: edit the words,
+ * or remove a guide. */
+export default function TopicsAdminView({ topics }: { topics: AdminTopic[] }) {
   const [done, setDone] = useState<Set<string>>(new Set());
   const shown = topics.filter((t) => !done.has(t.id));
   return (
     <>
-      <AdminPageHeader
-        title="Topics"
-        subtitle={approved ? `${shown.length} approved topic guides` : `${shown.length} drafts to approve`}
-        actions={
-          <AdminSelect
-            value={approved ? "approved" : "draft"}
-            onChange={(v) => router.push(v === "approved" ? "/admin/topics?show=approved" : "/admin/topics")}
-            options={[
-              { value: "draft", label: "Drafts" },
-              { value: "approved", label: "Approved" },
-            ]}
-            label="Show"
-          />
-        }
-      />
+      <AdminPageHeader title="Topics" subtitle={`${shown.length} topic guides`} />
       {shown.length === 0 ? (
         <p className="py-10 text-center text-[14px] text-[var(--reader-text-muted)]">
-          {approved ? "No approved topic guides yet." : "No drafts. Ask your AI, through the Ominira connector, to write the topic guides."}
+          No topic guides yet. Ask your AI, through the Ominira connector, to write them.
         </p>
       ) : (
         <div className="flex flex-col gap-5">
           {shown.map((t) => (
-            <TopicCard key={t.id} topic={t} approved={approved} onDone={() => setDone((s) => new Set(s).add(t.id))} />
+            <TopicCard key={t.id} topic={t} onDone={() => setDone((s) => new Set(s).add(t.id))} />
           ))}
         </div>
       )}
@@ -55,7 +38,7 @@ export default function TopicsAdminView({ approved, topics }: { approved: boolea
   );
 }
 
-function TopicCard({ topic: t, approved, onDone }: { topic: AdminTopic; approved: boolean; onDone: () => void }) {
+function TopicCard({ topic: t, onDone }: { topic: AdminTopic; onDone: () => void }) {
   const [title, setTitle] = useState(t.title);
   const [intro, setIntro] = useState(t.intro);
   const [stages, setStages] = useState(t.stages);
@@ -66,19 +49,19 @@ function TopicCard({ topic: t, approved, onDone }: { topic: AdminTopic; approved
   const setWhy = (i: number, slug: string, why: string) =>
     setStages((all) => all.map((s, j) => (j === i ? { ...s, books: s.books.map((b) => (b.slug === slug ? { ...b, why } : b)) } : s)));
 
-  const save = async (status?: "approved" | "draft" | "none") => {
+  const save = async (remove = false) => {
+    if (remove && !window.confirm(`Remove the ${t.name} guide from the site?`)) return;
     setBusy(true);
     setMessage(null);
     try {
-      const body =
-        status === "none"
-          ? { status }
-          : { title, intro, stages: stages.map((s) => ({ title: s.title, intro: s.intro, books: s.books.map((b) => ({ slug: b.slug, why: b.why })) })), ...(status && { status }) };
-      const response = await fetch(`/api/admin/topics/${t.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const response = await fetch(`/api/admin/topics/${t.id}`, {
+        method: remove ? "DELETE" : "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: remove ? undefined : JSON.stringify({ title, intro, stages: stages.map((s) => ({ title: s.title, intro: s.intro, books: s.books.map((b) => ({ slug: b.slug, why: b.why })) })) }),
+      });
       const result = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) throw new Error(result?.error || "Please try again.");
-      // Approving a draft, unpublishing or discarding moves it off this list.
-      if (status && (status !== "approved" || !approved)) onDone();
+      if (remove) onDone();
       else setMessage("Saved.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Please try again.");
@@ -94,11 +77,9 @@ function TopicCard({ topic: t, approved, onDone }: { topic: AdminTopic; approved
           <h2 className="m-0 font-serif text-[20px] font-semibold text-[var(--reader-text)]">{t.name}</h2>
           <span className="text-[12px] font-medium text-[var(--reader-text-muted)]">{t.category ? "Library category" : "Broad topic"} · /topics/{t.slug}</span>
         </span>
-        {(approved || t.category) && (
-          <Link href={`/topics/${t.slug}`} target="_blank" className="inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--reader-text-muted)] hover:text-[var(--reader-text)]">
-            Page <ExternalLink size={12} />
-          </Link>
-        )}
+        <Link href={`/topics/${t.slug}`} target="_blank" className="inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--reader-text-muted)] hover:text-[var(--reader-text)]">
+          Page <ExternalLink size={12} />
+        </Link>
       </header>
       <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
       <TextAreaField label="Introduction" hint={`${words(intro)} words`} rows={8} value={intro} onChange={(e) => setIntro(e.target.value)} />
@@ -125,18 +106,8 @@ function TopicCard({ topic: t, approved, onDone }: { topic: AdminTopic; approved
         </section>
       ))}
       <footer className="flex flex-wrap items-center gap-2">
-        {approved ? (
-          <>
-            <button type="button" className={primary} disabled={busy} onClick={() => save()}>Save</button>
-            <button type="button" className={secondary} disabled={busy} onClick={() => save("draft")}>Unpublish</button>
-          </>
-        ) : (
-          <>
-            <button type="button" className={primary} disabled={busy || !intro.trim()} onClick={() => save("approved")}>Approve</button>
-            <button type="button" className={secondary} disabled={busy} onClick={() => save()}>Save draft</button>
-            <button type="button" className={secondary} disabled={busy} onClick={() => save("none")}>Discard</button>
-          </>
-        )}
+        <button type="button" className={primary} disabled={busy || !intro.trim()} onClick={() => save()}>Save</button>
+        <button type="button" className={secondary} disabled={busy} onClick={() => save(true)}>Remove</button>
         {message && <span className="text-[12px] font-semibold text-[var(--reader-text-muted)]">{message}</span>}
       </footer>
     </article>

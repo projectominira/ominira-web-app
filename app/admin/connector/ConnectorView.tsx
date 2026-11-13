@@ -120,8 +120,8 @@ function ActivityRow({ item }: { item: ConnectorActivity }) {
         : item.kind === "topics"
           ? [
               <Compass key="i" size={15} />,
-              <>Drafted the {item.name} topic guide</>,
-              [{ key: item.slug, label: item.name, detail: "For approval in Topics" }],
+              <>Published the {item.name} topic guide</>,
+              [{ key: item.slug, label: item.name, detail: `/topics/${item.slug}` }],
             ]
         : item.kind === "authors"
           ? [

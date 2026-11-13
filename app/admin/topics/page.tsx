@@ -9,9 +9,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/** Topic guides the connector drafted, to edit and approve (seo-spec C3). */
-export default async function AdminTopicsPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
-  const approved = (await searchParams).show === "approved";
-  const topics = await adminTopics(approved ? "approved" : "draft");
-  return <TopicsAdminView approved={approved} topics={topics} />;
+/** Topic guides the connector published, to edit or remove (seo-spec C3). */
+export default async function AdminTopicsPage() {
+  return <TopicsAdminView topics={await adminTopics()} />;
 }

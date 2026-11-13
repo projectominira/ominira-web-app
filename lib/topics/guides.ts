@@ -12,9 +12,10 @@ import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { allRows } from "@/lib/supabase/allRows";
 
 // Topic pages (seo-spec.md C3): /topics/<slug>, a curated guide to a broad
-// topic or a library category. The connector drafts the guide (write_topic);
-// an editor approves it in /admin/topics. Every category has a page from the
-// start (its books); a broad topic only once its guide is approved.
+// topic or a library category. The connector writes the guide (write_topic)
+// and it goes live at once, like quotes; editors can edit or remove it in
+// /admin/topics. Every category has a page from the start (its books); a broad
+// topic once it has a guide.
 // migrations/20261214_topic_guides.sql.
 
 const db = () => getSupabaseAdminClient();
@@ -62,8 +63,7 @@ export const WriteTopicInput = z.object({
 });
 export type WriteTopicInput = z.input<typeof WriteTopicInput>;
 
-/** Saves the connector's draft of a topic guide for an editor to approve.
- * A string is a problem for the AI to fix. */
+/** Saves and publishes the connector's topic guide. A string is a problem for the AI to fix. */
 export async function writeTopic(raw: WriteTopicInput): Promise<{ slug: string; name: string } | string> {
   const input = WriteTopicInput.parse(raw);
   let category: string | null = null;
@@ -94,15 +94,16 @@ export async function writeTopic(raw: WriteTopicInput): Promise<{ slug: string; 
   const mine = existing.find((g) => (category ? g.category === category : g.slug === slug));
   if (existing.some((g) => g !== mine && g.slug === slug)) return `"${name}" is taken by another guide${category ? "" : " (a category's): pass category: true"}.`;
 
+  const now = new Date().toISOString();
   const fields = {
     name,
     category,
     title: input.title,
     intro: input.intro,
     stages: input.stages.map((s) => ({ title: s.title, intro: s.intro, books: s.books.map((b) => ({ slug: b.book, why: b.why })) })),
-    status: "draft" as const,
-    approved_at: null,
-    updated_at: new Date().toISOString(),
+    status: "approved" as const,
+    approved_at: now,
+    updated_at: now,
   };
   const { error: saveError } = mine
     ? await db().from("topic_guides").update(fields).eq("id", mine.id)
@@ -111,12 +112,12 @@ export async function writeTopic(raw: WriteTopicInput): Promise<{ slug: string; 
   return { slug: mine?.slug ?? slug, name };
 }
 
-/** Every category with its book count and guide status, then the broad
- * topics already drafted: what to write next. */
+/** Every category with its book count and whether it has a guide, then the
+ * broad topics already written: what to write next. */
 export async function topicsToWrite() {
   const [categories, guides, rows] = await Promise.all([
     getCategories(),
-    db().from("topic_guides").select("slug, name, category, status, updated_at"),
+    db().from("topic_guides").select("slug, name, category, updated_at").eq("status", "approved"),
     allRows((from, to) => db().from("materials").select("id, categories").eq("status", "published").eq("visibility", "public").order("id").range(from, to)),
   ]);
   if (guides.error) throw guides.error;
@@ -124,9 +125,9 @@ export async function topicsToWrite() {
   for (const r of rows) for (const c of (r.categories as string[] | null) ?? []) counts.set(c, (counts.get(c) ?? 0) + 1);
   const byCategory = new Map(guides.data.filter((g) => g.category).map((g) => [g.category!, g]));
   return {
-    categories: categories.map((c) => ({ name: c, books: counts.get(c) ?? 0, guide: byCategory.get(c)?.status ?? "none" })),
-    broad_topics: guides.data.filter((g) => !g.category).map((g) => ({ name: g.name, slug: g.slug, guide: g.status, updated: g.updated_at.slice(0, 10) })),
-    note: "Write a guide for each category with guide: none (most books first), and for broad topics the editor names or the brief suggests. Sending again replaces a draft. Resend an approved guide only when the editor asks: it comes off the site until approved again.",
+    categories: categories.map((c) => ({ name: c, books: counts.get(c) ?? 0, guide: byCategory.has(c) })),
+    broad_topics: guides.data.filter((g) => !g.category).map((g) => ({ name: g.name, slug: g.slug, updated: g.updated_at.slice(0, 10) })),
+    note: "Write a guide for each category with guide: false (most books first), and for broad topics the editor names or the brief suggests. Guides go live at once. Rewrite an existing guide only when the editor asks: sending again replaces it.",
   };
 }
 
@@ -318,16 +319,15 @@ export type AdminTopic = {
   slug: string;
   name: string;
   category: string | null;
-  status: "draft" | "approved";
   title: string;
   intro: string;
   stages: { title: string; intro: string; books: { slug: string; title: string; why: string }[] }[];
   updatedAt: string;
 };
 
-/** Drafted or approved guides, newest change first, with book titles. */
-export async function adminTopics(status: "draft" | "approved"): Promise<AdminTopic[]> {
-  const { data, error } = await db().from("topic_guides").select("*").eq("status", status).order("updated_at", { ascending: false }).limit(200);
+/** Published guides, newest change first, with book titles. */
+export async function adminTopics(): Promise<AdminTopic[]> {
+  const { data, error } = await db().from("topic_guides").select("*").eq("status", "approved").order("updated_at", { ascending: false }).limit(200);
   if (error) throw error;
   const slugs = [...new Set(data.flatMap((g) => stagesOf(g.stages).flatMap((s) => s.books.map((b) => b.slug))))];
   const titles = new Map<string, string>();
@@ -341,7 +341,6 @@ export async function adminTopics(status: "draft" | "approved"): Promise<AdminTo
     slug: g.slug,
     name: g.name,
     category: g.category,
-    status: g.status,
     title: g.title,
     intro: g.intro,
     stages: stagesOf(g.stages).map((s) => ({ ...s, books: s.books.map((b) => ({ ...b, title: titles.get(b.slug) ?? `${b.slug} (gone)` })) })),
@@ -357,24 +356,19 @@ export const TopicEdit = z.object({
     .array(z.object({ title: z.string().trim().min(1).max(60), intro: z.string().trim().max(300), books: z.array(z.object({ slug: z.string(), why: z.string().trim().max(400) })).max(10) }))
     .max(4)
     .optional(),
-  /** approved: publish it; draft: take it back off the page; none: discard it. */
-  status: z.enum(["approved", "draft", "none"]).optional(),
 });
 
-/** An editor's edit and/or approval. False when there's no such guide. */
+/** An editor's edit. False when there's no such guide. */
 export async function editTopic(id: string, edit: z.infer<typeof TopicEdit>): Promise<boolean> {
-  if (edit.status === "none") {
-    const { data, error } = await db().from("topic_guides").delete().eq("id", id).select("id");
-    if (error) throw error;
-    return data.length > 0;
-  }
   const now = new Date().toISOString();
-  const { status, ...fields } = edit;
-  const { data, error } = await db()
-    .from("topic_guides")
-    .update({ ...fields, ...(status && { status, approved_at: status === "approved" ? now : null }), updated_at: now })
-    .eq("id", id)
-    .select("id");
+  const { data, error } = await db().from("topic_guides").update({ ...edit, approved_at: now, updated_at: now }).eq("id", id).select("id");
+  if (error) throw error;
+  return data.length > 0;
+}
+
+/** Takes a guide off the site for good. False when there's no such guide. */
+export async function removeTopic(id: string): Promise<boolean> {
+  const { data, error } = await db().from("topic_guides").delete().eq("id", id).select("id");
   if (error) throw error;
   return data.length > 0;
 }

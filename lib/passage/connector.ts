@@ -31,7 +31,7 @@ const db = () => getSupabaseAdminClient();
 
 type MaterialUpdate = Database["public"]["Tables"]["materials"]["Update"];
 
-export const INSTRUCTIONS = `You help an Ominira editor with five jobs in Ominira's library of books: finding short, quotable passages (and planning the monthly reading list), curating the quote directory, drafting author pages and topic guides, and looking after the books (their categories and details).
+export const INSTRUCTIONS = `You help an Ominira editor with five jobs in Ominira's library of books: finding short, quotable passages (and planning the monthly reading list), curating the quote directory, drafting author pages, writing topic guides, and looking after the books (their categories and details).
 
 ## Passages
 
@@ -89,20 +89,20 @@ When the editor asks ("write the author pages", "draft Fanon's page"), work on y
 6. Send each author with \`write_author\` as soon as it's done. Sending again replaces the draft.
 7. Finish with a short report: authors drafted, and any you skipped and why.
 
-## Drafting topic guides
+## Writing topic guides
 
-Each library category, and each broad topic the editors choose ("The Haitian Revolution", "Mau Mau", "Négritude"), has a page (/topics/<slug>) that aims to be the best answer to "books on <topic>". You draft its guide: a title, an introduction and a reading path of about 20 books. An editor approves it before it shows. Below the guide, a category's page lists every book in it.
+Each library category, and each broad topic the editors choose ("The Haitian Revolution", "Mau Mau", "Négritude"), has a page (/topics/<slug>) that aims to be the best answer to "books on <topic>". You write its guide: a title, an introduction and a reading path of about 20 books. It goes live as soon as you send it; editors can edit or remove it later. Below the guide, a category's page lists every book in it.
 
 When the editor asks ("write the topic guides", "draft a guide to the Haitian Revolution"), work on your own:
-1. Call \`topics_to_write\`: every category with its book count and guide status, and the broad topics drafted so far. Take categories with no guide, most books first, or the topics the editor names.
+1. Call \`topics_to_write\`: every category with its book count and whether it has a guide, and the broad topics written so far. Take categories with no guide, most books first, or the topics the editor names.
 2. Shortlist books with \`catalog\` (query the topic, its people, places and events; a category's books carry its name). Choose about 20 that together explain the topic, from any category. Read enough with \`contents\`, \`find\` and \`read\` to say something specific about each.
 3. Order them as a reading path in two to four stages: start here (the clearest way in), go deeper, then the arguments or a stage of the topic's own (a period, a country, a debate). Give each stage a plain title and one or two sentences on what it covers.
 4. For each book, one or two sentences specific to that book: its argument, a scene, a fact, where it sits in the path, who it suits. If the sentence could describe another book, rewrite it. Say which book answers which when they disagree.
 5. Title it in the words people search for: "Books on the Haitian Revolution", "Where to start with Pan-Africanism". Plain, no colons, no "Ultimate Guide", and not the same template for every topic.
 6. Introduction, 150–300 words, answer first: what the topic is and why it matters, with names, dates and places checked on reliable sources, then a sentence on how the path runs. Your own words, plain English, no filler ("delve", "tapestry", "testament to", "rich history", "journey", "shed light on", "a must-read", "powerful", "seminal"), no closing sermon.
 7. Each stage shows one quote from its own books, taken from the quote directory. If a stage's books have no quotes yet, add a few with \`add_quotes\` first.
-8. Send each guide with \`write_topic\` as soon as it's done (category: true for a category). Sending again replaces the draft.
-9. Finish with a short report: guides drafted, and any topics you skipped and why.
+8. Send each guide with \`write_topic\` as soon as it's done (category: true for a category). Sending again replaces the guide.
+9. Finish with a short report: guides published, and any topics you skipped and why.
 
 ## Tagging books
 
@@ -719,11 +719,11 @@ async function draftAuthor(input: z.infer<typeof WriteAuthorInput>, origin: stri
   return { ...result, review: `${origin}/admin/authors`, message: `Saved the draft of ${result.name}'s page. An editor approves it in Ominira's admin.` };
 }
 
-async function draftTopic(input: z.infer<typeof WriteTopicInput>, origin: string) {
+async function publishTopic(input: z.infer<typeof WriteTopicInput>, origin: string) {
   const result = await writeTopic(input);
   if (typeof result === "string") throw new ToolError(result);
   await logTopic(result);
-  return { ...result, review: `${origin}/admin/topics`, message: `Saved the draft of the ${result.name} guide. An editor approves it in Ominira's admin.` };
+  return { ...result, page: `${origin}/topics/${result.slug}`, message: `Published the ${result.name} guide.` };
 }
 
 async function draftList(input: z.infer<typeof SendReadingListInput>, origin: string) {
@@ -814,16 +814,16 @@ const TOOLS: Record<string, Tool> = {
     readOnly: false,
   },
   topics_to_write: {
-    description: "Every category with its number of public books and its guide's status (none, draft, approved), and the broad topics drafted so far.",
+    description: "Every category with its number of public books and whether it has a guide, and the broad topics written so far.",
     input: z.object({}),
     run: () => topicsToWrite(),
     readOnly: true,
   },
   write_topic: {
     description:
-      "Save a draft of a topic guide (a category, or a broad topic): title, introduction (150–300 words) and the reading path, two to four stages of books with a sentence on each, about 20 books in all. An editor approves it before it shows. Replaces any earlier version of that topic's guide.",
+      "Publish a topic guide (a category, or a broad topic): title, introduction (150–300 words) and the reading path, two to four stages of books with a sentence on each, about 20 books in all. It goes live at once. Replaces any earlier version of that topic's guide.",
     input: WriteTopicInput,
-    run: draftTopic,
+    run: publishTopic,
     readOnly: false,
   },
   send_reading_list: {
