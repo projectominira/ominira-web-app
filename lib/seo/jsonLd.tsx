@@ -1,13 +1,15 @@
 import { appIconSrc } from "@/lib/config/brand-assets";
 import { PLATFORM_NAME, PLATFORM_URL } from "@/lib/config/platform";
+import { LIVE_SOCIALS } from "@/lib/config/socials";
 
 // schema.org structured data (seo-spec.md T9), shared by every public page.
 
 /**
  * Ominira's other profiles: the Wikidata item (seo-spec §7) and the social
- * accounts. Add each as it exists; it goes into the home page's Organization.
+ * accounts (lib/config/socials). It goes into the home page's Organization.
  */
-export const ORG_SAME_AS: string[] = [];
+const WIKIDATA = "https://www.wikidata.org/wiki/Q142143474";
+export const ORG_SAME_AS: string[] = [WIKIDATA, ...LIVE_SOCIALS.map((s) => s.url)];
 
 /** One or more schema.org objects as a JSON-LD script tag. */
 export function JsonLd({ data }: { data: object | object[] }) {
