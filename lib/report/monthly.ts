@@ -34,8 +34,8 @@ export type ReportData = {
   /** Each week since launch (Mon–Sun) up to the period's end, labelled by its Sunday. */
   /** Readers and hours are null in weeks before they were recorded. */
   weeks: { ending: LocalDay; members: number; target: number | null; readers: number | null; hours: number | null }[];
-  /** Public books in the library at the period's end, and added in it; the same for the period before. */
-  library: { books: number; added: number; booksBefore: number; addedBefore: number };
+  /** Public books in the library at the period's end, and added in it. For the summary. */
+  library: { books: number; added: number };
   /** The month's commits on GitHub, to write the updates from. */
   commits: string;
 };
@@ -98,13 +98,12 @@ export async function reportData(period: Period): Promise<ReportData> {
   const end = addDays(period.start, period.days);
   // The whole run since launch, for the weekly curves: whole weeks only.
   const span = Math.ceil(daysBetween(LAUNCH, end) / 7) * 7;
-  const [m, run, atEnd, atStart, atPrevStart] = await Promise.all([
+  const [m, run, atEnd, atStart] = await Promise.all([
     getPeriodMetrics(period, previous),
     // Its comparison is unused: one day keeps it cheap.
     getPeriodMetrics({ view: "week", start: LAUNCH, days: span }, { view: "week", start: LAUNCH, days: 1 }),
     booksBefore(end),
     booksBefore(period.start),
-    booksBefore(previous.start),
   ]);
 
   let members = run.membersAtStart;
@@ -124,7 +123,7 @@ export async function reportData(period: Period): Promise<ReportData> {
     before: figures(m, false),
     target: Math.round(targetOn(addDays(end, -1))),
     weeks,
-    library: { books: atEnd, added: atEnd - atStart, booksBefore: atStart, addedBefore: atStart - atPrevStart },
+    library: { books: atEnd, added: atEnd - atStart },
     commits: `https://github.com/${REPO}/commits/main/?since=${period.start}&until=${addDays(end, -1)}`,
   };
 }
@@ -164,12 +163,6 @@ export function reportPdf(data: ReportData, text: ReportText): Buffer {
     ...(now.listenSeconds !== null ? [row("Listened (audio)", pct(now.listenSeconds / (now.seconds || 1)), before.listenSeconds !== null ? pct(before.listenSeconds / (before.seconds || 1)) : "–", "")] : []),
   ];
 
-  const lib = data.library;
-  const library = [
-    row("Books in the library", count(lib.books), count(lib.booksBefore), change(lib.books, lib.booksBefore)),
-    row("Books added", count(lib.added), count(lib.addedBefore), change(lib.added, lib.addedBefore)),
-  ];
-
   // Days of the month with reading time recorded: from TIME_SINCE to its end, within the month.
   const timeDays = Math.max(0, Math.min(data.period.days, daysBetween(TIME_SINCE, addDays(data.period.start, data.period.days))));
 
@@ -180,7 +173,6 @@ export function reportPdf(data: ReportData, text: ReportText): Buffer {
     updates: text.updates,
     membership,
     readership,
-    library,
     caveats: [
       ...(!readersThen ? [`Active readers were first recorded on ${dayMonth(READERS_SINCE)}, so there is no ${data.previousLabel} comparison.`] : []),
       ...(timeDays < data.period.days ? [`Reading time was first recorded on ${dayMonth(TIME_SINCE)}, so it covers only ${timeDays} day${timeDays === 1 ? "" : "s"} of ${data.label}.`] : []),

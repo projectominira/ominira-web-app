@@ -97,9 +97,6 @@ Hello comrades. Ahead of our meeting, here is the update on Ominira for #d.label
   chart("Reading hours per week", d.weeks, ((values: d.hours, color: ink),)),
 )
 
-== Library
-#figures(d.library)
-
 == Updates
 Here is what we shipped in #d.label:
 #v(0.6em)
