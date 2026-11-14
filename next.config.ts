@@ -8,7 +8,8 @@ const nextConfig: NextConfig = {
   },
   // PDFium's Node build loads its pdfium.wasm from beside itself
   // (lib/passage/text.ts), which a bundled copy can't.
-  serverExternalPackages: ["@embedpdf/pdfium"],
+  // Typst's compiler is a native addon (the monthly report, lib/report/monthly.ts).
+  serverExternalPackages: ["@embedpdf/pdfium", "@myriaddreamin/typst-ts-node-compiler"],
   turbopack: {
     root: path.resolve(__dirname),
     // pdf.js (used only by the upload parser, lib/book/pdfParser.ts — the

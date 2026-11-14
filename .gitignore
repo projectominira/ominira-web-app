@@ -93,3 +93,6 @@ remotion/
 # local credentials (Search Console service account key, etc.)
 /secrets/
 /seo-reports/
+
+# monthly reports (scripts/monthly-report.ts)
+/reports

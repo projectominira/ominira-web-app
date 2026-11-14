@@ -19,6 +19,10 @@ import { topicsToWrite, writeTopic, WriteTopicInput } from "@/lib/topics/guides"
 import { listsForPlanning, sendReadingList, SendReadingListInput } from "@/lib/readingLists/lists";
 import { passageDay } from "@/lib/rooms/passage";
 import { addDays } from "@/lib/time/zone";
+import { dashboardToday } from "@/lib/metrics/dashboard";
+import { monthPeriod, periodOf, shift, type Period } from "@/lib/metrics/period";
+import { reportData, reportPdf } from "@/lib/report/monthly";
+import { cdnUrl, putObject } from "@/lib/storage/r2";
 import { isScanned, loadBookText, normalise, type BookText, type TextBlock } from "./text";
 
 // The tools the Ominira connector (passage-spec §6) gives an editor's AI:
@@ -31,7 +35,7 @@ const db = () => getSupabaseAdminClient();
 
 type MaterialUpdate = Database["public"]["Tables"]["materials"]["Update"];
 
-export const INSTRUCTIONS = `You help an Ominira editor with five jobs in Ominira's library of books: finding short, quotable passages (and planning the monthly reading list), curating the quote directory, writing author pages and topic guides, and looking after the books (their categories and details).
+export const INSTRUCTIONS = `You help an Ominira editor with six jobs in Ominira's library of books: finding short, quotable passages (and planning the monthly reading list), curating the quote directory, writing author pages and topic guides, looking after the books (their categories and details), and writing the monthly report for MAE leadership.
 
 ## Passages
 
@@ -130,7 +134,18 @@ When the editor asks in any words ("fix books with wrong details", "tidy the aut
    - Pirate-library names, hashes and file details never belong in a book: strip "Z-Library", "z-lib.org", "1lib", "Anna's Archive", "PDFDrive", ISBNs, 32-character hashes and publisher/year tails from titles, and pass \`fix_slug: true\` for every book whose hints say its slug carries them. The slug is remade from the (fixed) title and the old link redirects.
    Check with a web search when unsure. If still unsure, leave the book and say so.
 3. Send the fixes with \`edit_books\` as you go, up to 100 a call, passing only the fields that change.
-4. Finish with a short report: how many books you fixed, a few examples, and any you left for the editor. Every change, before and after, is kept in the Connector history.`;
+4. Finish with a short report: how many books you fixed, a few examples, and any you left for the editor. Every change, before and after, is kept in the Connector history.
+
+## Monthly report
+
+A PDF for MAE leadership on how Ominira did in a month: membership, readership and what shipped. A snapshot: not verbose, not razor thin.
+
+When the editor asks ("write the October report", "monthly report"):
+1. Call \`report_figures\` for the month (last month if none is named). It gives the figures, the weekly curves and a link to the month's commits on GitHub (a public repo). Open that link and read every page of it (GitHub shows about 35 commits a page; follow "Older"). If you can't open it, ask the editor what shipped.
+2. Write the summary: 4–6 sentences in plain English, first person plural, facts from the figures only. Open with what kind of month it was, then members against the 10%-a-week target, then readership (monthly and daily active readers, the share of members who read, reading time), then what the month's work was about. Bold the one or two figures that matter (\`*135*\`). Say plainly when a figure covers part of the month (the figures say when something was first recorded).
+3. Write the updates from the \`feat:\` commits: features members would notice, grouped (many commits make one line), 5–10 lines, each "*Name:* what it lets members do." in plain words, no code terms. Leave out fixes, admin tools, infrastructure and anything members can't see, unless it changed what they get (offline reading, faster narration). Commits are developers' notes: never copy them.
+4. Pass visitors and page views only if the editor gives them (from Vercel Analytics).
+5. Call \`make_report\` and give the editor the link. They may ask for changes: call it again with the new text.`;
 
 /** About 4 characters a token. */
 const tokens = (chars: number) => Math.ceil(chars / 4);
@@ -733,6 +748,42 @@ async function draftList(input: z.infer<typeof SendReadingListInput>, origin: st
   return { ...result, review: `${origin}/admin/reading-lists`, message: `Saved the draft of "${result.title}" for ${result.day}. An editor approves it in Ominira's admin; it goes live at 07:00 Lagos that day.` };
 }
 
+const ReportMonth = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional().describe("The month, as YYYY-MM. Leave out for last month.");
+
+/** The month asked for, or last month; not one that hasn't begun. */
+function reportPeriod(month: string | undefined): Period {
+  const today = dashboardToday();
+  const p = month ? monthPeriod(+month.slice(0, 4), +month.slice(5, 7)) : shift(periodOf("month", today), -1);
+  if (p.start > today) throw new ToolError(`${month} hasn't begun.`);
+  return p;
+}
+
+const ReportFigures = z.object({ month: ReportMonth });
+
+const MakeReport = z.object({
+  month: ReportMonth,
+  summary: z.string().trim().min(50).max(2000).describe("Typst markup: 4–6 sentences. *bold* for the key figures."),
+  updates: z.array(z.string().trim().min(5).max(300)).min(1).max(15).describe('Typst markup, one line per feature: "*Name:* what it lets members do."'),
+  visitors: z.int().min(1).optional().describe("Visitors in the month, from Vercel Analytics, if the editor gives them."),
+  page_views: z.int().min(1).optional().describe("Page views in the month, from Vercel Analytics, if the editor gives them."),
+});
+
+async function makeReport(input: z.infer<typeof MakeReport>) {
+  const period = reportPeriod(input.month);
+  const data = await reportData(period);
+  let pdf: Buffer;
+  try {
+    pdf = reportPdf(data, { summary: input.summary, updates: input.updates, visitors: input.visitors, pageViews: input.page_views });
+  } catch (err) {
+    // Typst errors are in the editor's markup: send them back to correct.
+    throw new ToolError(`The report didn't compile: ${err instanceof Error ? err.message : String(err)}. Check the markup (an unmatched * or _, or a stray # or $).`);
+  }
+  // Unguessable key: the bucket is public through the CDN, and the link should outlive a presign.
+  const key = `reports/${period.start.slice(0, 7)}-${crypto.randomUUID()}.pdf`;
+  await putObject(key, pdf, "application/pdf");
+  return { pdf: cdnUrl(key), message: `The ${data.label} report is ready.` };
+}
+
 // ---- Registry -------------------------------------------------------------
 
 type Tool = { description: string; input: z.ZodType; run: (input: never, origin: string) => Promise<unknown>; readOnly: boolean };
@@ -831,6 +882,18 @@ const TOOLS: Record<string, Tool> = {
       "Save a draft of the month's reading list: title, publish day, the key date it's tied to (if any), introduction (100–200 words) and 6–12 books in reading order with two or three sentences on each. An editor approves it; it goes live at 07:00 Lagos on its day. Sending the same title again replaces the draft.",
     input: SendReadingListInput,
     run: draftList,
+    readOnly: false,
+  },
+  report_figures: {
+    description: "Call first for the monthly report: a month's membership and readership figures, the weekly curves since launch, and a link to the month's commits on GitHub to write the updates from.",
+    input: ReportFigures,
+    run: (i: z.infer<typeof ReportFigures>) => reportData(reportPeriod(i.month)),
+    readOnly: true,
+  },
+  make_report: {
+    description: "Set the monthly report as a PDF from the month's figures and your summary and updates (Typst markup), and get its link. Calling again makes a new PDF.",
+    input: MakeReport,
+    run: makeReport,
     readOnly: false,
   },
   send_to_ominira: {
