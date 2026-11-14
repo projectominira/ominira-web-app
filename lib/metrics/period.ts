@@ -90,7 +90,7 @@ export function dashboardHref(p: Period, vs: Versus, current: Period): string {
   const q = new URLSearchParams();
   if (p.view === "month") q.set("view", "month");
   if (periodParam(p) !== periodParam(current)) q.set("period", periodParam(p));
-  if (vs !== "prev") q.set("vs", vs);
+  if (vs !== "none") q.set("vs", vs);
   const s = q.toString();
   return s ? `/admin?${s}` : "/admin";
 }

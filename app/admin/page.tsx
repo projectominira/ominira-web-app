@@ -46,7 +46,8 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   const today = dashboardToday();
   const view: View = params.view === "month" ? "month" : "week";
   const period = parsePeriod(view, params.period, today) ?? periodOf(view, today);
-  const vs: Versus = params.vs || "prev";
+  // No comparison unless one is picked.
+  const vs: Versus = params.vs || "none";
   const compare = comparisonOf(period, vs, today);
   const comparing = vs !== "none";
   const [m, readers, plan] = await Promise.all([getPeriodMetrics(period, compare), getPeriodReaders(period), daysPlanned()]);
