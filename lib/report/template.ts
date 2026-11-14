@@ -10,14 +10,7 @@ export const TEMPLATE = `
 
 #set document(title: "Project Ominira — " + d.label)
 #set page(paper: "a4", margin: (x: 2.2cm, top: 2cm, bottom: 2.2cm),
-  footer: context text(8pt, fill: muted)[
-    // The dashboard line on the last page only.
-    #if d.adminPin != none and counter(page).get().first() == counter(page).final().first() [
-      To follow the daily metrics or explore the numbers further, open the admin dashboard at projectominira.org/admin and enter the PIN #d.adminPin when asked.
-      #v(0.3em)
-    ]
-    Project Ominira · #d.label #h(1fr) #counter(page).display()
-  ])
+  footer: context text(8pt, fill: muted)[Project Ominira · #d.label #h(1fr) #counter(page).display()])
 #set text(font: "Libertinus Serif", size: 11pt, fill: ink)
 #set par(leading: 0.7em, spacing: 1.1em)
 #show heading.where(level: 2): it => block(above: 1.6em, below: 0.8em)[
@@ -103,6 +96,9 @@ Hello comrades. Ahead of our meeting, here is the update on Ominira for #d.label
   chart("Weekly active readers", d.weeks, ((values: d.readers, color: brand),)),
   chart("Reading hours per week", d.weeks, ((values: d.hours, color: ink),)),
 )
+
+== Library
+#figures(d.library)
 
 == Updates
 Here is what we shipped in #d.label:

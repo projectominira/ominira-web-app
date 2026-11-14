@@ -9,6 +9,7 @@
  */
 import { NodeCompiler } from "@myriaddreamin/typst-ts-node-compiler";
 import { getPeriodMetrics, type PeriodMetrics } from "@/lib/metrics/dashboard";
+import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { periodLabel, shift, type Period } from "@/lib/metrics/period";
 import { addDays, daysBetween, type LocalDay } from "@/lib/time/zone";
 import { TEMPLATE } from "./template";
@@ -33,6 +34,8 @@ export type ReportData = {
   /** Each week since launch (Mon–Sun) up to the period's end, labelled by its Sunday. */
   /** Readers and hours are null in weeks before they were recorded. */
   weeks: { ending: LocalDay; members: number; target: number | null; readers: number | null; hours: number | null }[];
+  /** Public books in the library at the period's end, and added in it; the same for the period before. */
+  library: { books: number; added: number; booksBefore: number; addedBefore: number };
   /** The month's commits on GitHub, to write the updates from. */
   commits: string;
 };
@@ -78,15 +81,30 @@ function figures(m: PeriodMetrics, current: boolean): Figures {
 
 const targetOn = (day: LocalDay) => TARGET.members * (1 + TARGET.weekly) ** (daysBetween(TARGET.day, day) / 7);
 
+/** Public, published books added before Lagos midnight starting `day`. */
+async function booksBefore(day: LocalDay): Promise<number> {
+  const { count, error } = await getSupabaseAdminClient()
+    .from("materials")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "published")
+    .eq("visibility", "public")
+    .lt("created_at", `${day}T00:00:00+01:00`);
+  if (error) throw new Error(`Could not count books: ${error.message}`);
+  return count ?? 0;
+}
+
 export async function reportData(period: Period): Promise<ReportData> {
   const previous = shift(period, -1);
   const end = addDays(period.start, period.days);
   // The whole run since launch, for the weekly curves: whole weeks only.
   const span = Math.ceil(daysBetween(LAUNCH, end) / 7) * 7;
-  const [m, run] = await Promise.all([
+  const [m, run, atEnd, atStart, atPrevStart] = await Promise.all([
     getPeriodMetrics(period, previous),
     // Its comparison is unused: one day keeps it cheap.
     getPeriodMetrics({ view: "week", start: LAUNCH, days: span }, { view: "week", start: LAUNCH, days: 1 }),
+    booksBefore(end),
+    booksBefore(period.start),
+    booksBefore(previous.start),
   ]);
 
   let members = run.membersAtStart;
@@ -106,6 +124,7 @@ export async function reportData(period: Period): Promise<ReportData> {
     before: figures(m, false),
     target: Math.round(targetOn(addDays(end, -1))),
     weeks,
+    library: { books: atEnd, added: atEnd - atStart, booksBefore: atStart, addedBefore: atStart - atPrevStart },
     commits: `https://github.com/${REPO}/commits/main/?since=${period.start}&until=${addDays(end, -1)}`,
   };
 }
@@ -145,18 +164,23 @@ export function reportPdf(data: ReportData, text: ReportText): Buffer {
     ...(now.listenSeconds !== null ? [row("Listened (audio)", pct(now.listenSeconds / (now.seconds || 1)), before.listenSeconds !== null ? pct(before.listenSeconds / (before.seconds || 1)) : "–", "")] : []),
   ];
 
+  const lib = data.library;
+  const library = [
+    row("Books in the library", count(lib.books), count(lib.booksBefore), change(lib.books, lib.booksBefore)),
+    row("Books added", count(lib.added), count(lib.addedBefore), change(lib.added, lib.addedBefore)),
+  ];
+
   // Days of the month with reading time recorded: from TIME_SINCE to its end, within the month.
   const timeDays = Math.max(0, Math.min(data.period.days, daysBetween(TIME_SINCE, addDays(data.period.start, data.period.days))));
 
   const input = {
-    // The same PIN /admin/unlock checks (lib/admin/pin.ts); never in the source, the repo is public.
-    adminPin: process.env.ADMIN_PIN?.trim() || null,
     label: data.label,
     previous: data.previousLabel,
     summary: text.summary,
     updates: text.updates,
     membership,
     readership,
+    library,
     caveats: [
       ...(!readersThen ? [`Active readers were first recorded on ${dayMonth(READERS_SINCE)}, so there is no ${data.previousLabel} comparison.`] : []),
       ...(timeDays < data.period.days ? [`Reading time was first recorded on ${dayMonth(TIME_SINCE)}, so it covers only ${timeDays} day${timeDays === 1 ? "" : "s"} of ${data.label}.`] : []),
