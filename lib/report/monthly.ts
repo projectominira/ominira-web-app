@@ -145,7 +145,12 @@ export function reportPdf(data: ReportData, text: ReportText): Buffer {
     ...(now.listenSeconds !== null ? [row("Listened (audio)", pct(now.listenSeconds / (now.seconds || 1)), before.listenSeconds !== null ? pct(before.listenSeconds / (before.seconds || 1)) : "–", "")] : []),
   ];
 
+  // Days of the month with reading time recorded: from TIME_SINCE to its end, within the month.
+  const timeDays = Math.max(0, Math.min(data.period.days, daysBetween(TIME_SINCE, addDays(data.period.start, data.period.days))));
+
   const input = {
+    // The same PIN /admin/unlock checks (lib/admin/pin.ts); never in the source, the repo is public.
+    adminPin: process.env.ADMIN_PIN?.trim() || null,
     label: data.label,
     previous: data.previousLabel,
     summary: text.summary,
@@ -154,7 +159,7 @@ export function reportPdf(data: ReportData, text: ReportText): Buffer {
     readership,
     caveats: [
       ...(!readersThen ? [`Active readers were first recorded on ${dayMonth(READERS_SINCE)}, so there is no ${data.previousLabel} comparison.`] : []),
-      ...(data.period.start < TIME_SINCE ? [`Reading time was first recorded on ${dayMonth(TIME_SINCE)}, so ${data.label}'s covers ${daysBetween(TIME_SINCE, addDays(data.period.start, data.period.days))} days.`] : []),
+      ...(timeDays < data.period.days ? [`Reading time was first recorded on ${dayMonth(TIME_SINCE)}, so it covers only ${timeDays} day${timeDays === 1 ? "" : "s"} of ${data.label}.`] : []),
     ],
     target: `On the 10%-a-week path, the target for ${dayMonth(addDays(data.period.start, data.period.days - 1))} was ${count(data.target)} members, so we are ${behind > 0 ? `${count(behind)} behind` : behind < 0 ? `${count(-behind)} ahead` : "on target"}.`,
     weeks: data.weeks.map((w) => dayMonth(w.ending)),
