@@ -45,6 +45,27 @@ async function refreshSession(refreshToken: string): Promise<RefreshOutcome> {
 }
 
 /**
+ * Supabase rotates the refresh token on every use and revokes the whole
+ * session when an old one is reused. Each browser tab holds its own copy in
+ * memory, so two open tabs used to refresh with the same token and the
+ * second one signed the reader out. A Web Lock lets one tab refresh at a
+ * time, and re-reading localStorage inside it picks up a token another tab
+ * has already rotated.
+ */
+async function refreshAcrossTabs(staleToken: string): Promise<RefreshOutcome> {
+  const run = async (): Promise<RefreshOutcome> => {
+    await useSessionStore.persist.rehydrate();
+    const current = useSessionStore.getState().session;
+    if (!current) return { revoked: true }; // signed out in another tab
+    if (current.refreshToken !== staleToken) return { session: current };
+    return refreshSession(current.refreshToken);
+  };
+  return typeof navigator !== "undefined" && navigator.locks
+    ? navigator.locks.request("ominira-session-refresh", run)
+    : run();
+}
+
+/**
  * The access token stored in session-store lives far shorter than a reader
  * should have to stay actively signed in for (Supabase's own default is
  * ~1h) — this is what actually keeps a reader logged in across days/weeks:
@@ -63,7 +84,7 @@ export async function ensureFreshSession({ force = false } = {}): Promise<string
   if (stillFresh && !force) return session.accessToken;
 
   if (!refreshPromise) {
-    refreshPromise = refreshSession(session.refreshToken).finally(() => {
+    refreshPromise = refreshAcrossTabs(session.refreshToken).finally(() => {
       refreshPromise = null;
     });
   }

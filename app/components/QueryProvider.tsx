@@ -38,6 +38,12 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
     Promise.resolve(useSessionStore.persist.rehydrate()).then(() => {
       ensureFreshSession();
     });
+    // Keep every open tab on the latest tokens (and sign-out) another tab wrote.
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === useSessionStore.persist.getOptions().name) useSessionStore.persist.rehydrate();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   return (
