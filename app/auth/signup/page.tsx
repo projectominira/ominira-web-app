@@ -3,28 +3,26 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getNames } from "country-list";
 import Wordmark from "@/app/components/auth/Wordmark";
 import AuthButton from "@/app/components/auth/AuthButton";
 import BackArrow from "@/app/components/auth/BackArrow";
 import TextField from "@/app/components/auth/TextField";
 import PasswordField from "@/app/components/auth/PasswordField";
 import SelectField from "@/app/components/auth/SelectField";
-import NotePreviewCard from "@/app/components/auth/NotePreviewCard";
 import { useSignup } from "@/lib/auth/useSignup";
 import { useCheckAvailability } from "@/lib/auth/useCheckAvailability";
 import { onboardingRoute } from "@/lib/auth/onboardingRoute";
 import { ApiError, fieldError } from "@/lib/api/client";
+import { COUNTRIES } from "@/lib/countries";
 
 // The old "A library. A space. A movement." / "What you get with Ominira"
 // slides were dropped from this flow (both mobile and desktop) — they
 // duplicated the marketing copy already on the pre-signup landing, adding
 // two taps before a reader could even start the form.
-const FORM_STEPS = ["form-account", "form-pseudonym", "form-location"] as const;
+// The pseudonym, once a step of its own, is on the account step.
+const FORM_STEPS = ["form-account", "form-location"] as const;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-const COUNTRIES = [...getNames().sort((a, b) => a.localeCompare(b)), "Other"];
 
 /** Continue's moderate desktop width (welcome screen's own button treatment) —
  * full-width stays on mobile, this just reins it in past the 860px split. */
@@ -69,7 +67,7 @@ export default function SignupPage() {
     fullName: FORM_STEPS.indexOf("form-account"),
     email: FORM_STEPS.indexOf("form-account"),
     password: FORM_STEPS.indexOf("form-account"),
-    pseudonym: FORM_STEPS.indexOf("form-pseudonym"),
+    pseudonym: FORM_STEPS.indexOf("form-account"),
   };
 
   // Each field is validated (format, then server-checked availability) as
@@ -84,8 +82,7 @@ export default function SignupPage() {
   const pseudonymAvailability = useCheckAvailability("pseudonym", pseudonym, pseudonymFormatValid);
   const pseudonymAvailable = pseudonymFormatValid && pseudonymAvailability.available === true;
 
-  const accountStepValid = fullName.trim().length > 0 && emailAvailable && password.length >= 8;
-  const pseudonymStepValid = pseudonymAvailable;
+  const accountStepValid = fullName.trim().length > 0 && pseudonymAvailable && emailAvailable && password.length >= 8;
 
   const emailError =
     fieldError(signup.error, "email") ??
@@ -103,7 +100,7 @@ export default function SignupPage() {
       ? "That pseudonym is taken — try another."
       : undefined);
 
-  const canContinue = current === "form-account" ? accountStepValid : current === "form-pseudonym" ? pseudonymStepValid : true;
+  const canContinue = current === "form-account" ? accountStepValid : true;
 
   const goNext = () => {
     if (!canContinue) return;
@@ -145,7 +142,7 @@ export default function SignupPage() {
           <div className="shell:contents">
             <div>
               <h1 className="font-serif type-1 text-balance text-[var(--reader-text)]">
-                Let&rsquo;s get you started, <br></br> Comrade.
+                Let&rsquo;s get you started.
               </h1>
               <p className="mt-3 text-[14px] font-medium text-[var(--reader-text-muted)]">
                 Enter your details below to create your account. <br></br> Use a fake identity if you have to.
@@ -165,6 +162,15 @@ export default function SignupPage() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   error={fieldError(signup.error, "fullName")}
+                />
+                <TextField
+                  label="Pseudonym"
+                  placeholder="e.g. Kofi Writes"
+                  maxLength={20}
+                  hint={pseudonymAvailability.isChecking ? "Checking…" : "What others see, never your name."}
+                  value={pseudonym}
+                  onChange={(e) => setPseudonym(e.target.value)}
+                  error={pseudonymError}
                 />
                 <TextField
                   label="Email"
@@ -196,29 +202,6 @@ export default function SignupPage() {
           </div>
         )}
 
-        {current === "form-pseudonym" && (
-          <div className="shell:contents">
-            <h1 className="font-serif type-1 text-balance text-[var(--reader-text)]">
-              Choose the name your comrades will know you by — this is what others see, never your full name.
-            </h1>
-            <div className="mt-8 w-full max-w-sm space-y-5 shell:mt-0 shell:justify-self-center">
-              <TextField
-                label="Pseudonym"
-                placeholder="e.g. Kofi Writes"
-                maxLength={20}
-                hint={pseudonymAvailability.isChecking ? "Checking…" : `${pseudonym.length}/20`}
-                value={pseudonym}
-                onChange={(e) => setPseudonym(e.target.value)}
-                error={pseudonymError}
-              />
-              <NotePreviewCard pseudonym={pseudonym} />
-              <AuthButton className={DESKTOP_AUTO_BUTTON} onClick={goNext} disabled={!pseudonymStepValid}>
-                Continue
-              </AuthButton>
-            </div>
-          </div>
-        )}
-
         {current === "form-location" && (
           <div className="shell:contents">
             <div>
@@ -227,7 +210,7 @@ export default function SignupPage() {
               </h1>
               <div className="mt-6 flex gap-3">
                 <p className="text-[14px] font-medium leading-relaxed text-[var(--reader-text-muted)]">
-                  We don&rsquo;t track your location. We only ask for your city and country so that we can show comrades that they&rsquo;re studying with other Africans from across the globe.
+                  We don&rsquo;t track your location. We only ask for your city and country to show that you&rsquo;re studying with other Africans from across the globe.
                 </p>
               </div>
             </div>
