@@ -10,7 +10,7 @@ import type { AuthorBioStatus } from "@/lib/supabase/database.types";
 
 // Author pages (seo-spec.md C2): /authors/<slug>. The connector writes the
 // bio, facts and "read alongside" (write_author), which go live at once;
-// editors can edit or take them down in /admin/authors. Books and quotes show from the start.
+// editors can edit or take them down in /admin/ai/authors. Books and quotes show from the start.
 // migrations/20261211_seo_authors_quotes.sql, 20261212_author_pages.sql.
 
 const db = () => getSupabaseAdminClient();
@@ -298,9 +298,9 @@ export type AdminAuthor = {
   updatedAt: string;
 };
 
-/** Drafted or approved author pages, newest change first. */
-export async function adminAuthors(status: "draft" | "approved"): Promise<AdminAuthor[]> {
-  const { data, error } = await db().from("authors").select("*").eq("bio_status", status).order("updated_at", { ascending: false }).limit(200);
+/** Every written author page, on the site or taken off it, newest change first. */
+export async function adminAuthors(): Promise<AdminAuthor[]> {
+  const { data, error } = await db().from("authors").select("*").in("bio_status", ["approved", "draft"]).order("updated_at", { ascending: false }).limit(500);
   if (error) throw error;
   return data.map((a) => ({
     id: a.id,

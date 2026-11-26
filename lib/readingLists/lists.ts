@@ -12,9 +12,9 @@ import { addDays, localMinutes, zonedTime } from "@/lib/time/zone";
 import { listTopics, topicCovers } from "@/lib/topics/guides";
 
 // The monthly reading list (seo-spec.md C1): /reading-lists/<slug>. The
-// connector drafts it while planning the calendar (send_reading_list); an
-// editor approves it in /admin/reading-lists, and it goes live at 07:00
-// Lagos on its day. "Live" is worked out from the clock on every read, so
+// connector writes it while planning the calendar (send_reading_list) and
+// it goes live at 07:00 Lagos on its day, with no approval step; editors can
+// edit it or take it off the site in /admin/ai/reading-lists. "Live" is worked out from the clock on every read, so
 // nothing has to flip it. migrations/20261215_reading_lists.sql.
 
 const db = () => getSupabaseAdminClient();
@@ -78,7 +78,7 @@ export const SendReadingListInput = z.object({
 });
 export type SendReadingListInput = z.input<typeof SendReadingListInput>;
 
-/** Saves the connector's draft of a reading list for an editor to approve.
+/** Publishes the connector's reading list for its day (editors can take it down).
  * A string is a problem for the AI to fix. */
 export async function sendReadingList(raw: SendReadingListInput): Promise<{ slug: string; title: string; day: string } | string> {
   const input = SendReadingListInput.parse(raw);
@@ -106,8 +106,8 @@ export async function sendReadingList(raw: SendReadingListInput): Promise<{ slug
     intro: input.intro,
     books: input.books.map((b) => ({ slug: b.book, why: b.why, tag: b.tag?.trim() || null })),
     topic: input.topic ?? null,
-    status: "draft" as const,
-    approved_at: null,
+    status: "approved" as const,
+    approved_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
   const { error: saveError } = existing
@@ -131,7 +131,7 @@ export async function listsForPlanning() {
     day: l.day,
     title: l.title,
     occasion: l.occasion || undefined,
-    status: l.status === "draft" ? "waiting for review" : l.day <= live ? "published" : "approved",
+    status: l.status === "draft" ? "taken down by an editor" : l.day <= live ? "published" : "scheduled",
     books: booksOf(l.books).map((b) => b.slug),
   }));
 }
@@ -267,9 +267,9 @@ export type AdminReadingList = {
   updatedAt: string;
 };
 
-/** Drafted or approved lists, by day (drafts soonest first, approved newest first), with book titles. */
-export async function adminReadingLists(status: "draft" | "approved"): Promise<AdminReadingList[]> {
-  const { data, error } = await db().from("reading_lists").select("*").eq("status", status).order("day", { ascending: status === "draft" }).limit(200);
+/** Every list, on the site or taken off it, latest day first, with book titles. */
+export async function adminReadingLists(): Promise<AdminReadingList[]> {
+  const { data, error } = await db().from("reading_lists").select("*").order("day", { ascending: false }).limit(500);
   if (error) throw error;
   const slugs = [...new Set(data.flatMap((l) => booksOf(l.books).map((b) => b.slug)))];
   const titles = new Map<string, string>();
@@ -300,7 +300,7 @@ export const ReadingListEdit = z.object({
   day: z.iso.date().optional(),
   /** The same books, with their words edited. */
   books: z.array(z.object({ slug: z.string(), why: z.string().trim().max(500), tag: z.string().trim().max(24).nullable() })).max(12).optional(),
-  /** approved: publish it on its day; draft: take it back off the site; none: discard it. */
+  /** approved: on the site from its day; draft: taken off it; none: delete it. */
   status: z.enum(["approved", "draft", "none"]).optional(),
 });
 

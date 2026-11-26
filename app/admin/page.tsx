@@ -115,7 +115,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
           {plan.through
             ? `Passages planned to ${new Date(`${plan.through}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })} · ${plan.count} day${plan.count === 1 ? "" : "s"} left · `
             : "No passage planned for tomorrow · "}
-          <Link href="/admin/connector" className="font-semibold text-brand-500 no-underline hover:underline">
+          <Link href="/admin/ai/connector" className="font-semibold text-brand-500 no-underline hover:underline">
             Ask your AI for more
           </Link>
         </p>

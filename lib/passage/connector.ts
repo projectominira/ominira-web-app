@@ -741,11 +741,11 @@ async function publishTopic(input: z.infer<typeof WriteTopicInput>, origin: stri
   return { ...result, page: `${origin}/topics/${result.slug}`, message: `Published the ${result.name} guide.` };
 }
 
-async function draftList(input: z.infer<typeof SendReadingListInput>, origin: string) {
+async function publishList(input: z.infer<typeof SendReadingListInput>, origin: string) {
   const result = await sendReadingList(input);
   if (typeof result === "string") throw new ToolError(result);
   await logList(result);
-  return { ...result, review: `${origin}/admin/reading-lists`, message: `Saved the draft of "${result.title}" for ${result.day}. An editor approves it in Ominira's admin; it goes live at 07:00 Lagos that day.` };
+  return { ...result, page: `${origin}/reading-lists/${result.slug}`, message: `Scheduled "${result.title}": it goes live at 07:00 Lagos on ${result.day}.` };
 }
 
 const ReportMonth = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional().describe("The month, as YYYY-MM. Leave out for last month.");
@@ -879,9 +879,9 @@ const TOOLS: Record<string, Tool> = {
   },
   send_reading_list: {
     description:
-      "Save a draft of the month's reading list: title, publish day, the key date it's tied to (if any), introduction (100–200 words) and 6–12 books in reading order with two or three sentences on each. An editor approves it; it goes live at 07:00 Lagos on its day. Sending the same title again replaces the draft.",
+      "Publish the month's reading list: title, publish day, the key date it's tied to (if any), introduction (100–200 words) and 6–12 books in reading order with two or three sentences on each. It goes live at 07:00 Lagos on its day, with no approval step; editors can edit or take it down later. Sending the same title again replaces it.",
     input: SendReadingListInput,
-    run: draftList,
+    run: publishList,
     readOnly: false,
   },
   report_figures: {

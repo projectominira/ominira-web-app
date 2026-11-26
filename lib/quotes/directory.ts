@@ -215,19 +215,21 @@ export const ADMIN_PAGE = 50;
 
 export type AdminQuote = DirectoryQuote & { hidden: boolean };
 
-/** Directory quotes for /admin/quotes: listed or hidden, newest first, by
- * their words. Posted passages ("used") stay out: they belong to the calendar. */
-export async function adminQuotes(opts: { q: string; hidden: boolean; page: number }): Promise<{ quotes: AdminQuote[]; more: boolean; total: number }> {
+/** Directory quotes for /admin/ai/quotes, listed and hidden together, newest
+ * first, by their words. Posted passages ("used") stay out: they belong to the calendar. */
+export async function adminQuotes(opts: { q: string; page: number }): Promise<{ quotes: AdminQuote[]; more: boolean; total: number }> {
   let query = db()
     .from("passage_quotes")
     .select("id, material_id, ranges, topics, status", { count: "exact" })
-    .eq("status", opts.hidden ? "hidden" : "listed");
+    .in("status", ["listed", "hidden"]);
   if (opts.q) query = query.textSearch("search_vector", opts.q, { type: "websearch", config: "english" });
   const from = (opts.page - 1) * ADMIN_PAGE;
   const { data, error, count } = await query.order("created_at", { ascending: false }).order("id").range(from, from + ADMIN_PAGE);
   if (error) throw error;
-  const quotes = await toDirectoryQuotes(data.slice(0, ADMIN_PAGE));
-  return { quotes: quotes.map((q) => ({ ...q, hidden: opts.hidden })), more: data.length > ADMIN_PAGE, total: count ?? data.length };
+  const rows = data.slice(0, ADMIN_PAGE);
+  const hidden = new Set(rows.filter((r) => r.status === "hidden").map((r) => r.id));
+  const quotes = await toDirectoryQuotes(rows);
+  return { quotes: quotes.map((q) => ({ ...q, hidden: hidden.has(q.id) })), more: data.length > ADMIN_PAGE, total: count ?? data.length };
 }
 
 /** Hides a directory quote, or lists it again. False when there's no such quote. */

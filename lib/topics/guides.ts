@@ -14,7 +14,7 @@ import { allRows } from "@/lib/supabase/allRows";
 // Topic pages (seo-spec.md C3): /topics/<slug>, a curated guide to a broad
 // topic or a library category. The connector writes the guide (write_topic)
 // and it goes live at once, like quotes; editors can edit or remove it in
-// /admin/topics. Every category has a page from the start (its books); a broad
+// /admin/ai/topics. Every category has a page from the start (its books); a broad
 // topic once it has a guide.
 // migrations/20261214_topic_guides.sql.
 
@@ -322,12 +322,13 @@ export type AdminTopic = {
   title: string;
   intro: string;
   stages: { title: string; intro: string; books: { slug: string; title: string; why: string }[] }[];
+  live: boolean;
   updatedAt: string;
 };
 
-/** Published guides, newest change first, with book titles. */
+/** Every guide, on the site or taken off it, newest change first, with book titles. */
 export async function adminTopics(): Promise<AdminTopic[]> {
-  const { data, error } = await db().from("topic_guides").select("*").eq("status", "approved").order("updated_at", { ascending: false }).limit(200);
+  const { data, error } = await db().from("topic_guides").select("*").order("updated_at", { ascending: false }).limit(500);
   if (error) throw error;
   const slugs = [...new Set(data.flatMap((g) => stagesOf(g.stages).flatMap((s) => s.books.map((b) => b.slug))))];
   const titles = new Map<string, string>();
@@ -344,6 +345,7 @@ export async function adminTopics(): Promise<AdminTopic[]> {
     title: g.title,
     intro: g.intro,
     stages: stagesOf(g.stages).map((s) => ({ ...s, books: s.books.map((b) => ({ ...b, title: titles.get(b.slug) ?? `${b.slug} (gone)` })) })),
+    live: g.status === "approved",
     updatedAt: g.updated_at,
   }));
 }
@@ -356,19 +358,14 @@ export const TopicEdit = z.object({
     .array(z.object({ title: z.string().trim().min(1).max(60), intro: z.string().trim().max(300), books: z.array(z.object({ slug: z.string(), why: z.string().trim().max(400) })).max(10) }))
     .max(4)
     .optional(),
+  /** approved: on the site; draft: taken off it. */
+  status: z.enum(["approved", "draft"]).optional(),
 });
 
-/** An editor's edit. False when there's no such guide. */
+/** An editor's edit, or taking the guide off the site and back. False when there's no such guide. */
 export async function editTopic(id: string, edit: z.infer<typeof TopicEdit>): Promise<boolean> {
   const now = new Date().toISOString();
   const { data, error } = await db().from("topic_guides").update({ ...edit, approved_at: now, updated_at: now }).eq("id", id).select("id");
-  if (error) throw error;
-  return data.length > 0;
-}
-
-/** Takes a guide off the site for good. False when there's no such guide. */
-export async function removeTopic(id: string): Promise<boolean> {
-  const { data, error } = await db().from("topic_guides").delete().eq("id", id).select("id");
   if (error) throw error;
   return data.length > 0;
 }

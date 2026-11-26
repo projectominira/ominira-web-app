@@ -4,22 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { ANALYTICS_OPT_OUT_KEY } from "@/lib/analytics";
-import { ArrowUpRight, BookOpen, BookUser, Compass, Home, ListOrdered, Menu, Mic, Plug, Quote, Send, TextQuote, UserPen, Users, X } from "lucide-react";
+import { ArrowUpRight, BookOpen, BookUser, Home, Menu, Quote, Send, Sparkles, X } from "lucide-react";
 import { SPLASH_MARK } from "@/lib/config/brand-assets";
 
 const NAV = [
   { href: "/admin", label: "Overview", icon: Home },
   { href: "/admin/library", label: "Library", icon: BookOpen },
   { href: "/admin/readers", label: "Readers", icon: BookUser },
-  { href: "/admin/groups", label: "Study groups", icon: Users },
-  { href: "/admin/rooms", label: "Reading rooms", icon: Mic },
   { href: "/admin/passage", label: "Passages", icon: Quote },
-  { href: "/admin/quotes", label: "Quotes", icon: TextQuote },
-  { href: "/admin/authors", label: "Authors", icon: UserPen },
-  { href: "/admin/topics", label: "Topics", icon: Compass },
-  { href: "/admin/reading-lists", label: "Reading lists", icon: ListOrdered },
+  { href: "/admin/ai", label: "AI", icon: Sparkles },
   { href: "/admin/push", label: "Broadcast", icon: Send },
-  { href: "/admin/connector", label: "Connector", icon: Plug },
 ];
 
 function Mark({ className }: { className: string }) {

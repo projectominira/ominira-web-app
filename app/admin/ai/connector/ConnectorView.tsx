@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { ArrowRight, BookUser, Check, ChevronRight, Compass, Copy, FolderPen, ListOrdered, PenLine, Quote, Tags } from "lucide-react";
-import AdminPageHeader from "../AdminPageHeader";
-import { BUTTON, PRIMARY } from "../passage/QuoteCard";
+import { BUTTON, PRIMARY } from "@/app/admin/passage/QuoteCard";
 import { showToast } from "@/stores/toast-store";
 import { formatTimeAgo } from "@/lib/time/relative";
 import type { ConnectorActivity } from "@/lib/passage/activity";
@@ -114,8 +113,8 @@ function ActivityRow({ item }: { item: ConnectorActivity }) {
         : item.kind === "lists"
           ? [
               <ListOrdered key="i" size={15} />,
-              <>Drafted the reading list “{item.title}”</>,
-              [{ key: item.slug, label: item.title, detail: `For ${item.day}, for approval in Reading lists` }],
+              <>Published the reading list “{item.title}”</>,
+              [{ key: item.slug, label: item.title, detail: `Goes live ${item.day}` }],
             ]
         : item.kind === "topics"
           ? [
@@ -126,8 +125,8 @@ function ActivityRow({ item }: { item: ConnectorActivity }) {
         : item.kind === "authors"
           ? [
               <BookUser key="i" size={15} />,
-              <>Drafted {item.name}’s author page</>,
-              [{ key: item.slug, label: item.name, detail: "For approval in Authors" }],
+              <>Published {item.name}’s author page</>,
+              [{ key: item.slug, label: item.name, detail: `/authors/${item.slug}` }],
             ]
           : item.kind === "quotes"
           ? [
@@ -290,14 +289,13 @@ export default function ConnectorView({ url, brief: initialBrief, history }: Pro
 
   return (
     <div className="flex max-w-[720px] flex-col gap-10">
-      <AdminPageHeader
-        title="Connector"
-        subtitle={connected ? "What your AI has changed in Ominira." : "Add Ominira to Claude or ChatGPT, so your AI can find passages and look after the books."}
-      />
+      <p className="m-0 text-[13px] font-medium text-[var(--reader-text-muted)]">
+        {connected ? "What your AI has changed in Ominira." : "Add Ominira to Claude or ChatGPT, so your AI can find passages and look after the books."}
+      </p>
 
       {connected ? (
         <>
-          <section className="-mt-8 flex flex-col gap-3">
+          <section className="-mt-6 flex flex-col gap-3">
             <p className="m-0 flex items-center gap-2 text-ui-sm text-[var(--reader-text)]">
               <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
               <span suppressHydrationWarning>Connected · last used {ago(history.lastSeenAt!)}</span>

@@ -40,6 +40,8 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       { source: "/reading", destination: "/shelf", permanent: true },
+      // The AI's pages and the connector moved under one admin section.
+      { source: "/admin/:page(authors|topics|reading-lists|quotes|connector)", destination: "/admin/ai/:page", permanent: false },
       // A note's page was /post/[id]; notifications already sent still link there.
       { source: "/post/:id", destination: "/note/:id", permanent: true },
       // Superseded icon URLs. Already-sent announcement emails and installed

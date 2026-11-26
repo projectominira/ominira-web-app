@@ -12,11 +12,10 @@ export const metadata: Metadata = {
 
 /** The quote directory's quotes, to hide a weak or out-of-context one
  * (seo-spec C4: quotes publish without review; editors hide afterwards). */
-export default async function AdminQuotesPage({ searchParams }: { searchParams: Promise<{ q?: string; show?: string; page?: string }> }) {
+export default async function AdminQuotesPage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string }> }) {
   const params = await searchParams;
   const q = (params.q ?? "").trim().slice(0, 100);
-  const hidden = params.show === "hidden";
   const page = pageNumber(params.page);
-  const result = await adminQuotes({ q, hidden, page });
-  return <QuotesAdminView q={q} hidden={hidden} page={page} {...result} />;
+  const result = await adminQuotes({ q, page });
+  return <QuotesAdminView q={q} page={page} {...result} />;
 }
