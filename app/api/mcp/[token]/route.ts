@@ -52,7 +52,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   if (!authorised((await params).token)) return NextResponse.json({ error: "Not found." }, { status: 404 });
   const body = await request.json().catch(() => undefined);
   if (body === undefined) return NextResponse.json(failure(null, -32700, "Parse error"), { status: 400 });
-  const origin = new URL(request.url).origin;
+  // Behind Caddy request.url is the container's address (0.0.0.0:3000);
+  // the forwarded host is what the editor's AI should link to.
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const origin = host ? `${request.headers.get("x-forwarded-proto") ?? "https"}://${host}` : new URL(request.url).origin;
   if (Array.isArray(body)) {
     const replies = (await Promise.all(body.map((m: Message) => handle(m, origin)))).filter(Boolean);
     return replies.length ? NextResponse.json(replies) : new NextResponse(null, { status: 202 });
