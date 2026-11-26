@@ -5,7 +5,16 @@ import type { PostHog } from "posthog-js";
 export const ANALYTICS_OPT_OUT_KEY = "va-disable";
 
 /** Every custom event, so names stay consistent in PostHog. */
-export type AnalyticsEvent = "signed_up" | "note_shared" | "room_started" | "room_joined";
+export type AnalyticsEvent =
+  | "signed_up"
+  | "onboarding_completed" // the welcome tap; `push` is the browser's notification state then
+  | "push_asked" // our sheet shown; `where`
+  | "push_answered" // our ask answered; `where`, `answer` (allow | not_now)
+  | "push_permission" // the browser's dialog answered; `where`, `result` (granted | denied | default)
+  | "push_save_failed" // granted, but the device's subscription didn't save; `where`
+  | "note_shared"
+  | "room_started"
+  | "room_joined";
 
 let client: Promise<PostHog | null> | null = null;
 

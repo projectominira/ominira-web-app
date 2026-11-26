@@ -5,8 +5,9 @@ import { persist } from "zustand/middleware";
  * enough that a "Not now" isn't nagged every visit, short enough the card
  * still resurfaces rather than being gone for good. Native permission is
  * the actual hard stop (see useWebPush.ts): once a reader accepts or the
- * browser reports "denied", HomePushPrompt hides itself regardless of this
- * cooldown. */
+ * browser reports "denied", PushPrompt hides itself regardless of this
+ * cooldown. `dismiss` marks any ask the reader didn't accept: "Don't
+ * Allow" here, or the welcome screen's native ask. */
 export const PUSH_PROMPT_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000;
 export const PUSH_PROMPT_LONG_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -28,7 +29,7 @@ export const usePushPromptStore = create<PushPromptState>()(
     {
       name: "ominira-push-prompt",
       // Same SSR-hydration-mismatch reasoning as install-banner-store —
-      // rehydrated explicitly by HomePushPrompt before it trusts this.
+      // rehydrated explicitly by PushPrompt before it trusts this.
       skipHydration: true,
       onRehydrateStorage: () => () => {
         usePushPromptStore.setState({ hasHydrated: true });

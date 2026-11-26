@@ -2,6 +2,10 @@
 
 import { useCallback, useState } from "react";
 import { apiFetch } from "@/lib/api/client";
+import { track } from "@/lib/analytics";
+
+/** Where a reader was asked, for PostHog. */
+export type PushAskPlace = "welcome" | "app" | "home" | "account";
 
 // Base64url (VAPID's format) -> the BufferSource pushManager.subscribe expects.
 function urlBase64ToUint8Array(base64Url: string): ArrayBuffer {
@@ -56,13 +60,19 @@ export function useWebPush() {
   const [supported] = useState(isSupported);
   const [permission, setPermission] = useState<NotificationPermission>(() => (isSupported() ? Notification.permission : "default"));
 
-  const subscribe = useCallback(async () => {
+  const subscribe = useCallback(async (where: PushAskPlace) => {
     if (!isSupported()) return false;
     const permissionResult = await Notification.requestPermission();
     setPermission(permissionResult);
+    track("push_permission", { where, result: permissionResult });
     if (permissionResult !== "granted") return false;
 
-    await saveSubscription(await navigator.serviceWorker.ready);
+    try {
+      await saveSubscription(await navigator.serviceWorker.ready);
+    } catch (error) {
+      track("push_save_failed", { where });
+      throw error;
+    }
     return true;
   }, []);
 

@@ -7,6 +7,7 @@ import { useDockedHeight } from "@/app/components/useBottomDock";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useAppBadge } from "@/lib/notifications/useNotifications";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
+import PushPrompt from "./PushPrompt";
 
 /**
  * Shared chrome for every page under app/(app) — reserves space for the
@@ -43,6 +44,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       {member && <AppBottomNav />}
+      {member && <PushPrompt />}
     </div>
   );
 }

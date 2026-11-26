@@ -8,6 +8,7 @@ import FistReaction from "@/app/components/rooms/FistReaction";
 import { apiFetch } from "@/lib/api/client";
 import type { HomePassage } from "@/lib/rooms/types";
 import { useShareQuote } from "@/app/components/reader/ShareQuoteModal";
+import { useWebPush } from "@/lib/push/useWebPush";
 
 /**
  * The passage of the day on Home (home-spec §2 Home 3), as its note shows
@@ -15,9 +16,10 @@ import { useShareQuote } from "@/app/components/reader/ShareQuoteModal";
  * and Share, the context (an anniversary's label on its own row), the quote
  * (PassageQuote, its ↗ opening the reader at the passage) with the book
  * under it, and the note's fist. Share makes the quote an image. Also the
- * note's own page (NoteView).
+ * note's own page (NoteView). `notify` (Home): a row offering it each
+ * morning, to a reader whose browser hasn't been asked yet.
  */
-export default function PassageCard({ passage }: { passage: HomePassage }) {
+export default function PassageCard({ passage, notify = false }: { passage: HomePassage; notify?: boolean }) {
   const { book } = passage;
   const shareQuote = useShareQuote(book.title, book.author);
   return (
@@ -51,8 +53,36 @@ export default function PassageCard({ passage }: { passage: HomePassage }) {
         cite={<BookCite title={book.title} author={book.author} />}
         footer={passage.reaction && <Fist {...passage.reaction} />}
       />
+      {notify && <NotifyRow />}
       {shareQuote.modal}
     </article>
+  );
+}
+
+/** "Turn on" opens the browser's dialog straight away: the row is the ask.
+ * Gone once the browser has an answer (allowed or blocked). */
+function NotifyRow() {
+  const { supported, permission, subscribe } = useWebPush();
+  const [busy, setBusy] = useState(false);
+  if (!supported || permission !== "default") return null;
+  const turnOn = () => {
+    setBusy(true);
+    subscribe("home")
+      .catch(() => {})
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="-mx-5 -mb-1 flex items-center gap-3 border-t border-[var(--color-app-border)] px-5 pt-4">
+      <span className="min-w-0 flex-1 text-ui-caption text-[var(--color-app-text-secondary)]">Get the passage of the day each morning</span>
+      <button
+        type="button"
+        onClick={turnOn}
+        disabled={busy}
+        className="flex-none cursor-pointer rounded-sm bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Turn on
+      </button>
+    </div>
   );
 }
 

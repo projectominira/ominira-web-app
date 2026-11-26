@@ -93,7 +93,7 @@ export default function Home({
   );
   const join = <GroupsToJoin groups={toJoin} />;
 
-  const passage = view.passage && <PassageCard passage={view.passage} />;
+  const passage = view.passage && <PassageCard passage={view.passage} notify />;
 
   if (!desktop)
     return (

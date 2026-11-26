@@ -63,7 +63,7 @@ function NotificationsRow() {
   const onToggle = async (next: boolean) => {
     setPending(true);
     try {
-      if (next) await subscribe();
+      if (next) await subscribe("account");
       else await unsubscribe();
     } finally {
       setPending(false);

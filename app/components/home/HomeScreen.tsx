@@ -14,7 +14,6 @@ import { useHome, useSaveGoal } from "@/lib/rooms/useHome";
 import { useSessionStore } from "@/stores/session-store";
 import Home from "./Home";
 import HomeInstallBanner from "./HomeInstallBanner";
-import HomePushPrompt from "./HomePushPrompt";
 
 /**
  * Home (home-spec §2 Home), signed in only, from one summary call. Sign-in
@@ -54,7 +53,6 @@ export default function HomeScreen() {
   return (
     <SearchableAppPage className="pb-2 shell:pb-10" greeting={timeOfDay()} greetingName={reader?.pseudonym}>
       <HomeInstallBanner />
-      <HomePushPrompt />
       <Home
         view={view}
         failed={isError}
