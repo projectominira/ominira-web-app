@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const nextConfig: NextConfig = {
+  // Self-hosted on EC2 in Docker (Dockerfile, deploy/).
+  output: "standalone",
   // Versions the service worker per deploy (app/ServiceWorkerRegistration.tsx).
   env: {
     NEXT_PUBLIC_BUILD_ID: (process.env.VERCEL_GIT_COMMIT_SHA ?? String(Date.now())).slice(0, 12),

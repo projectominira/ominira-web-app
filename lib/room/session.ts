@@ -1,3 +1,4 @@
+import { track } from "@/lib/analytics";
 import { ApiError } from "@/lib/api/client";
 import type { AnnotationRange } from "@/lib/api/types";
 import * as api from "@/lib/room/api";
@@ -144,10 +145,12 @@ export class RoomSession {
    * group, for a group room). */
   async start(materialId: string, title?: string, host?: RoomStartHost): Promise<void> {
     this.enter(await this.deps.api.startRoom(materialId, title, host));
+    track("room_started", { materialId });
   }
 
   async join(roomId: string): Promise<void> {
     this.enter(await this.deps.api.joinRoom(roomId));
+    track("room_joined", { roomId });
   }
 
   async leave(): Promise<void> {

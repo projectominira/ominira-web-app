@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { ANALYTICS_OPT_OUT_KEY } from "@/app/components/SiteAnalytics";
+import { ANALYTICS_OPT_OUT_KEY } from "@/lib/analytics";
 import { ArrowUpRight, BookOpen, BookUser, Compass, Home, ListOrdered, Menu, Mic, Plug, Quote, Send, TextQuote, UserPen, Users, X } from "lucide-react";
 import { SPLASH_MARK } from "@/lib/config/brand-assets";
 

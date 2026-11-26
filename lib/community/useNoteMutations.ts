@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { track } from "@/lib/analytics";
 import { apiFetch } from "@/lib/api/client";
 import { materialKeys } from "@/lib/materials/queryKeys";
 import { communityKeys } from "@/lib/community/queryKeys";
@@ -230,7 +231,8 @@ export function useCreateNote(materialId: string | null) {
       cache.restore(context?.previous);
       invalidateFanoutQueries(queryClient, materialId);
     },
-    onSuccess: (created, _input, context) => {
+    onSuccess: (created, input, context) => {
+      track("note_shared", { reply: Boolean(input.parentId), visibility: created.visibility });
       cache.set((old) => old.map((n) => (context && n.id === context.tempId ? created : n)));
       invalidateFanoutQueries(queryClient, materialId);
     },

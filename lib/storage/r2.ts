@@ -75,15 +75,16 @@ export async function headObject(key: string): Promise<{ size: number; contentTy
   }
 }
 
-/** Every object under `prefix`, with its size. */
-export async function listObjects(prefix: string, max = Infinity): Promise<{ key: string; size: number }[]> {
-  const out: { key: string; size: number }[] = [];
+/** Every object under `prefix`, with its size and ETag (unquoted; for a
+ * single-part upload or a copy of one, the object's MD5 in hex). */
+export async function listObjects(prefix: string, max = Infinity): Promise<{ key: string; size: number; etag: string }[]> {
+  const out: { key: string; size: number; etag: string }[] = [];
   let ContinuationToken: string | undefined;
   do {
     const res = await r2Client().send(
       new ListObjectsV2Command({ Bucket: r2Bucket(), Prefix: prefix, ContinuationToken, MaxKeys: Math.min(1000, max - out.length) })
     );
-    for (const o of res.Contents ?? []) if (o.Key) out.push({ key: o.Key, size: o.Size ?? 0 });
+    for (const o of res.Contents ?? []) if (o.Key) out.push({ key: o.Key, size: o.Size ?? 0, etag: (o.ETag ?? "").replaceAll('"', "") });
     ContinuationToken = res.IsTruncated && out.length < max ? res.NextContinuationToken : undefined;
   } while (ContinuationToken);
   return out;

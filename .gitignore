@@ -96,3 +96,12 @@ remotion/
 
 # monthly reports (scripts/monthly-report.ts)
 /reports
+
+# book imports (scripts/drive-download.ts, scripts/upload-pending.ts)
+/book-import
+
+# own server deploy (deploy/deploy.sh, Caddy, compose, runtime .env)
+/deploy/
+/Dockerfile
+/.dockerignore
+/leads/

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { track } from "@/lib/analytics";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import { useSessionStore, type Session } from "@/stores/session-store";
 import { authKeys } from "@/lib/auth/queryKeys";
@@ -27,6 +28,7 @@ export function useSignup() {
     onSuccess: ({ reader, session }) => {
       setSession(reader.id, session);
       queryClient.setQueryData(authKeys.me, reader);
+      track("signed_up");
     },
   });
 }

@@ -161,6 +161,9 @@ export type Database = {
           /** Bytes of the primary stored object (source file, else parsed JSON,
            * else article HTML) — migrations/20261005_admin_dashboard.sql. */
           file_size_bytes: number | null;
+          /** MD5 of the source file (R2's ETag), the duplicate check for imports —
+           * migrations/20261217_materials_source_md5.sql. */
+          source_md5: string | null;
         } & Timestamps;
         Insert: {
           id?: string;
@@ -192,6 +195,7 @@ export type Database = {
           source_url?: string | null;
           reaction_count?: number;
           file_size_bytes?: number | null;
+          source_md5?: string | null;
           created_at?: string;
           updated_at?: string;
         };

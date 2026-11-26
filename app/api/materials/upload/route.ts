@@ -65,8 +65,12 @@ export async function POST(request: Request) {
   };
 
   // What actually landed — one listing of this upload's folder.
-  const listed = new Map((await listObjects(`${paths.folder}/`)).map((o) => [o.key, o.size]));
+  const objects = await listObjects(`${paths.folder}/`);
+  const listed = new Map(objects.map((o) => [o.key, o.size]));
   const sizeOf = (path: string | null) => (path ? (listed.get(path) ?? null) : null);
+  // A single PUT's ETag is its MD5: the duplicate check for later imports.
+  const sourceEtag = objects.find((o) => o.key === paths.source)?.etag ?? "";
+  const sourceMd5 = /^[0-9a-f]{32}$/.test(sourceEtag) ? sourceEtag : null;
 
   const sourceSize = sizeOf(paths.source);
   if (sourceSize === null) return reject("The file didn't finish uploading. Please try again.", "sourceFile");
@@ -159,6 +163,7 @@ export async function POST(request: Request) {
       source_url: cdnUrl(finalKey(paths.source)),
       page_count_estimate: pageCountEstimate,
       file_size_bytes: sourceSize,
+      source_md5: sourceMd5,
       status: "published",
       uploaded_by: uploader.readerId,
       visibility,
