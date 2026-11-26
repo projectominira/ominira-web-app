@@ -1,6 +1,9 @@
 import "server-only";
 
 import { revalidateTag } from "next/cache";
+import { after } from "next/server";
+import { createHash } from "node:crypto";
+import sharp from "sharp";
 import { z } from "zod";
 import { CATEGORIES_CACHE_TAG } from "@/lib/categories/config";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
@@ -23,6 +26,8 @@ import { dashboardToday } from "@/lib/metrics/dashboard";
 import { monthPeriod, periodOf, shift, type Period } from "@/lib/metrics/period";
 import { reportData, reportPdf } from "@/lib/report/monthly";
 import { cdnUrl, putObject } from "@/lib/storage/r2";
+import { resolveBookCoverSrc, type CoverSource } from "@/lib/materials/image";
+import { enrichMaterial } from "@/lib/materials/enrichMaterial";
 import { isScanned, loadBookText, normalise, type BookText, type TextBlock } from "./text";
 
 // The tools the Ominira connector (passage-spec §6) gives an editor's AI:
@@ -35,7 +40,7 @@ const db = () => getSupabaseAdminClient();
 
 type MaterialUpdate = Database["public"]["Tables"]["materials"]["Update"];
 
-export const INSTRUCTIONS = `You help an Ominira editor with six jobs in Ominira's library of books: finding short, quotable passages (and planning the monthly reading list), curating the quote directory, writing author pages and topic guides, looking after the books (their categories and details), and writing the monthly report for MAE leadership.
+export const INSTRUCTIONS = `You help an Ominira editor with six jobs in Ominira's library of books: finding quotable passages (and planning the monthly reading list), curating the quote directory, writing author pages and topic guides, looking after the books (their categories and details), and writing the monthly report for MAE leadership.
 
 ## Passages
 
@@ -64,7 +69,7 @@ How to work:
 
 ### Every quote
 - Quote word for word from \`read\` output. A quote that isn't found verbatim in the book is rejected.
-- Keep quotes short (one to three sentences) and self-contained: they must make sense without what comes before.
+- Choose by judgment, not by length: a great passage is punchy and resonant, and lands on its own without what comes before. Most are a line or a few sentences; take in more only when the setup is what gives the words their force, and never let it go slack: every sentence must earn its place.
 - For each quote, pass \`near\` (the block id or page number \`read\` showed) and say why it fits.
 - Check \`recent_passages\` and avoid repeating recent quotes or books.
 
@@ -75,7 +80,7 @@ Ominira's quote directory (/quotes) shows quotes from every book, word for word 
 When the editor asks you to curate quotes ("curate the new books", "add quotes from Fanon"), work on your own:
 1. Call \`books_to_quote\` for books not yet curated, or pick books with \`catalog\` when the editor names some.
 2. For each book, use what readers already quote as a guide (Goodreads quotes, well-known lines), then \`find\` and \`read\` to locate them, or better ones, in the book. Read enough of the book to choose well, not just the opening.
-3. Choose up to about 8 quotes a book (never more than ${MAX_QUOTES_PER_BOOK}): its strongest, most quotable lines, one to three sentences, each making sense on its own. Skip tables of contents, front matter, editors' introductions and other people's words quoted in the book. A book with nothing worth quoting gets none.
+3. Choose up to about 8 quotes a book (never more than ${MAX_QUOTES_PER_BOOK}): its strongest, most quotable lines, punchy and resonant, each making sense on its own (length is your judgment: as long as the line needs, never padded). Skip tables of contents, front matter, editors' introductions and other people's words quoted in the book. A book with nothing worth quoting gets none.
 4. Give each quote one to three topics from \`categories\`.
 5. Send each book's quotes with \`add_quotes\` as soon as it's done, passing books you skipped in \`done\`. Re-sending a listed quote is skipped, so a run can safely resume.
 6. Finish with a short report: books curated, quotes added, and anything skipped.
@@ -122,7 +127,7 @@ How to work:
 
 ## Tidying book details
 
-Titles and authors come from uploads and are often messy: all caps, file names, "Unknown", subtitles run together, an editor's name where the author should be.
+Titles and authors come from uploads and are often messy: all caps, file names, "Unknown", subtitles run together, an editor's name where the author should be. Covers can be missing, or come from a lookup that matched a different book.
 
 When the editor asks in any words ("fix books with wrong details", "tidy the authors"), work on your own, without asking them to name books or confirm each fix:
 1. Call \`books_to_fix\` and page through it. It lists books showing signs of a problem, each with its hints. Hints are leads, not verdicts: fix what is wrong, leave what is right. With \`all: true\` it lists every book, for a full check or when the editor asks about something hints can't see (a misspelled name, the wrong author).
@@ -132,6 +137,8 @@ When the editor asks in any words ("fix books with wrong details", "tidy the aut
    - Year: fill a missing one with the year the work was first published. Leave existing years alone unless plainly wrong.
    - Description: fill a missing one only with a short, factual summary you are sure of.
    - Pirate-library names, hashes and file details never belong in a book: strip "Z-Library", "z-lib.org", "1lib", "Anna's Archive", "PDFDrive", ISBNs, 32-character hashes and publisher/year tails from titles, and pass \`fix_slug: true\` for every book whose hints say its slug carries them. The slug is remade from the (fixed) title and the old link redirects.
+   - The book's own title page is the best source: \`read\` its first blocks or pages when the title or author is in doubt, then confirm with OpenLibrary or a web search.
+   - Cover: look at covers with \`covers\` (it shows them as images): the ones hints flag, and, for a full check, every book (PDFs first: their cover is the file's first page). Replace a cover that is missing, blank, a title page or library scan instead of the cover, too blurred or cropped to read, or of a different book. A PDF's first page that is the real cover is fine; leave it. To replace one, find this book's real cover and pass it as \`cover\`: an OpenLibrary cover (https://covers.openlibrary.org/b/isbn/<ISBN>-L.jpg, or /b/olid/<OLID>-L.jpg, for an edition you've checked is this book) or a Google Books image for its volume. Nothing from anywhere else, and none when you're not sure it is this book. Ominira rejects images too small or the wrong shape; try another edition. Fixing a title or author also re-runs Ominira's own cover lookup for books without their own cover, so fix those first and check the cover hints again later.
    Check with a web search when unsure. If still unsure, leave the book and say so.
 3. Send the fixes with \`edit_books\` as you go, up to 100 a call, passing only the fields that change.
 4. Finish with a short report: how many books you fixed, a few examples, and any you left for the editor. Every change, before and after, is kept in the Connector history.
@@ -366,7 +373,9 @@ async function publicBooks() {
   const data = await allRows((from, to) =>
     db()
       .from("materials")
-      .select("id, slug, old_slugs, title, author, published_year, material_type, categories, description, json_storage_path")
+      .select(
+        "id, slug, old_slugs, title, author, published_year, material_type, categories, description, json_storage_path, cover_url, thumbnail_url, cover_source, google_title:google_meta_data->>title, google_cover:google_meta_data->>coverUrl, google_thumb:google_meta_data->>thumbnailUrl, ol_cover:openlibrary_meta_data->>coverUrl"
+      )
       .eq("status", "published")
       .eq("visibility", "public")
       .order("title")
@@ -423,10 +432,38 @@ function slugIsMessy(slug: string, title: string): boolean {
   return /z-?lib|1lib|anna-s-arc|pdfdrive|libgen|isbn|[0-9a-f]{32}/.test(slug) || slug.length > slugFromTitle(title).length + 12;
 }
 
-function hints(b: { slug: string; title: string; author: string; published_year: number | null; description: string | null }): string[] {
+type PublicBook = Awaited<ReturnType<typeof publicBooks>>[number];
+
+const bareTitle = (t: string) => t.split(/[:–—(]/)[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** The cover readers see, as resolveBookCoverSrc picks it. */
+const shownCover = (b: PublicBook) =>
+  resolveBookCoverSrc({
+    cover: b.cover_url,
+    thumbnail: b.thumbnail_url,
+    coverSource: b.cover_source as CoverSource,
+    googleCoverUrl: b.google_cover,
+    googleThumbnailUrl: b.google_thumb,
+    openlibraryCoverUrl: b.ol_cover,
+  });
+
+/** A missing cover, or one from a Google/OpenLibrary lookup whose match is
+ * titled differently: the usual way a wrong book's cover gets in. */
+function coverHint(b: PublicBook): string | null {
+  const own = b.cover_url || b.thumbnail_url;
+  const looked = b.ol_cover || b.google_cover || b.google_thumb;
+  if (!own && !looked) return "no cover";
+  if (!looked || (own && b.cover_source === "own") || !b.google_title) return null;
+  const [a, m] = [bareTitle(b.title), bareTitle(b.google_title)];
+  return a && m && !a.includes(m) && !m.includes(a) ? `cover came from a lookup that matched "${b.google_title}": check it's this book, or pass cover` : null;
+}
+
+function hints(b: PublicBook): string[] {
   const out: string[] = [];
   const { title, author } = b;
   if (slugIsMessy(b.slug, title)) out.push("slug carries a pirate-library name, hash or file details: pass fix_slug");
+  const cover = coverHint(b);
+  if (cover) out.push(cover);
   const letters = title.replace(/[^A-Za-z]/g, "");
   if (letters.length > 3 && (letters === letters.toUpperCase() || letters === letters.toLowerCase())) out.push("title all upper or lower case");
   if (/[_]|\.(pdf|epub|txt)$|--|\s[-–:]\s|\s:/i.test(title)) out.push("title has file-name or odd punctuation");
@@ -458,6 +495,7 @@ async function booksToFix({ all, offset, limit }: z.infer<typeof ToFix>) {
       author: b.author,
       year: b.published_year,
       description: b.description?.slice(0, 300) ?? null,
+      cover: shownCover(b),
       hints,
     })),
     next: offset + limit < books.length ? offset + limit : null,
@@ -543,6 +581,11 @@ const Edit = z.object({
         author: z.string().trim().min(1).max(300).optional(),
         year: z.int().min(0).max(3000).nullable().optional().describe("Year the work was first published; null clears it."),
         description: z.string().trim().max(10_000).nullable().optional().describe("Null clears it."),
+        cover: z
+          .url()
+          .max(1000)
+          .optional()
+          .describe("This book's real cover: an OpenLibrary cover (covers.openlibrary.org/b/isbn/<ISBN>-L.jpg or /b/olid/<OLID>-L.jpg) or a Google Books image of its volume. Ominira copies it; too small or the wrong shape is rejected."),
         fix_slug: z
           .literal(true)
           .optional()
@@ -555,10 +598,81 @@ const Edit = z.object({
 
 /** Fixes books' details. With fix_slug the slug is remade from the title and
  * the old one kept in old_slugs, which redirect to it (seo-spec.md T2). */
+const Covers = z.object({
+  books: z.array(BookKey).max(20).optional().describe("Up to 20 book slugs. Leave out to page through every book, PDFs first."),
+  offset: z.int().min(0).default(0),
+  limit: z.int().min(1).max(20).default(20),
+});
+
+type Content = { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
+/** A tool result passed to the client as MCP content blocks, not JSON. */
+class Blocks {
+  constructor(readonly content: Content[]) {}
+}
+
+/** Books' covers as small images, each after a line naming its book, so the
+ * AI can see which are missing, poor or of another book. */
+async function covers({ books, offset, limit }: z.infer<typeof Covers>) {
+  const all = await publicBooks();
+  let list: PublicBook[];
+  let next: number | null = null;
+  if (books?.length) {
+    const byKey = new Map<string, PublicBook>();
+    for (const b of all) byKey.set(b.slug, b).set(b.id, b);
+    list = books.flatMap((k) => byKey.get(k) ?? []);
+  } else {
+    const sorted = [...all].sort((x, y) => Number(y.material_type === "pdf") - Number(x.material_type === "pdf"));
+    list = sorted.slice(offset, offset + limit);
+    next = offset + limit < sorted.length ? offset + limit : null;
+  }
+  const images = await Promise.all(
+    list.map(async (b) => {
+      const url = shownCover(b);
+      if (!url) return null;
+      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) }).catch(() => null);
+      if (!res?.ok) return null;
+      const buf = Buffer.from(await res.arrayBuffer());
+      const meta = await sharp(buf).metadata().catch(() => null);
+      if (!meta) return null;
+      const small = await sharp(buf).rotate().resize({ height: 260, withoutEnlargement: true }).jpeg({ quality: 70 }).toBuffer();
+      return { data: small.toString("base64"), size: `${meta.width}×${meta.height}` };
+    })
+  );
+  const content: Content[] = [];
+  list.forEach((b, i) => {
+    const img = images[i];
+    content.push({ type: "text", text: `${b.slug} | ${b.title} | ${b.author} | ${b.material_type === "pdf" ? "PDF" : "EPUB"} | ${img ? `cover ${img.size}` : "no cover"}` });
+    if (img) content.push({ type: "image", data: img.data, mimeType: "image/jpeg" });
+  });
+  content.push({ type: "text", text: JSON.stringify({ shown: list.length, total: books?.length ? list.length : all.length, next }) });
+  return new Blocks(content);
+}
+
+const COVER_HOSTS = /(^|\.)(openlibrary\.org|archive\.org|books\.google\.com|books\.googleusercontent\.com)$/;
+
+/** Copies a cover from OpenLibrary or Google Books into the book's R2
+ * folder, as a JPEG at most 1200px tall. Returns its URL, or why not. */
+async function importCover(url: string, slug: string): Promise<{ url: string } | { error: string }> {
+  if (!COVER_HOSTS.test(new URL(url).hostname)) return { error: "covers come only from OpenLibrary or Google Books" };
+  const res = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(15_000) }).catch(() => null);
+  if (!res?.ok || !COVER_HOSTS.test(new URL(res.url).hostname)) return { error: `couldn't fetch the cover (${res ? res.status : "no response"})` };
+  if (!res.headers.get("content-type")?.startsWith("image/")) return { error: "the cover link isn't an image" };
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (bytes.length > 15_000_000) return { error: "the cover image is too large" };
+  const { width = 0, height = 0 } = await sharp(bytes).metadata().catch(() => ({ width: 0, height: 0 }));
+  if (width < 250 || height < 380) return { error: `the cover is too small (${width}×${height}); try a larger size or another edition` };
+  if (height / width < 1.2 || height / width > 1.9) return { error: `the image isn't book-cover shaped (${width}×${height})` };
+  const jpeg = await sharp(bytes).rotate().resize({ height: 1200, withoutEnlargement: true }).jpeg({ quality: 85, mozjpeg: true }).toBuffer();
+  const key = `books/${slug}/cover-${createHash("sha256").update(jpeg).digest("hex").slice(0, 12)}.jpg`;
+  await putObject(key, jpeg, "image/jpeg");
+  return { url: cdnUrl(key) };
+}
+
 async function editBooks({ books }: z.infer<typeof Edit>, origin: string) {
-  const byKey = new Map<string, Awaited<ReturnType<typeof publicBooks>>[number]>();
+  const byKey = new Map<string, PublicBook>();
   for (const b of await publicBooks()) byKey.set(b.slug, b).set(b.id, b);
   const skipped: string[] = [];
+  const relook: string[] = [];
   const edits: (BookEdit & { id: string; update: MaterialUpdate })[] = [];
   for (const w of books) {
     const b = byKey.get(w.book);
@@ -586,6 +700,17 @@ async function editBooks({ books }: z.infer<typeof Edit>, origin: string) {
       update.old_slugs = [...b.old_slugs, b.slug];
       changes.push({ field: "slug", from: b.slug, to: slug });
     }
+    if (w.cover) {
+      const got = await importCover(w.cover, (update.slug as string) ?? b.slug);
+      if ("error" in got) skipped.push(`${w.book}: cover not set, ${got.error}`);
+      else {
+        Object.assign(update, { cover_url: got.url, thumbnail_url: null, cover_source: "own" });
+        changes.push({ field: "cover", from: shownCover(b), to: got.url });
+      }
+    }
+    // A new title or author can find the right Google/OpenLibrary match,
+    // and so the right cover, for a book without its own.
+    if ((update.title || update.author) && !update.cover_url && !(b.cover_url || b.thumbnail_url)) relook.push(b.id);
     if (changes.length) edits.push({ id: b.id, slug: (update.slug as string) ?? b.slug, title, changes, update: update as MaterialUpdate });
   }
   for (let i = 0; i < edits.length; i += 10) {
@@ -597,6 +722,10 @@ async function editBooks({ books }: z.infer<typeof Edit>, origin: string) {
     );
   }
   if (edits.length) await logEdits(edits.map(({ slug, title, changes }) => ({ slug, title, changes })));
+  if (relook.length)
+    after(async () => {
+      for (let i = 0; i < relook.length; i += 5) await Promise.all(relook.slice(i, i + 5).map((id) => enrichMaterial(id, { force: true })));
+    });
   return { edited: edits.length, unchanged: books.length - edits.length - skipped.length, ...(skipped.length ? { skipped } : {}), review: `${origin}/admin/library` };
 }
 
@@ -814,7 +943,7 @@ const TOOLS: Record<string, Tool> = {
   },
   edit_books: {
     description:
-      "Fix books' details: title, author, year first published, description, and fix_slug to remake a messy slug from the title (the old link redirects). Pass only the fields to change. Up to 100 books a call. When the editor asks you to fix or tidy books, apply the fixes you are sure of without asking first; every change is kept in the Connector history.",
+      "Fix books' details: title, author, year first published, description, cover (an OpenLibrary or Google Books image of this book), and fix_slug to remake a messy slug from the title (the old link redirects). Pass only the fields to change. Up to 100 books a call. When the editor asks you to fix or tidy books, apply the fixes you are sure of without asking first; every change is kept in the Connector history.",
     input: Edit,
     run: editBooks,
     readOnly: false,
@@ -827,9 +956,15 @@ const TOOLS: Record<string, Tool> = {
     readOnly: false,
   },
   books_to_fix: {
-    description: "Public books whose title, author, year or description show signs of a problem, each with hints; all: true lists every book. Pages of up to 100.",
+    description: "Public books whose title, author, cover, year or description show signs of a problem, each with hints; all: true lists every book. Pages of up to 100.",
     input: ToFix,
     run: booksToFix,
+    readOnly: true,
+  },
+  covers: {
+    description: "See books' covers: each book's slug, title, author and cover size, then its cover as a small image. Up to 20 books a call, by slug or paging through every book (PDFs first).",
+    input: Covers,
+    run: covers,
     readOnly: true,
   },
   tag_books: {
@@ -921,6 +1056,7 @@ export async function callTool(name: string, args: unknown, origin: string) {
   if (!parsed.success) return { content: [{ type: "text", text: `Invalid input: ${z.prettifyError(parsed.error)}` }], isError: true };
   try {
     const out = await tool.run(parsed.data as never, origin);
+    if (out instanceof Blocks) return { content: out.content };
     return { content: [{ type: "text", text: typeof out === "string" ? out : JSON.stringify(out) }] };
   } catch (err) {
     if (err instanceof ToolError) return { content: [{ type: "text", text: err.message }], isError: true };
