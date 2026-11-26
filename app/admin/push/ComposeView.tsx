@@ -425,7 +425,7 @@ function TestSend({ broadcast, disabled }: { broadcast: BroadcastBody; disabled:
     try {
       localStorage.setItem(TEST_EMAIL_KEY, to.trim());
     } catch {}
-    const res = await fetch("/api/admin/push/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: to.trim(), broadcast: { ...broadcast, sendAt: null } }) }).catch(() => null);
+    const res = await fetch("/api/admin/push/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: to.trim(), broadcast: { ...broadcast, channels: ["email"], sendAt: null } }) }).catch(() => null);
     const data = (await res?.json().catch(() => null)) as { error?: string } | null;
     setBusy(false);
     setMessage(res?.ok ? `Sent to ${to.trim()}.` : data?.error ?? "Couldn’t send. Try again.");

@@ -61,19 +61,22 @@ ${escapeHtml(FOOTER)}<br>
 
 const textFooter = (unsubscribeUrl: string) => `\n\n—\n${FOOTER}\nUnsubscribe: ${unsubscribeUrl}\n`;
 
-export type EmailBook = { title: string; author: string; tag: string | null; why: string; cover: string | null };
+export type EmailBook = { title: string; author: string; tag: string | null; why: string; cover: string | null; /** Its page in the library. */ url: string };
 
-/** A book row: cover, label, title, author and the editor's lines. */
+/** A book row: cover, label, title, author, the editor's lines and a link to
+ * its page; the cover and title link there too. */
 function bookRow(b: EmailBook) {
+  const href = escapeHtml(absoluteUrl(b.url));
   const cover = b.cover
-    ? `<td width="64" valign="top" style="padding:0 16px 0 0"><img src="${escapeHtml(b.cover)}" width="64" height="96" alt="" style="display:block;width:64px;height:96px;object-fit:cover;border-radius:3px;background:#eeeeee"></td>`
+    ? `<td width="64" valign="top" style="padding:0 16px 0 0"><a href="${href}"><img src="${escapeHtml(b.cover)}" width="64" height="96" alt="" style="display:block;width:64px;height:96px;object-fit:cover;border-radius:3px;background:#eeeeee;border:0"></a></td>`
     : "";
   const tag = b.tag ? `<div style="font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:${BRAND};margin:0 0 4px">${escapeHtml(b.tag)}</div>` : "";
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${RULE}"><tr><td style="padding:18px 0">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${cover}<td valign="top">
-${tag}<div style="font-family:${SERIF};font-size:17px;font-weight:700;line-height:1.3;color:#1c1917">${escapeHtml(b.title)}</div>
+${tag}<a href="${href}" style="font-family:${SERIF};font-size:17px;font-weight:700;line-height:1.3;color:#1c1917;text-decoration:none">${escapeHtml(b.title)}</a>
 <div style="font-size:13px;color:${FAINT};margin:2px 0 6px">${escapeHtml(b.author)}</div>
 <div style="font-size:14px;line-height:1.55;color:${INK}">${escapeHtml(b.why)}</div>
+<a href="${href}" style="display:inline-block;margin-top:10px;font-size:13px;font-weight:700;color:${BRAND};text-decoration:none">Start reading &rarr;</a>
 </td></tr></table>
 </td></tr></table>`;
 }
@@ -89,7 +92,7 @@ export function renderAnnouncement({ title, body, url, books = [], unsubscribeUr
 ${paragraphs(body)}
 ${books.map(bookRow).join("")}
 ${url ? `<div style="${books.length ? `border-top:1px solid ${RULE};padding-top:20px` : ""}">${button(url, label)}</div>` : `<div style="height:8px"></div>`}`;
-  const textBooks = books.length ? `\n\n${books.map((b, i) => `${i + 1}. ${b.title}, ${b.author}${b.tag ? ` (${b.tag})` : ""}\n${b.why}`).join("\n\n")}` : "";
+  const textBooks = books.length ? `\n\n${books.map((b, i) => `${i + 1}. ${b.title}, ${b.author}${b.tag ? ` (${b.tag})` : ""}\n${b.why}\nStart reading: ${absoluteUrl(b.url)}`).join("\n\n")}` : "";
   const link = url ? `\n\n${label}: ${absoluteUrl(url)}` : "";
   return {
     html: frame({ title, preheader: body, inner, unsubscribeUrl }),

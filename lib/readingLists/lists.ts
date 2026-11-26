@@ -352,7 +352,7 @@ export async function readingListForEmail(id: string): Promise<{ url: string; bo
     url: `/reading-lists/${list.slug}`,
     books: stored.flatMap((b) => {
       const m = bySlug.get(b.slug);
-      return m ? [{ title: m.title, author: m.author, tag: b.tag ?? null, why: b.why, cover: cover(m) }] : [];
+      return m ? [{ title: m.title, author: m.author, tag: b.tag ?? null, why: b.why, cover: cover(m), url: `/library/${m.slug}` }] : [];
     }),
   };
 }
