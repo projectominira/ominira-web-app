@@ -46,6 +46,8 @@ export type Database = {
           avatar_color: string | null;
           avatar_url: string | null;
           email_announcements: boolean;
+          /** migrations/20261218_broadcast_queue.sql: never email (unsubscribe link, account setting). */
+          email_unsubscribed: boolean;
           upload_approved: boolean;
           /** IANA zone synced from the device — migrations/20261017_reader_timezone.sql. */
           timezone: string | null;
@@ -69,6 +71,7 @@ export type Database = {
           avatar_color?: string | null;
           avatar_url?: string | null;
           email_announcements?: boolean;
+          email_unsubscribed?: boolean;
           upload_approved?: boolean;
           timezone?: string | null;
           official?: boolean;
@@ -489,6 +492,13 @@ export type Database = {
           email_recipient_count: number;
           email_failure_count: number;
           created_at: string;
+          // migrations/20261218_broadcast_queue.sql
+          kind: "message" | "reading_list";
+          reading_list_id: string | null;
+          audience: "everyone" | "opted_in";
+          send_at: string;
+          status: "scheduled" | "sending" | "sent" | "stopped";
+          email_sent_count: number;
         };
         Insert: {
           id?: string;
@@ -501,8 +511,33 @@ export type Database = {
           email_recipient_count?: number;
           email_failure_count?: number;
           created_at?: string;
+          kind?: "message" | "reading_list";
+          reading_list_id?: string | null;
+          audience?: "everyone" | "opted_in";
+          send_at?: string;
+          status?: "scheduled" | "sending" | "sent" | "stopped";
+          email_sent_count?: number;
         };
         Update: Partial<Database["public"]["Tables"]["push_broadcasts"]["Insert"]>;
+        Relationships: [];
+      };
+      /** migrations/20261218_broadcast_queue.sql: one row per broadcast email and recipient. */
+      broadcast_emails: {
+        Row: {
+          broadcast_id: string;
+          reader_id: string;
+          status: "queued" | "sending" | "sent" | "failed" | "skipped";
+          attempts: number;
+          sent_at: string | null;
+        };
+        Insert: {
+          broadcast_id: string;
+          reader_id: string;
+          status?: "queued" | "sending" | "sent" | "failed" | "skipped";
+          attempts?: number;
+          sent_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["broadcast_emails"]["Insert"]>;
         Relationships: [];
       };
       notifications: {
@@ -1080,6 +1115,10 @@ export type Database = {
     // `never` rather than erroring loudly, which is its own trap.
     Views: Record<string, never>;
     Functions: {
+      /** migrations/20261218_broadcast_queue.sql (lib/broadcast/queue.ts). */
+      enqueue_broadcast_emails: { Args: { p_broadcast: string }; Returns: number };
+      claim_broadcast_emails: { Args: { p_batch: number; p_daily: number }; Returns: { broadcast_id: string; reader_id: string; attempts: number }[] };
+      broadcast_emails_today: { Args: Record<string, never>; Returns: number };
       /** migrations/20261206_rename_category.sql: rename, merge (an existing new_name) or remove (null); returns books changed. */
       rename_category: { Args: { old_name: string; new_name: string | null }; Returns: number };
       /** migrations/20261211_seo_authors_quotes.sql: the /quotes directory, filtered and paged. */

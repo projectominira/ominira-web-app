@@ -17,7 +17,7 @@ async function unsubscribe(form: FormData) {
   const r = String(form.get("r") ?? "");
   const t = String(form.get("t") ?? "");
   if (!isValidUnsubscribeToken(r, t)) redirect("/unsubscribe");
-  await getSupabaseAdminClient().from("readers").update({ email_announcements: false }).eq("id", r);
+  await getSupabaseAdminClient().from("readers").update({ email_announcements: false, email_unsubscribed: true }).eq("id", r);
   redirect("/unsubscribe?done=1");
 }
 
@@ -31,7 +31,7 @@ export default async function UnsubscribePage({
   if (done) {
     return (
       <StatusPage title="You're unsubscribed">
-        You won&apos;t get announcement emails any more. You can turn them back on any time in Account settings →
+        You won&apos;t get emails from Ominira any more. You can turn them back on any time in Account settings →
         Preferences.
       </StatusPage>
     );

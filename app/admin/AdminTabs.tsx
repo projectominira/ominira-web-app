@@ -3,21 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const TABS = [
-  { href: "/admin/ai/authors", label: "Authors" },
-  { href: "/admin/ai/topics", label: "Topics" },
-  { href: "/admin/ai/reading-lists", label: "Reading lists" },
-  { href: "/admin/ai/quotes", label: "Quotes" },
-  { href: "/admin/ai/connector", label: "Connector" },
-];
-
-/** The AI section's tabs: what the AI writes for the site, and the connector it writes through. */
-export default function AiTabs() {
+/** A section's tabs under its header (AI, Broadcast), one link each. A tab
+ * is current on its own path and below it, unless `exact`. */
+export default function AdminTabs({ label, tabs }: { label: string; tabs: { href: string; label: string; exact?: boolean }[] }) {
   const pathname = usePathname();
   return (
-    <nav aria-label="AI" className="mb-6 flex gap-5 overflow-x-auto border-b border-[var(--reader-border)]">
-      {TABS.map(({ href, label }) => {
-        const active = pathname.startsWith(href);
+    <nav aria-label={label} className="mb-6 flex gap-5 overflow-x-auto border-b border-[var(--reader-border)]">
+      {tabs.map(({ href, label, exact }) => {
+        const active = exact ? pathname === href : pathname.startsWith(href);
         return (
           <Link
             key={href}

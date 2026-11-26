@@ -7,6 +7,7 @@ import { toMaterialSummary } from "@/lib/materials/summary";
 import { resolveBookThumbnailSrc } from "@/lib/materials/image";
 import { toDirectoryQuotes, type DirectoryQuote } from "@/lib/quotes/directory";
 import { passageDay, PASSAGE_ZONE } from "@/lib/rooms/passage";
+import type { EmailBook } from "@/lib/email/announcement";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { addDays, localMinutes, zonedTime } from "@/lib/time/zone";
 import { listTopics, topicCovers } from "@/lib/topics/guides";
@@ -325,4 +326,33 @@ export async function editReadingList(id: string, edit: z.infer<typeof ReadingLi
     .select("id");
   if (error) throw error;
   return data.length > 0;
+}
+
+// ---- Broadcast --------------------------------------------------------------
+
+/** A list's page and books as a broadcast email shows them (lib/email/
+ * announcement.ts): cover, label, author and the editor's lines. Null when
+ * there's no such list. */
+export async function readingListForEmail(id: string): Promise<{ url: string; books: EmailBook[] } | null> {
+  const { data: list, error } = await db().from("reading_lists").select("slug, books").eq("id", id).maybeSingle();
+  if (error) throw error;
+  if (!list) return null;
+  const stored = booksOf(list.books);
+  const { data: rows, error: e } = stored.length
+    ? await db().from("materials").select(BOOK_FIELDS).in("slug", stored.map((b) => b.slug))
+    : { data: [], error: null };
+  if (e) throw e;
+  const bySlug = new Map(rows.map((r) => [r.slug, r]));
+  // Emails need an absolute cover; anything else is left out.
+  const cover = (m: (typeof rows)[number]) => {
+    const src = resolveBookThumbnailSrc(toMaterialSummary(m as never));
+    return src?.startsWith("https://") ? src : null;
+  };
+  return {
+    url: `/reading-lists/${list.slug}`,
+    books: stored.flatMap((b) => {
+      const m = bySlug.get(b.slug);
+      return m ? [{ title: m.title, author: m.author, tag: b.tag ?? null, why: b.why, cover: cover(m) }] : [];
+    }),
+  };
 }

@@ -85,9 +85,9 @@ function NotificationsRow() {
   );
 }
 
-/** Opt-in to admin email announcements (off by default — see
- * migrations/20261008_email_announcements.sql). Saves on toggle, same as
- * the push switch above; every email also carries a one-click unsubscribe. */
+/** Email from Ominira: on for every member unless they unsubscribe
+ * (migrations/20261218_broadcast_queue.sql). Saves on toggle, same as the
+ * push switch above; every email also carries a one-click unsubscribe. */
 function EmailAnnouncementsRow({ reader }: { reader: ReaderProfile }) {
   const update = useUpdateProfile();
   // Show the requested state while the save is in flight, not the stale one.
@@ -95,14 +95,14 @@ function EmailAnnouncementsRow({ reader }: { reader: ReaderProfile }) {
 
   return (
     <SettingRow
-      label="Email announcements"
-      sub={update.isError ? "Couldn’t save — try again" : `Occasional updates from Ominira`}
+      label="Email from Ominira"
+      sub={update.isError ? "Couldn’t save — try again" : "Reading lists and news"}
     >
       <Switch
         checked={checked}
         onChange={(next) => update.mutate({ emailAnnouncements: next })}
         disabled={update.isPending}
-        ariaLabel="Email announcements"
+        ariaLabel="Email from Ominira"
       />
     </SettingRow>
   );

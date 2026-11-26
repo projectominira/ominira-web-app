@@ -54,6 +54,8 @@ export async function sendBatch(emails: OutgoingEmail[], idempotencyKey: string)
       return 0;
     }
     const retryAfter = Number(res?.headers.get("retry-after"));
-    await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * attempt);
+    // Capped: a daily-quota 429 can say "retry in hours"; the broadcast
+    // queue picks those emails up on a later run instead.
+    await sleep(Math.min(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * attempt, 5000));
   }
 }

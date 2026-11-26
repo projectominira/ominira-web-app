@@ -14,6 +14,6 @@ export async function POST(request: Request) {
   if (!isValidUnsubscribeToken(readerId, params.get("t") ?? "")) {
     return NextResponse.json({ error: "Invalid unsubscribe link." }, { status: 400 });
   }
-  await getSupabaseAdminClient().from("readers").update({ email_announcements: false }).eq("id", readerId);
+  await getSupabaseAdminClient().from("readers").update({ email_announcements: false, email_unsubscribed: true }).eq("id", readerId);
   return NextResponse.json({ ok: true });
 }

@@ -21,7 +21,8 @@ export function toReaderProfile(row: ReaderRow): ReaderProfile {
     genderIdentity: row.gender_identity,
     onboardingStatus: row.onboarding_status,
     avatar: toAvatar(row),
-    emailAnnouncements: row.email_announcements,
+    // Broadcasts reach every member who hasn't unsubscribed (migrations/20261218_broadcast_queue.sql).
+    emailAnnouncements: !row.email_unsubscribed,
     timeZone: row.timezone,
     canUpload: canUpload(row),
     isAdmin: isAdminReader(row),

@@ -52,7 +52,9 @@ export async function PATCH(request: Request) {
   }
   if (body.emailAnnouncements !== undefined) {
     if (typeof body.emailAnnouncements !== "boolean") return validationError("Must be true or false.", "emailAnnouncements");
+    // One switch: on opts in (and lifts an unsubscribe); off is an unsubscribe.
     update.email_announcements = body.emailAnnouncements;
+    update.email_unsubscribed = !body.emailAnnouncements;
   }
   if (body.timeZone !== undefined) {
     if (typeof body.timeZone !== "string" || !isValidTimeZone(body.timeZone)) return validationError("Unknown timezone.", "timeZone");
